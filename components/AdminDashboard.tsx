@@ -54,6 +54,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     }
   };
 
+  const handleDownloadEmployeeReport = (emp: Employee) => {
+    const empRecords = latestRecords.filter(r => r.matricula === emp.matricula);
+    if (empRecords.length === 0) return alert(`Nenhum registro encontrado para ${emp.name}`);
+
+    let content = `RELATÓRIO DE PONTO INDIVIDUAL - ${emp.name.toUpperCase()}\n`;
+    content += "========================================================\n\n";
+    content += `Empresa: ${company?.name || 'Não Informada'}\n`;
+    content += `CNPJ: ${company?.cnpj || '-'}\n`;
+    content += `Colaborador: ${emp.name}\n`;
+    content += `Matrícula: ${emp.matricula}\n`;
+    content += `Período: Dezembro / 2024 (Consolidado)\n\n`;
+    content += "HISTÓRICO DE MARCAÇÕES:\n";
+    content += "--------------------------------------------------------\n";
+
+    empRecords.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()).forEach(r => {
+      content += `[${r.timestamp.toLocaleDateString('pt-BR')}] ${r.timestamp.toLocaleTimeString('pt-BR')} - ${r.address}\n`;
+    });
+
+    content += "\n--------------------------------------------------------\n";
+    content += "Gerado em: " + new Date().toLocaleString('pt-BR');
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Relatorio_${emp.name.replace(/\s/g, '_')}.txt`;
+    a.click();
+  };
+
   const copyCode = () => {
     if (company?.accessCode) {
       navigator.clipboard.writeText(company.accessCode);
@@ -89,6 +118,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                       </div>
                     </div>
                     <div className="flex gap-1">
+                      <button onClick={() => handleDownloadEmployeeReport(e)} className="p-2 text-slate-300 hover:text-emerald-500 transition-colors" title="Baixar Relatório">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      </button>
                       <button onClick={() => setEditingEmployee(e)} className="p-2 text-slate-300 hover:text-orange-500 transition-colors" title="Alterar Senha">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
                       </button>
