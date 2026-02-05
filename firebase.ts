@@ -16,8 +16,9 @@ let db: any;
 try {
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
+  console.log("✅ Firebase Inicializado com Sucesso: fortimepro-8d3d6");
 } catch (error) {
-  console.error("Erro ao conectar ao novo Firebase:", error);
+  console.error("❌ Erro ao conectar ao Firebase:", error);
 }
 
 export { db };

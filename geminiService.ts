@@ -1,10 +1,7 @@
 
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 
-// Use process.env.API_KEY directly in initialization as per guidelines.
-
-export const getGeminiResponse = async (prompt: string, sources: string[]) => {
-  // Always create a new instance before use to ensure the latest API key is used.
+export const getGeminiResponse = async (prompt: string, records: string[]) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
@@ -12,46 +9,45 @@ export const getGeminiResponse = async (prompt: string, sources: string[]) => {
       {
         role: 'user',
         parts: [
-          { text: `Contexto das Fontes:\n${sources.join('\n\n')}\n\nPergunta: ${prompt}` }
+          { text: `Contexto de Registros de Ponto:\n${records.join('\n\n')}\n\nPergunta do Colaborador: ${prompt}` }
         ]
       }
     ],
     config: {
-      systemInstruction: "Você é o assistente do NotebookLM. Responda APENAS com base nas fontes fornecidas. Se não souber, diga que a informação não está nas fontes. Use markdown para formatação.",
-      temperature: 0.4,
+      systemInstruction: "Você é o assistente virtual da ForTime PRO. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas com base nos dados fornecidos e na legislação brasileira. Seja profissional, conciso e acolhedor.",
+      temperature: 0.5,
     }
   });
 
-  // Fixed: Use .text property instead of method.
-  return response.text || "";
+  return response.text || "Desculpe, tive um problema ao processar sua consulta de RH.";
 };
 
-export const generateNotebookGuide = async (sources: string[]) => {
+export const generateAttendanceSummary = async (records: string[]) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: [{ role: 'user', parts: [{ text: `Analise estas fontes e crie um guia estruturado:\n${sources.join('\n\n')}` }] }],
+    contents: [{ role: 'user', parts: [{ text: `Analise este histórico de ponto e crie um resumo executivo:\n${records.join('\n\n')}` }] }],
     config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          overview: { type: Type.STRING, description: "Um resumo geral de 3 parágrafos sobre as fontes." },
-          topics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de 5 tópicos principais abordados." },
+          overview: { type: Type.STRING, description: "Resumo da pontualidade e carga horária." },
+          topics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Alertas (Ex: Atrasos, Horas Extras)." },
           faqs: { 
             type: Type.ARRAY, 
             items: { 
               type: Type.OBJECT,
               properties: {
-                q: { type: Type.STRING },
-                a: { type: Type.STRING }
+                q: { type: Type.STRING, description: "Pergunta comum sobre este cartão." },
+                a: { type: Type.STRING, description: "Resposta técnica baseada na CLT." }
               }
             }
           }
         },
         required: ["overview", "topics", "faqs"]
       },
-      systemInstruction: "Você é um analista de documentos. Extraia a essência do material fornecido.",
+      systemInstruction: "Você é um auditor de folha de pagamento. Identifique inconsistências e resuma a jornada.",
     }
   });
   
@@ -59,19 +55,6 @@ export const generateNotebookGuide = async (sources: string[]) => {
   return JSON.parse(text);
 };
 
-export const generatePodcastScript = async (sources: string[]) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: [{ role: 'user', parts: [{ text: `Crie um roteiro de podcast estilo 'Deep Dive' sobre estas fontes entre Alex e Sam:\n${sources.join('\n\n')}` }] }],
-    config: {
-      systemInstruction: "O roteiro deve ser natural, amigável e em Português. Formato: 'Alex: [texto]' e 'Sam: [texto]'.",
-    }
-  });
-  return response.text || "";
-};
-
-// Fixed: Manual implementation of audio decoding as required by guidelines.
 export async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
@@ -85,7 +68,6 @@ export async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampl
   return buffer;
 }
 
-// Fixed: Manual implementation of base64 decoding following provided example.
 export function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -95,23 +77,3 @@ export function decodeBase64(base64: string) {
   }
   return bytes;
 }
-
-export const generateAudioOverview = async (script: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: script }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        multiSpeakerVoiceConfig: {
-          speakerVoiceConfigs: [
-            { speaker: 'Alex', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-            { speaker: 'Sam', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
-          ]
-        }
-      },
-    },
-  });
-  return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-};
