@@ -6,7 +6,7 @@ interface AdminDashboardProps {
   latestRecords?: PointRecord[];
   company: Company | null;
   employees: Employee[];
-  onAddEmployee: (emp: Employee) => void;
+  onAddEmployee: (emp: Omit<Employee, 'id'>) => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords = [], company, employees, onAddEmployee }) => {
@@ -18,16 +18,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords = [], com
   const [newMatricula, setNewMatricula] = useState('');
 
   const handleSaveEmployee = () => {
-    if(!newName || !newMatricula) return;
+    if(!newName || !newMatricula || !newEmail) {
+      alert("Preencha todos os campos obrigatórios (Nome, E-mail e Matrícula).");
+      return;
+    }
+    
     onAddEmployee({
-      id: Math.random().toString(36).substr(2, 9),
       name: newName,
       email: newEmail,
       matricula: newMatricula,
       photo: `https://ui-avatars.com/api/?name=${newName}&background=f97316&color=fff`,
-      status: 'active'
+      status: 'active',
+      companyCode: company?.accessCode || ''
     });
-    setNewName(''); setNewEmail(''); setNewMatricula('');
+
+    setNewName(''); 
+    setNewEmail(''); 
+    setNewMatricula('');
     setShowAddModal(false);
   };
 

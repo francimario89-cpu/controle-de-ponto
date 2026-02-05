@@ -33,49 +33,66 @@ const App: React.FC = () => {
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [records, setRecords] = useState<PointRecord[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('fortime_user');
-    const savedCompany = localStorage.getItem('fortime_company');
-    
-    if (savedUser && savedUser !== "undefined") {
+    const initApp = () => {
       try {
-        const parsedUser = JSON.parse(savedUser) as User;
-        setUser(parsedUser);
-        if (savedCompany && savedCompany !== "undefined") {
-          setCompany(JSON.parse(savedCompany) as Company);
-        }
+        const savedUser = localStorage.getItem('fortime_user');
+        const savedCompany = localStorage.getItem('fortime_company');
+        
+        if (savedUser && savedUser !== "undefined") {
+          const parsedUser = JSON.parse(savedUser) as User;
+          setUser(parsedUser);
+          
+          if (savedCompany && savedCompany !== "undefined") {
+            setCompany(JSON.parse(savedCompany) as Company);
+          }
 
-        if (parsedUser.role === 'admin') setActiveView('admin');
-        else if (parsedUser.role === 'totem') setActiveView('totem');
-        else setActiveView('dashboard');
+          if (parsedUser.role === 'admin') setActiveView('admin');
+          else if (parsedUser.role === 'totem') setActiveView('totem');
+          else setActiveView('dashboard');
+        }
       } catch (e) {
-        localStorage.removeItem('fortime_user');
+        console.error("Erro ao carregar dados locais:", e);
+        localStorage.clear();
+      } finally {
+        setIsInitialized(true);
       }
-    }
+    };
+
+    initApp();
   }, []);
 
   useEffect(() => {
     if (!user?.companyCode || !db) return;
-    const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode));
-    return onSnapshot(q, (snapshot) => {
-      const emps: Employee[] = [];
-      snapshot.forEach((doc) => emps.push({ id: doc.id, ...doc.data() } as Employee));
-      setEmployees(emps);
-    });
+    try {
+      const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode));
+      return onSnapshot(q, (snapshot) => {
+        const emps: Employee[] = [];
+        snapshot.forEach((doc) => emps.push({ id: doc.id, ...doc.data() } as Employee));
+        setEmployees(emps);
+      }, (err) => console.error("Erro ao ouvir funcionários:", err));
+    } catch (e) {
+      console.error("Erro na query de funcionários:", e);
+    }
   }, [user?.companyCode]);
 
   useEffect(() => {
     if (!user?.companyCode || !db) return;
-    const q = query(collection(db, "records"), where("companyCode", "==", user.companyCode), orderBy("timestamp", "desc"));
-    return onSnapshot(q, (snapshot) => {
-      const recs: PointRecord[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        recs.push({ ...data, id: doc.id, timestamp: data.timestamp.toDate() } as PointRecord);
-      });
-      setRecords(recs);
-    });
+    try {
+      const q = query(collection(db, "records"), where("companyCode", "==", user.companyCode), orderBy("timestamp", "desc"));
+      return onSnapshot(q, (snapshot) => {
+        const recs: PointRecord[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          recs.push({ ...data, id: doc.id, timestamp: data.timestamp.toDate() } as PointRecord);
+        });
+        setRecords(recs);
+      }, (err) => console.error("Erro ao ouvir registros:", err));
+    } catch (e) {
+      console.error("Erro na query de registros:", e);
+    }
   }, [user?.companyCode]);
 
   const handleLogin = async (newUser: User, newCompany?: Company) => {
@@ -91,7 +108,7 @@ const App: React.FC = () => {
       else if (newUser.role === 'totem') setActiveView('totem');
       else setActiveView('dashboard');
     } catch (e) {
-      alert("Erro ao conectar com Firebase.");
+      alert("Erro ao conectar com Firebase. Verifique suas regras de segurança.");
     }
   };
 
@@ -104,15 +121,32 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
   };
 
+  const handleAddEmployee = async (emp: Omit<Employee, 'id'>) => {
+    if (!db || !user?.companyCode) return;
+    try {
+      await addDoc(collection(db, "employees"), {
+        ...emp,
+        companyCode: user.companyCode
+      });
+    } catch (e) {
+      console.error("Erro ao salvar funcionário:", e);
+      alert("Erro ao salvar funcionário no banco de dados.");
+    }
+  };
+
   const handlePunch = async (record: PointRecord) => {
     if (!user?.companyCode || !db) return;
     try {
-      const firestoreRecord = { ...record, companyCode: user.companyCode, timestamp: Timestamp.fromDate(record.timestamp) };
+      const firestoreRecord = { 
+        ...record, 
+        companyCode: user.companyCode, 
+        timestamp: Timestamp.fromDate(record.timestamp) 
+      };
       await addDoc(collection(db, "records"), firestoreRecord);
       if (user?.role !== 'totem') setLastPunch(record);
       setIsPunching(false);
     } catch (e) {
-      alert("Erro ao registrar ponto.");
+      alert("Erro ao registrar ponto no Firebase.");
     }
   };
 
@@ -131,6 +165,7 @@ const App: React.FC = () => {
     });
   };
 
+  if (!isInitialized) return null; 
   if (!user) return <Login onLogin={handleLogin} />;
   
   if (activeView === 'totem') {
@@ -139,7 +174,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen bg-orange-50/50 text-slate-900 font-sans overflow-hidden">
-      {/* Container principal com paddings para Safe Areas do iPhone (Notch) */}
       <div className="h-full w-full max-w-md mx-auto bg-white shadow-2xl flex flex-col relative overflow-hidden border-x border-orange-100 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <Sidebar 
           user={user} 
@@ -174,7 +208,14 @@ const App: React.FC = () => {
           {activeView === 'mypoint' && <MyPoint />}
           {activeView === 'card' && <AttendanceCard />}
           {activeView === 'requests' && <Requests />}
-          {activeView === 'admin' && <AdminDashboard latestRecords={records} company={company} employees={employees} onAddEmployee={(e) => {}} />}
+          {activeView === 'admin' && (
+            <AdminDashboard 
+              latestRecords={records} 
+              company={company} 
+              employees={employees} 
+              onAddEmployee={handleAddEmployee} 
+            />
+          )}
         </div>
 
         {isPunching && <PunchCamera onCapture={handleCameraPunch} onCancel={() => setIsPunching(false)} />}

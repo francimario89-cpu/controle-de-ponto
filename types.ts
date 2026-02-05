@@ -14,6 +14,7 @@ export interface Employee {
   matricula: string;
   photo: string;
   status: 'active' | 'inactive';
+  companyCode: string;
 }
 
 export interface User {
