@@ -26,12 +26,13 @@ import AttendanceCard from './components/AttendanceCard';
 import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
 import KioskMode from './components/KioskMode';
+import Profile from './components/Profile';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'admin' | 'totem'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'admin' | 'totem' | 'profile'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -100,7 +101,7 @@ const App: React.FC = () => {
       const res = await fetch('https://api.ipify.org?format=json');
       const data = await res.json();
       if (data.ip !== company.authorizedIP) {
-        alert("Acesso Negado: Você deve estar no Wi-Fi da empresa.");
+        alert(`Acesso Negado: Registre ponto conectado ao Wi-Fi autorizado.\nSeu IP atual: ${data.ip}`);
         return false;
       }
       return true;
@@ -150,7 +151,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-screen bg-orange-50/50 overflow-hidden font-sans">
       <div className="h-full w-full max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-orange-100">
-        <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => v === 'logout' ? handleLogout() : setActiveView(v as any)} activeView={activeView} />
+        <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => v === 'logout' ? handleLogout() : {setActiveView(v as any), setIsSidebarOpen(false)}} activeView={activeView} />
         
         <header className="px-4 py-4 flex items-center justify-between border-b border-orange-50 bg-white sticky top-0 z-10">
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-orange-500">
@@ -160,15 +161,16 @@ const App: React.FC = () => {
             <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{user.role === 'admin' ? 'Gestão RH' : 'Minha Jornada'}</p>
             <p className="text-[8px] text-slate-400 font-bold truncate max-w-[120px]">{company?.name}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-100"><img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" /></div>
+          <button onClick={() => setActiveView('profile')} className="w-10 h-10 rounded-xl overflow-hidden border border-orange-100 active:scale-95 transition-transform"><img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" /></button>
         </header>
 
-        <main className="flex-1 overflow-y-auto no-scrollbar">
-          {activeView === 'dashboard' && <Dashboard onPunchClick={async () => (await checkNetwork()) && setIsPunching(true)} lastPunch={records[0]} onNavigate={setActiveView} user={user} />}
-          {activeView === 'mypoint' && <MyPoint records={records} />}
-          {activeView === 'card' && <AttendanceCard records={records} />}
+        <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
+          {activeView === 'dashboard' && <Dashboard onPunchClick={async () => (await checkNetwork()) && setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={setActiveView} user={user} />}
+          {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
+          {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
           {activeView === 'requests' && <Requests />}
           {activeView === 'admin' && <AdminDashboard latestRecords={records} company={company} employees={employees} onAddEmployee={handleAddEmployee} onDeleteEmployee={handleDeleteEmployee} onUpdateIP={handleUpdateIP} />}
+          {activeView === 'profile' && <Profile user={user} />}
         </main>
 
         {isPunching && <PunchCamera isFirstAccess={!user.hasFacialRecord && user.role === 'employee'} onCapture={handleCameraCapture} onCancel={() => setIsPunching(false)} />}

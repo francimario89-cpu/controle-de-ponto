@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { PointRecord, Company, Employee } from '../types';
+import { db } from '../firebase';
+import { doc, updateDoc } from "firebase/firestore";
 
 interface AdminDashboardProps {
   latestRecords: PointRecord[];
@@ -12,7 +14,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company, employees, onAddEmployee, onDeleteEmployee, onUpdateIP }) => {
-  const [tab, setTab] = useState<'colaboradores' | 'rede' | 'logs'>('colaboradores');
+  const [tab, setTab] = useState<'colaboradores' | 'empresa' | 'logs'>('colaboradores');
   const [showAdd, setShowAdd] = useState(false);
   
   const [name, setName] = useState('');
@@ -37,12 +39,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     setName(''); setMat(''); setPass(''); setShowAdd(false);
   };
 
+  const copyCode = () => {
+    if (company?.accessCode) {
+      navigator.clipboard.writeText(company.accessCode);
+      alert("Código copiado para a área de transferência!");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-orange-50/30">
       <div className="p-6 bg-white border-b border-orange-50 shrink-0">
         <div className="flex p-1 bg-orange-50 rounded-2xl">
-          {(['colaboradores', 'rede', 'logs'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${tab === t ? 'bg-white text-orange-600 shadow-sm border border-orange-100' : 'text-orange-300'}`}>{t}</button>
+          {(['colaboradores', 'empresa', 'logs'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${tab === t ? 'bg-white text-orange-600 shadow-sm border border-orange-100' : 'text-orange-300'}`}>{t === 'empresa' ? 'Configurações' : t}</button>
           ))}
         </div>
       </div>
@@ -74,35 +83,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </div>
         )}
 
-        {tab === 'rede' && company && (
+        {tab === 'empresa' && company && (
           <div className="space-y-4">
             <div className="bg-white p-6 rounded-[32px] border border-orange-50 shadow-sm space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-50 rounded-xl text-orange-500"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" /></svg></div>
-                <h3 className="text-xs font-black text-slate-800 uppercase">Segurança de Rede</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-50 rounded-xl text-orange-500"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg></div>
+                  <h3 className="text-xs font-black text-slate-800 uppercase">Acesso da Empresa</h3>
+                </div>
+                <button onClick={copyCode} className="text-[9px] font-black text-orange-500 uppercase bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">Copiar Código</button>
               </div>
-              <div className="p-5 bg-orange-50/50 rounded-2xl border border-orange-100">
-                <p className="text-[9px] font-black text-orange-400 uppercase mb-2">Seu IP Atual:</p>
-                <p className="text-lg font-black text-slate-700 font-mono">{currentIP}</p>
-                {company.authorizedIP && <p className="text-[9px] text-emerald-500 font-black mt-2">✓ IP BLOQUEADO: {company.authorizedIP}</p>}
+              
+              <div className="p-6 bg-gradient-to-br from-orange-500 to-orange-600 rounded-3xl text-white text-center shadow-lg shadow-orange-100">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2">Código de Acesso Unidade</p>
+                <p className="text-4xl font-black tracking-[0.3em]">{company.accessCode}</p>
               </div>
-              <button onClick={() => onUpdateIP(currentIP)} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-slate-200">Vincular a esta rede</button>
-              <p className="text-[9px] text-slate-400 font-bold text-center px-4 leading-relaxed">Ao ativar, colaboradores só registram ponto se estiverem no Wi-Fi autorizado.</p>
+
+              <div className="space-y-3">
+                <div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                  <p className="text-[9px] font-black text-orange-400 uppercase mb-2">Trava de Rede (IP):</p>
+                  <p className="text-sm font-bold text-slate-700 font-mono">{company.authorizedIP || 'Livre (Qualquer rede)'}</p>
+                </div>
+                <button onClick={() => onUpdateIP(currentIP)} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black uppercase text-[10px]">Vincular ao IP Atual: {currentIP}</button>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-[32px] border border-orange-50 shadow-sm space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase">Segurança do RH</h3>
+              <div className="p-4 bg-slate-50 rounded-2xl">
+                 <p className="text-[9px] font-black text-slate-400 uppercase mb-1">E-mail do Gestor</p>
+                 <p className="text-xs font-bold text-slate-600">{company.adminEmail}</p>
+              </div>
+              <p className="text-[9px] text-slate-400 font-bold leading-relaxed">Para alterar a senha do RH, entre em contato com o administrador do sistema.</p>
             </div>
           </div>
         )}
 
         {tab === 'logs' && (
           <div className="space-y-3">
-            {latestRecords.map(r => (
-              <div key={r.id} className="bg-white p-4 rounded-3xl border border-orange-50 flex items-center gap-4 shadow-sm">
-                <img src={r.photo} className="w-12 h-12 rounded-2xl object-cover shadow-sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-slate-800 truncate">{r.userName}</p>
-                  <p className="text-[9px] text-orange-500 font-black uppercase">{r.timestamp.toLocaleTimeString()} • {r.address.substring(0, 30)}...</p>
+            {latestRecords.length === 0 ? (
+               <div className="py-20 text-center opacity-20"><p className="text-5xl mb-2">📋</p><p className="text-xs font-black uppercase">Nenhum log recente</p></div>
+            ) : (
+              latestRecords.map(r => (
+                <div key={r.id} className="bg-white p-4 rounded-3xl border border-orange-50 flex items-center gap-4 shadow-sm">
+                  <img src={r.photo} className="w-12 h-12 rounded-2xl object-cover shadow-sm" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-slate-800 truncate">{r.userName}</p>
+                    <p className="text-[9px] text-orange-500 font-black uppercase">{r.timestamp.toLocaleTimeString()} • {r.address.substring(0, 30)}...</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
@@ -112,9 +143,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           <div className="w-full bg-white rounded-[44px] p-8 animate-in slide-in-from-bottom-full duration-300">
             <h3 className="text-center font-black text-slate-800 uppercase text-xs mb-6">Novo Colaborador</h3>
             <div className="space-y-4">
-              <input placeholder="NOME COMPLETO" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold" />
-              <input placeholder="Nº MATRÍCULA" value={mat} onChange={e => setMat(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold" />
-              <input type="password" placeholder="DEFINIR SENHA" value={pass} onChange={e => setPass(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold" />
+              <input placeholder="NOME COMPLETO" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" />
+              <input placeholder="Nº MATRÍCULA" value={mat} onChange={e => setMat(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" />
+              <input type="password" placeholder="DEFINIR SENHA INICIAL" value={pass} onChange={e => setPass(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" />
               <div className="flex gap-3 pt-4">
                 <button onClick={() => setShowAdd(false)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase">Cancelar</button>
                 <button onClick={handleSave} className="flex-2 bg-orange-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-orange-100">Cadastrar</button>

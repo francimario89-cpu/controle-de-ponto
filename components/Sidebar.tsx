@@ -17,6 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
     { id: 'mypoint', label: 'Meus Registros', icon: '📝' },
     { id: 'card', label: 'Folha de Ponto', icon: '📇' },
     { id: 'requests', label: 'Ajustes', icon: '💬' },
+    { id: 'profile', label: 'Meu Perfil', icon: '👤' },
     { id: 'logout', label: 'Sair do App', icon: '🚪' }
   ];
 
@@ -24,7 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
     <>
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-orange-900/20 z-40 animate-in fade-in backdrop-blur-[2px]"
+          className="fixed inset-0 bg-orange-900/40 z-40 animate-in fade-in backdrop-blur-sm"
           onClick={onClose}
         />
       )}
@@ -37,7 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
               <div className="text-center">
                  <h2 className="font-black text-lg leading-tight text-slate-800 tracking-tight">{user.name}</h2>
                  <p className="text-[10px] text-orange-400 font-bold uppercase tracking-[0.2em] mt-1">
-                   {user.role === 'admin' ? 'Administrador' : 'Colaborador'}
+                   {user.role === 'admin' ? 'Administrador' : `MAT: ${user.matricula}`}
                  </p>
               </div>
            </div>
@@ -61,7 +62,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
         </div>
 
         <div className="p-8 border-t border-orange-50 flex items-center justify-between text-[9px] text-orange-200 font-black uppercase tracking-[0.2em]">
-           <span>V: 3.5.0</span>
+           <span>V: 3.5.2</span>
            <span className="text-orange-400">ForTime Pro</span>
         </div>
       </div>

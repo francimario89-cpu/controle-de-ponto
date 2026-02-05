@@ -70,6 +70,28 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(false);
   };
 
+  const handleRecoverCode = async () => {
+    if (!email) {
+      alert("Digite seu e-mail de gestor no campo 'E-mail' para recuperar o código.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const q = query(collection(db, "companies"), where("adminEmail", "==", email), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const c = snap.docs[0].data() as Company;
+        alert(`Recuperação de Código:\n\nSua empresa: ${c.name}\nSeu Código: ${c.accessCode}\n\nEnviamos estes dados para o e-mail: ${email} (Simulado)`);
+      } else {
+        alert("E-mail de gestor não encontrado.");
+      }
+    } catch {
+      alert("Erro ao buscar dados.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="h-screen w-screen bg-orange-50 flex flex-col items-center justify-center p-8 max-w-md mx-auto relative overflow-hidden">
       <div className="mb-10 text-center animate-in fade-in zoom-in duration-500">
@@ -112,19 +134,24 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 
                 {adminMode === 'signup' && (
                   <>
-                    <input type="text" placeholder="CHAVE MESTRA (DONO)" value={masterKey} onChange={e => setMasterKey(e.target.value.toUpperCase())} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold" />
-                    <input type="text" placeholder="NOME DA EMPRESA" value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold" />
+                    <input type="text" placeholder="CHAVE MESTRA (DONO)" value={masterKey} onChange={e => setMasterKey(e.target.value.toUpperCase())} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none" />
+                    <input type="text" placeholder="NOME DA EMPRESA" value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none" />
                   </>
                 )}
-                <input type="email" placeholder="E-MAIL DO GESTOR" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold" />
-                <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold" />
-                <button onClick={handleAdminAuth} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl shadow-orange-100 active:scale-95 transition-all">{adminMode === 'signup' ? 'Criar Empresa' : 'Acessar Painel'}</button>
+                <input type="email" placeholder="E-MAIL DO GESTOR" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none" />
+                <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none" />
+                <div className="flex flex-col gap-2">
+                  <button onClick={handleAdminAuth} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl shadow-orange-100 active:scale-95 transition-all">{adminMode === 'signup' ? 'Criar Empresa' : 'Acessar Painel'}</button>
+                  {adminMode === 'login' && (
+                    <button onClick={handleRecoverCode} className="text-[8px] font-black text-orange-400 uppercase tracking-widest mt-1 hover:text-orange-600 transition-colors">Esqueceu o Código da Empresa?</button>
+                  )}
+                </div>
               </>
             ) : (
               <>
-                <input type="text" placeholder="CÓDIGO DA EMPRESA" value={companyCode} onChange={e => setCompanyCode(e.target.value.toUpperCase())} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold text-center tracking-widest" />
-                <input type="text" placeholder="SUA MATRÍCULA" value={matricula} onChange={e => setMatricula(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold" />
-                <input type="password" placeholder="SUA SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold" />
+                <input type="text" placeholder="CÓDIGO DA EMPRESA" value={companyCode} onChange={e => setCompanyCode(e.target.value.toUpperCase())} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold text-center tracking-widest focus:ring-2 focus:ring-orange-500 outline-none" />
+                <input type="text" placeholder="SUA MATRÍCULA" value={matricula} onChange={e => setMatricula(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none" />
+                <input type="password" placeholder="SUA SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-orange-50/50 border border-orange-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none" />
                 <button onClick={handleEmployeeLogin} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl shadow-orange-100 active:scale-95 transition-all">Entrar</button>
               </>
             )}
@@ -132,7 +159,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
         )}
       </div>
-      <p className="mt-8 text-[9px] text-orange-400/30 font-black uppercase tracking-[0.4em]">v3.5.1 Stable Cloud</p>
+      <p className="mt-8 text-[9px] text-orange-400/30 font-black uppercase tracking-[0.4em]">v3.5.2 Stable Cloud</p>
     </div>
   );
 };
