@@ -3,33 +3,29 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const getGeminiResponse = async (prompt: string, records: string[]) => {
-  // Always initialize GoogleGenAI with a named parameter
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    // Always use the parts array inside a content object for clarity and compliance
     contents: {
       parts: [
-        { text: `Contexto de Registros de Ponto:\n${records.join('\n\n')}\n\nPergunta do Colaborador: ${prompt}` }
+        { text: `Contexto de Registros de Ponto:\n${records.join('\n\n')}\n\nPergunta: ${prompt}` }
       ]
     },
     config: {
-      systemInstruction: "Você é o assistente virtual da ForTime PRO. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas com base nos dados fornecidos e na legislação brasileira. Seja profissional, conciso e acolhedor.",
+      systemInstruction: "Você é o assistente virtual da ForTime PRO. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas. Seja profissional e direto.",
       temperature: 0.5,
     }
   });
-
-  // Property access .text is correct (do not call as a method)
-  return response.text || "Desculpe, tive um problema ao processar sua consulta de RH.";
+  return response.text || "Desculpe, tive um problema ao processar sua consulta.";
 };
 
-export const generateAttendanceSummary = async (records: string[]) => {
+export const auditCompliance = async (employeeName: string, records: string[]) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [
-        { text: `Analise este histórico de ponto e crie um resumo executivo:\n${records.join('\n\n')}` }
+        { text: `Analise as marcações de ${employeeName} e verifique se há desvios da CLT (horas extras excessivas, falta de intervalo, falta de descanso interjornada):\n${records.join('\n')}` }
       ]
     },
     config: {
@@ -37,30 +33,20 @@ export const generateAttendanceSummary = async (records: string[]) => {
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          overview: { type: Type.STRING, description: "Resumo da pontualidade e carga horária." },
-          topics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Alertas (Ex: Atrasos, Horas Extras)." },
-          faqs: { 
-            type: Type.ARRAY, 
-            items: { 
-              type: Type.OBJECT,
-              properties: {
-                q: { type: Type.STRING, description: "Pergunta comum sobre este cartão." },
-                a: { type: Type.STRING, description: "Resposta técnica baseada na CLT." }
-              }
-            }
-          }
+          riskLevel: { type: Type.STRING, description: "Baixo, Médio ou Alto" },
+          summary: { type: Type.STRING, description: "Resumo da auditoria" },
+          alerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de irregularidades encontradas" }
         },
-        required: ["overview", "topics", "faqs"]
+        required: ["riskLevel", "summary", "alerts"]
       },
-      systemInstruction: "Você é um auditor de folha de pagamento. Identifique inconsistências e resuma a jornada.",
+      systemInstruction: "Você é um auditor trabalhista rigoroso. Identifique riscos para a empresa com base na CLT.",
     }
   });
   
-  const text = response.text?.trim() || "{}";
   try {
-    return JSON.parse(text);
-  } catch (e) {
-    return { overview: "Inconsistência no processamento dos dados.", topics: [], faqs: [] };
+    return JSON.parse(response.text?.trim() || "{}");
+  } catch {
+    return { riskLevel: "Erro", summary: "Não foi possível auditar.", alerts: [] };
   }
 };
 
