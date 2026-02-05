@@ -1,16 +1,25 @@
 
 {
-  "short_name": "ForTime",
-  "name": "Meu Controle de Ponto 3.0",
+  "short_name": "ForTime PRO",
+  "name": "ForTime PRO - Gestão de Ponto",
+  "description": "Controle de ponto biométrico com reconhecimento facial e geolocalização.",
   "icons": [
     {
       "src": "https://ortep.com.br/wp-content/uploads/2021/08/logo-fortime-blue.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://ortep.com.br/wp-content/uploads/2021/08/logo-fortime-blue.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "./index.html",
   "display": "standalone",
-  "theme_color": "#0055b8",
-  "background_color": "#ffffff"
+  "orientation": "portrait",
+  "theme_color": "#f97316",
+  "background_color": "#fff7ed"
 }

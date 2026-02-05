@@ -1,20 +1,41 @@
 
+export interface Company {
+  id: string;
+  name: string;
+  cnpj: string;
+  address: string;
+  accessCode: string;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  email: string;
+  matricula: string;
+  photo: string;
+  status: 'active' | 'inactive';
+}
+
 export interface User {
   name: string;
   email: string;
   photo?: string;
   companyCode: string;
-  role: string;
+  companyName?: string;
+  role: 'admin' | 'employee' | 'totem';
+  matricula?: string;
 }
 
 export interface PointRecord {
   id: string;
+  userName: string;
   timestamp: Date;
   address: string;
   latitude: number;
   longitude: number;
   photo: string;
   status: 'synchronized' | 'pending';
+  matricula?: string;
 }
 
 export interface AttendanceRequest {
@@ -26,14 +47,6 @@ export interface AttendanceRequest {
   reason: string;
 }
 
-export interface DaySchedule {
-  day: string;
-  date: string;
-  records: string[];
-  totalHours: string;
-}
-
-// Added missing interfaces for Gemini-powered features
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
@@ -50,8 +63,5 @@ export interface Note {
 export interface NotebookSummary {
   overview: string;
   topics: string[];
-  faqs: {
-    q: string;
-    a: string;
-  }[];
+  faqs: Array<{ q: string; a: string }>;
 }
