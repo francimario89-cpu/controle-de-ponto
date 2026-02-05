@@ -16,6 +16,8 @@ interface AdminDashboardProps {
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company, employees, onAddEmployee, onDeleteEmployee, onUpdateIP }) => {
   const [tab, setTab] = useState<'colaboradores' | 'empresa' | 'logs'>('colaboradores');
   const [showAdd, setShowAdd] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [newEmployeePassword, setNewEmployeePassword] = useState('');
   
   const [name, setName] = useState('');
   const [mat, setMat] = useState('');
@@ -39,10 +41,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     setName(''); setMat(''); setPass(''); setShowAdd(false);
   };
 
+  const handleUpdatePassword = async () => {
+    if (!editingEmployee || !newEmployeePassword) return;
+    try {
+      const empRef = doc(db, "employees", editingEmployee.id);
+      await updateDoc(empRef, { password: newEmployeePassword });
+      alert(`Senha de ${editingEmployee.name} atualizada com sucesso!`);
+      setEditingEmployee(null);
+      setNewEmployeePassword('');
+    } catch (e) {
+      alert("Erro ao atualizar senha.");
+    }
+  };
+
   const copyCode = () => {
     if (company?.accessCode) {
       navigator.clipboard.writeText(company.accessCode);
-      alert("Código copiado para a área de transferência!");
+      alert("Código copiado!");
     }
   };
 
@@ -51,7 +66,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       <div className="p-6 bg-white border-b border-orange-50 shrink-0">
         <div className="flex p-1 bg-orange-50 rounded-2xl">
           {(['colaboradores', 'empresa', 'logs'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${tab === t ? 'bg-white text-orange-600 shadow-sm border border-orange-100' : 'text-orange-300'}`}>{t === 'empresa' ? 'Configurações' : t}</button>
+            <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${tab === t ? 'bg-white text-orange-600 shadow-sm border border-orange-100' : 'text-orange-300'}`}>{t === 'empresa' ? 'Unidade' : t}</button>
           ))}
         </div>
       </div>
@@ -70,12 +85,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                       <img src={e.photo} className="w-10 h-10 rounded-xl object-cover border border-orange-50" />
                       <div>
                         <p className="text-xs font-black text-slate-800">{e.name}</p>
-                        <p className="text-[9px] text-orange-400 font-bold">MAT: {e.matricula} {e.hasFacialRecord ? '• BIOMETRIA OK' : '• AGUARDANDO FACE'}</p>
+                        <p className="text-[9px] text-orange-400 font-bold uppercase tracking-tighter">MAT: {e.matricula} {e.hasFacialRecord ? '• BIOMETRIA OK' : '• AGUARDANDO FACE'}</p>
                       </div>
                     </div>
-                    <button onClick={() => onDeleteEmployee(e.id)} className="p-2 text-red-200 hover:text-red-500 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
+                    <div className="flex gap-1">
+                      <button onClick={() => setEditingEmployee(e)} className="p-2 text-slate-300 hover:text-orange-500 transition-colors" title="Alterar Senha">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                      </button>
+                      <button onClick={() => onDeleteEmployee(e.id)} className="p-2 text-red-200 hover:text-red-500 transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -89,32 +109,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-orange-50 rounded-xl text-orange-500"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg></div>
-                  <h3 className="text-xs font-black text-slate-800 uppercase">Acesso da Empresa</h3>
+                  <h3 className="text-xs font-black text-slate-800 uppercase">Dados da Unidade</h3>
                 </div>
-                <button onClick={copyCode} className="text-[9px] font-black text-orange-500 uppercase bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">Copiar Código</button>
+                <button onClick={copyCode} className="text-[9px] font-black text-orange-500 uppercase bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">Copiar</button>
               </div>
               
-              <div className="p-6 bg-gradient-to-br from-orange-500 to-orange-600 rounded-3xl text-white text-center shadow-lg shadow-orange-100">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2">Código de Acesso Unidade</p>
-                <p className="text-4xl font-black tracking-[0.3em]">{company.accessCode}</p>
+              <div className="p-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-[40px] text-white text-center shadow-xl shadow-orange-100 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-full bg-white/5 pointer-events-none"></div>
+                <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-80 mb-3">CÓDIGO DE ACESSO</p>
+                <p className="text-5xl font-black tracking-[0.2em] drop-shadow-md">{company.accessCode}</p>
+                <p className="text-[8px] font-bold mt-4 opacity-50 uppercase">Forneça este código aos seus colaboradores</p>
               </div>
 
               <div className="space-y-3">
                 <div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-                  <p className="text-[9px] font-black text-orange-400 uppercase mb-2">Trava de Rede (IP):</p>
-                  <p className="text-sm font-bold text-slate-700 font-mono">{company.authorizedIP || 'Livre (Qualquer rede)'}</p>
+                  <p className="text-[9px] font-black text-orange-400 uppercase mb-2">Trava de Rede Ativa (IP):</p>
+                  <p className="text-sm font-bold text-slate-700 font-mono">{company.authorizedIP || 'Sem restrição de rede'}</p>
                 </div>
-                <button onClick={() => onUpdateIP(currentIP)} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black uppercase text-[10px]">Vincular ao IP Atual: {currentIP}</button>
+                <button onClick={() => onUpdateIP(currentIP)} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black uppercase text-[10px] active:scale-95 transition-all">Bloquear neste IP: {currentIP}</button>
               </div>
             </div>
 
             <div className="bg-white p-6 rounded-[32px] border border-orange-50 shadow-sm space-y-4">
-              <h3 className="text-xs font-black text-slate-800 uppercase">Segurança do RH</h3>
-              <div className="p-4 bg-slate-50 rounded-2xl">
-                 <p className="text-[9px] font-black text-slate-400 uppercase mb-1">E-mail do Gestor</p>
+              <h3 className="text-xs font-black text-slate-800 uppercase">Informações de Admin</h3>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                 <p className="text-[9px] font-black text-slate-400 uppercase mb-1">E-mail Cadastrado</p>
                  <p className="text-xs font-bold text-slate-600">{company.adminEmail}</p>
               </div>
-              <p className="text-[9px] text-slate-400 font-bold leading-relaxed">Para alterar a senha do RH, entre em contato com o administrador do sistema.</p>
             </div>
           </div>
         )}
@@ -145,10 +166,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="space-y-4">
               <input placeholder="NOME COMPLETO" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" />
               <input placeholder="Nº MATRÍCULA" value={mat} onChange={e => setMat(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" />
-              <input type="password" placeholder="DEFINIR SENHA INICIAL" value={pass} onChange={e => setPass(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" />
+              <input type="password" placeholder="SENHA INICIAL" value={pass} onChange={e => setPass(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" />
               <div className="flex gap-3 pt-4">
                 <button onClick={() => setShowAdd(false)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase">Cancelar</button>
                 <button onClick={handleSave} className="flex-2 bg-orange-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-orange-100">Cadastrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingEmployee && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white rounded-[44px] p-8 animate-in zoom-in duration-300 shadow-2xl">
+            <h3 className="text-center font-black text-slate-800 uppercase text-xs mb-2">Editar Senha</h3>
+            <p className="text-center text-[10px] font-bold text-orange-500 uppercase mb-6">{editingEmployee.name}</p>
+            <div className="space-y-4">
+              <input 
+                type="password" 
+                placeholder="NOVA SENHA" 
+                value={newEmployeePassword} 
+                onChange={e => setNewEmployeePassword(e.target.value)} 
+                className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-orange-500 outline-none transition-all" 
+              />
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setEditingEmployee(null)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase">Sair</button>
+                <button onClick={handleUpdatePassword} className="flex-2 bg-orange-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-orange-100">Atualizar</button>
               </div>
             </div>
           </div>
