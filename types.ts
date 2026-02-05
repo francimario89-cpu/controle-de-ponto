@@ -5,6 +5,9 @@ export interface Company {
   cnpj: string;
   address: string;
   accessCode: string;
+  authorizedIP?: string;
+  adminEmail: string;
+  adminPassword?: string;
 }
 
 export interface Employee {
@@ -12,7 +15,9 @@ export interface Employee {
   name: string;
   email: string;
   matricula: string;
+  password?: string;
   photo: string;
+  hasFacialRecord: boolean;
   status: 'active' | 'inactive';
   companyCode: string;
 }
@@ -25,6 +30,7 @@ export interface User {
   companyName?: string;
   role: 'admin' | 'employee' | 'totem';
   matricula?: string;
+  hasFacialRecord?: boolean;
 }
 
 export interface PointRecord {
@@ -48,12 +54,14 @@ export interface AttendanceRequest {
   reason: string;
 }
 
+// Added missing interface for ChatArea component
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
 }
 
+// Added missing interface for NotesArea component
 export interface Note {
   id: string;
   title: string;
@@ -61,8 +69,12 @@ export interface Note {
   updatedAt: Date;
 }
 
+// Added missing interface for GuideArea component, matching the responseSchema in geminiService
 export interface NotebookSummary {
   overview: string;
   topics: string[];
-  faqs: Array<{ q: string; a: string }>;
+  faqs: Array<{
+    q: string;
+    a: string;
+  }>;
 }

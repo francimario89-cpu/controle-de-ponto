@@ -10,8 +10,11 @@ import {
   onSnapshot, 
   doc, 
   setDoc, 
+  deleteDoc,
+  updateDoc,
   Timestamp,
-  orderBy
+  orderBy,
+  getDoc
 } from "firebase/firestore";
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -36,189 +39,139 @@ const App: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    const initApp = () => {
-      try {
-        const savedUser = localStorage.getItem('fortime_user');
-        const savedCompany = localStorage.getItem('fortime_company');
-        
-        if (savedUser && savedUser !== "undefined") {
-          const parsedUser = JSON.parse(savedUser) as User;
-          setUser(parsedUser);
-          
-          if (savedCompany && savedCompany !== "undefined") {
-            setCompany(JSON.parse(savedCompany) as Company);
-          }
-
-          if (parsedUser.role === 'admin') setActiveView('admin');
-          else if (parsedUser.role === 'totem') setActiveView('totem');
-          else setActiveView('dashboard');
-        }
-      } catch (e) {
-        console.error("Erro ao carregar dados locais:", e);
-        localStorage.clear();
-      } finally {
-        setIsInitialized(true);
-      }
-    };
-
-    initApp();
+    const savedUser = localStorage.getItem('fortime_user');
+    const savedCompany = localStorage.getItem('fortime_company');
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      if (savedCompany) setCompany(JSON.parse(savedCompany));
+      if (parsedUser.role === 'admin') setActiveView('admin');
+    }
+    setIsInitialized(true);
   }, []);
 
+  // Sync Data
   useEffect(() => {
     if (!user?.companyCode || !db) return;
-    try {
-      const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode));
-      return onSnapshot(q, (snapshot) => {
-        const emps: Employee[] = [];
-        snapshot.forEach((doc) => emps.push({ id: doc.id, ...doc.data() } as Employee));
-        setEmployees(emps);
-      }, (err) => console.error("Erro ao ouvir funcionários:", err));
-    } catch (e) {
-      console.error("Erro na query de funcionários:", e);
-    }
+    const unsubComp = onSnapshot(doc(db, "companies", user.companyCode), (d) => {
+      if (d.exists()) setCompany({ id: d.id, ...d.data() } as Company);
+    });
+    const unsubEmps = onSnapshot(query(collection(db, "employees"), where("companyCode", "==", user.companyCode)), (s) => {
+      const emps: Employee[] = [];
+      s.forEach(d => emps.push({ id: d.id, ...d.data() } as Employee));
+      setEmployees(emps);
+    });
+    const unsubRecs = onSnapshot(query(collection(db, "records"), where("companyCode", "==", user.companyCode), orderBy("timestamp", "desc")), (s) => {
+      const recs: PointRecord[] = [];
+      s.forEach(d => {
+        const data = d.data();
+        recs.push({ ...data, id: d.id, timestamp: data.timestamp.toDate() } as PointRecord);
+      });
+      setRecords(recs);
+    });
+    return () => { unsubComp(); unsubEmps(); unsubRecs(); };
   }, [user?.companyCode]);
 
-  useEffect(() => {
-    if (!user?.companyCode || !db) return;
-    try {
-      const q = query(collection(db, "records"), where("companyCode", "==", user.companyCode), orderBy("timestamp", "desc"));
-      return onSnapshot(q, (snapshot) => {
-        const recs: PointRecord[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          recs.push({ ...data, id: doc.id, timestamp: data.timestamp.toDate() } as PointRecord);
-        });
-        setRecords(recs);
-      }, (err) => console.error("Erro ao ouvir registros:", err));
-    } catch (e) {
-      console.error("Erro na query de registros:", e);
-    }
-  }, [user?.companyCode]);
-
-  const handleLogin = async (newUser: User, newCompany?: Company) => {
-    try {
-      if (newCompany && db) {
-        await setDoc(doc(db, "companies", newCompany.accessCode), newCompany);
-        setCompany(newCompany);
-        localStorage.setItem('fortime_company', JSON.stringify(newCompany));
-      }
-      setUser(newUser);
-      localStorage.setItem('fortime_user', JSON.stringify(newUser));
-      if (newUser.role === 'admin') setActiveView('admin');
-      else if (newUser.role === 'totem') setActiveView('totem');
-      else setActiveView('dashboard');
-    } catch (e) {
-      alert("Erro ao conectar com Firebase. Verifique suas regras de segurança.");
-    }
+  const handleLogin = (newUser: User, newCompany?: Company) => {
+    setUser(newUser);
+    if (newCompany) setCompany(newCompany);
+    localStorage.setItem('fortime_user', JSON.stringify(newUser));
+    if (newCompany) localStorage.setItem('fortime_company', JSON.stringify(newCompany));
+    setActiveView(newUser.role === 'admin' ? 'admin' : newUser.role === 'totem' ? 'totem' : 'dashboard');
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('fortime_user');
-    localStorage.removeItem('fortime_company');
+    localStorage.clear();
     setUser(null);
     setCompany(null);
     setActiveView('dashboard');
     setIsSidebarOpen(false);
   };
 
-  const handleAddEmployee = async (emp: Omit<Employee, 'id'>) => {
-    if (!db || !user?.companyCode) return;
+  const handleUpdateIP = async (ip: string) => {
+    if (!user?.companyCode) return;
+    await updateDoc(doc(db, "companies", user.companyCode), { authorizedIP: ip });
+    alert("IP da Empresa atualizado!");
+  };
+
+  const checkNetwork = async () => {
+    if (!company?.authorizedIP) return true;
     try {
-      await addDoc(collection(db, "employees"), {
-        ...emp,
-        companyCode: user.companyCode
-      });
-    } catch (e) {
-      console.error("Erro ao salvar funcionário:", e);
-      alert("Erro ao salvar funcionário no banco de dados.");
+      const res = await fetch('https://api.ipify.org?format=json');
+      const data = await res.json();
+      if (data.ip !== company.authorizedIP) {
+        alert("Acesso Negado: Você deve estar no Wi-Fi da empresa.");
+        return false;
+      }
+      return true;
+    } catch { return false; }
+  };
+
+  const handleAddEmployee = async (emp: any) => {
+    await addDoc(collection(db, "employees"), { ...emp, companyCode: user?.companyCode });
+  };
+
+  const handleDeleteEmployee = async (id: string) => {
+    if (confirm("Excluir este colaborador permanentemente?")) {
+      await deleteDoc(doc(db, "employees", id));
     }
   };
 
-  const handlePunch = async (record: PointRecord) => {
-    if (!user?.companyCode || !db) return;
-    try {
-      const firestoreRecord = { 
-        ...record, 
-        companyCode: user.companyCode, 
-        timestamp: Timestamp.fromDate(record.timestamp) 
-      };
-      await addDoc(collection(db, "records"), firestoreRecord);
-      if (user?.role !== 'totem') setLastPunch(record);
-      setIsPunching(false);
-    } catch (e) {
-      alert("Erro ao registrar ponto no Firebase.");
-    }
-  };
-
-  const handleCameraPunch = (photo: string, location: { lat: number; lng: number; address: string }) => {
+  const handleCameraCapture = async (photo: string, loc: any) => {
     if (!user) return;
-    handlePunch({
-      id: '', 
-      userName: user.name,
-      timestamp: new Date(),
-      photo,
-      latitude: location.lat,
-      longitude: location.lng,
-      address: location.address,
-      status: 'synchronized',
-      matricula: user.matricula
-    });
+    
+    // Se for primeiro acesso, salva a foto como biometria oficial
+    if (!user.hasFacialRecord && user.role === 'employee') {
+      const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode), where("matricula", "==", user.matricula));
+      const snap = await (await import("firebase/firestore")).getDocs(q);
+      if (!snap.empty) {
+        await updateDoc(doc(db, "employees", snap.docs[0].id), { photo, hasFacialRecord: true });
+        const updatedUser = { ...user, photo, hasFacialRecord: true };
+        setUser(updatedUser);
+        localStorage.setItem('fortime_user', JSON.stringify(updatedUser));
+      }
+    }
+
+    const record: PointRecord = {
+      id: '', userName: user.name, timestamp: new Date(), 
+      photo, latitude: loc.lat, longitude: loc.lng, address: loc.address,
+      status: 'synchronized', matricula: user.matricula
+    };
+
+    await addDoc(collection(db, "records"), { ...record, companyCode: user.companyCode, timestamp: Timestamp.fromDate(record.timestamp) });
+    setLastPunch(record);
+    setIsPunching(false);
   };
 
-  if (!isInitialized) return null; 
+  if (!isInitialized) return null;
   if (!user) return <Login onLogin={handleLogin} />;
-  
-  if (activeView === 'totem') {
-    return <KioskMode employees={employees} onPunch={handlePunch} onExit={handleLogout} />;
-  }
+  if (activeView === 'totem') return <KioskMode employees={employees} onPunch={() => {}} onExit={handleLogout} />;
 
   return (
-    <div className="flex h-screen w-screen bg-orange-50/50 text-slate-900 font-sans overflow-hidden">
-      <div className="h-full w-full max-w-md mx-auto bg-white shadow-2xl flex flex-col relative overflow-hidden border-x border-orange-100 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-        <Sidebar 
-          user={user} 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)} 
-          onNavigate={(v) => { 
-            if (v === 'logout') handleLogout();
-            else { setActiveView(v as any); setIsSidebarOpen(false); }
-          }} 
-          activeView={activeView} 
-        />
-
-        <header className="bg-white px-4 py-4 flex items-center justify-between border-b border-orange-50 sticky top-0 z-10">
+    <div className="flex h-screen w-screen bg-orange-50/50 overflow-hidden font-sans">
+      <div className="h-full w-full max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-orange-100">
+        <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => v === 'logout' ? handleLogout() : setActiveView(v as any)} activeView={activeView} />
+        
+        <header className="px-4 py-4 flex items-center justify-between border-b border-orange-50 bg-white sticky top-0 z-10">
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-orange-500">
             <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-          <div className="flex flex-col items-center">
-             <span className="text-sm font-black text-orange-600 uppercase">
-               {user.role === 'admin' ? 'RH Master' : 'Meu Ponto'}
-             </span>
-             <span className="text-[9px] text-orange-400 font-bold uppercase truncate max-w-[150px]">
-               {company?.name || user.companyName}
-             </span>
+          <div className="text-center">
+            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{user.role === 'admin' ? 'Gestão RH' : 'Minha Jornada'}</p>
+            <p className="text-[8px] text-slate-400 font-bold truncate max-w-[120px]">{company?.name}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-100 bg-orange-50">
-            <img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} alt="Profile" className="w-full h-full object-cover" />
-          </div>
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-100"><img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" /></div>
         </header>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar bg-orange-50/10">
-          {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records[0]} />}
-          {activeView === 'mypoint' && <MyPoint />}
-          {activeView === 'card' && <AttendanceCard />}
+        <main className="flex-1 overflow-y-auto no-scrollbar">
+          {activeView === 'dashboard' && <Dashboard onPunchClick={async () => (await checkNetwork()) && setIsPunching(true)} lastPunch={records[0]} onNavigate={setActiveView} user={user} />}
+          {activeView === 'mypoint' && <MyPoint records={records} />}
+          {activeView === 'card' && <AttendanceCard records={records} />}
           {activeView === 'requests' && <Requests />}
-          {activeView === 'admin' && (
-            <AdminDashboard 
-              latestRecords={records} 
-              company={company} 
-              employees={employees} 
-              onAddEmployee={handleAddEmployee} 
-            />
-          )}
-        </div>
+          {activeView === 'admin' && <AdminDashboard latestRecords={records} company={company} employees={employees} onAddEmployee={handleAddEmployee} onDeleteEmployee={handleDeleteEmployee} onUpdateIP={handleUpdateIP} />}
+        </main>
 
-        {isPunching && <PunchCamera onCapture={handleCameraPunch} onCancel={() => setIsPunching(false)} />}
+        {isPunching && <PunchCamera isFirstAccess={!user.hasFacialRecord && user.role === 'employee'} onCapture={handleCameraCapture} onCancel={() => setIsPunching(false)} />}
         {lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
       </div>
     </div>

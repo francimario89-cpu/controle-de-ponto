@@ -1,24 +1,25 @@
 
-import { GoogleGenAI, Modality, Type } from "@google/genai";
+// @google/genai coding standards: Use Type from @google/genai
+import { GoogleGenAI, Type } from "@google/genai";
 
 export const getGeminiResponse = async (prompt: string, records: string[]) => {
+  // Always initialize GoogleGenAI with a named parameter
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          { text: `Contexto de Registros de Ponto:\n${records.join('\n\n')}\n\nPergunta do Colaborador: ${prompt}` }
-        ]
-      }
-    ],
+    // Always use the parts array inside a content object for clarity and compliance
+    contents: {
+      parts: [
+        { text: `Contexto de Registros de Ponto:\n${records.join('\n\n')}\n\nPergunta do Colaborador: ${prompt}` }
+      ]
+    },
     config: {
       systemInstruction: "Você é o assistente virtual da ForTime PRO. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas com base nos dados fornecidos e na legislação brasileira. Seja profissional, conciso e acolhedor.",
       temperature: 0.5,
     }
   });
 
+  // Property access .text is correct (do not call as a method)
   return response.text || "Desculpe, tive um problema ao processar sua consulta de RH.";
 };
 
@@ -26,7 +27,11 @@ export const generateAttendanceSummary = async (records: string[]) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: [{ role: 'user', parts: [{ text: `Analise este histórico de ponto e crie um resumo executivo:\n${records.join('\n\n')}` }] }],
+    contents: {
+      parts: [
+        { text: `Analise este histórico de ponto e crie um resumo executivo:\n${records.join('\n\n')}` }
+      ]
+    },
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -52,7 +57,11 @@ export const generateAttendanceSummary = async (records: string[]) => {
   });
   
   const text = response.text?.trim() || "{}";
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { overview: "Inconsistência no processamento dos dados.", topics: [], faqs: [] };
+  }
 };
 
 export async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
