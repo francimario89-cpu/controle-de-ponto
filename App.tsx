@@ -14,7 +14,6 @@ import MyPoint from './components/MyPoint';
 import AttendanceCard from './components/AttendanceCard';
 import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
-import KioskMode from './components/KioskMode';
 import Profile from './components/Profile';
 
 const App: React.FC = () => {
@@ -38,19 +37,24 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user?.companyCode) return;
     
-    // Listen to Company Data
     const unsubComp = onSnapshot(doc(db, "companies", user.companyCode), (d) => {
-      if (d.exists()) setCompany({ id: d.id, ...d.data() } as Company);
+      if (d.exists()) {
+        const data = { id: d.id, ...d.data() } as Company;
+        setCompany(data);
+        
+        // Aplicação de Cor Dinâmica
+        const themeColor = data.themeColor || '#f97316';
+        document.documentElement.style.setProperty('--primary-color', themeColor);
+        document.documentElement.style.setProperty('--primary-light', themeColor + '20'); // 20 opacity
+      }
     });
 
-    // Listen to Employees
     const unsubEmps = onSnapshot(query(collection(db, "employees"), where("companyCode", "==", user.companyCode)), (s) => {
       const emps: Employee[] = [];
       s.forEach(d => emps.push({ id: d.id, ...d.data() } as Employee));
       setEmployees(emps);
     });
 
-    // Listen to Point Records
     const unsubRecs = onSnapshot(query(collection(db, "records"), where("companyCode", "==", user.companyCode), orderBy("timestamp", "desc")), (s) => {
       const recs: PointRecord[] = [];
       s.forEach(d => {
@@ -60,7 +64,6 @@ const App: React.FC = () => {
       setRecords(recs);
     });
 
-    // Listen to Pending Requests (Notifications)
     const unsubReqs = onSnapshot(query(collection(db, "requests"), where("companyCode", "==", user.companyCode), where("status", "==", "pending")), (s) => {
       setPendingRequestsCount(s.size);
     });
@@ -110,9 +113,22 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans">
+      <style>{`
+        :root {
+          --primary-color: #f97316;
+          --primary-light: #fff7ed;
+        }
+        .bg-primary { background-color: var(--primary-color) !important; }
+        .text-primary { color: var(--primary-color) !important; }
+        .border-primary { border-color: var(--primary-color) !important; }
+        .bg-primary-light { background-color: var(--primary-light) !important; }
+        .shadow-primary { shadow-color: var(--primary-color) !important; }
+      `}</style>
+
       <div className="h-full w-full max-md:max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-slate-200">
         <Sidebar 
           user={user} 
+          company={company}
           isOpen={isSidebarOpen} 
           onClose={() => setIsSidebarOpen(false)} 
           onNavigate={(v) => v === 'logout' ? handleLogout() : (setActiveView(v as any), setIsSidebarOpen(false))} 
@@ -127,7 +143,7 @@ const App: React.FC = () => {
             {isAdmin && pendingRequestsCount > 0 && (
               <button 
                 onClick={() => setActiveView('aprovacoes')}
-                className="relative p-2 text-orange-500 hover:bg-orange-50 rounded-xl transition-all animate-bounce"
+                className="relative p-2 text-primary hover:bg-primary-light rounded-xl transition-all animate-bounce"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                 <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm">
@@ -138,7 +154,11 @@ const App: React.FC = () => {
           </div>
 
           <div className="text-center">
-            <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>
+            {company?.logoUrl ? (
+              <img src={company.logoUrl} className="h-6 mx-auto object-contain mb-0.5" alt="Logo" />
+            ) : (
+              <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>
+            )}
             <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{activeView}</p>
           </div>
 

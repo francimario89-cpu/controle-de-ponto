@@ -26,17 +26,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
   return (
     <div className="p-4 space-y-4">
       {/* Seção Relógio */}
-      <div className="bg-white rounded-[40px] p-6 shadow-sm border border-orange-50 text-center">
+      <div className="bg-white rounded-[40px] p-6 shadow-sm border border-primary-light text-center">
         <p className="text-5xl font-black text-slate-800 tracking-tighter mb-1">{time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-        <p className="text-[9px] font-black text-orange-400 uppercase tracking-[0.2em] mb-6">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(time)}</p>
+        <p className="text-[9px] font-black text-primary uppercase tracking-[0.2em] mb-6">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(time)}</p>
         
-        <button onClick={onPunchClick} className="w-full bg-gradient-to-br from-orange-500 to-orange-600 text-white py-5 rounded-[28px] font-black text-xs uppercase tracking-widest shadow-xl shadow-orange-100 flex items-center justify-center gap-3 active:scale-95 transition-all">
+        <button onClick={onPunchClick} className="w-full bg-primary text-white py-5 rounded-[28px] font-black text-xs uppercase tracking-widest shadow-xl shadow-primary-light flex items-center justify-center gap-3 active:scale-95 transition-all">
           <span className="text-xl">{user.hasFacialRecord || user.role === 'admin' ? '📸' : '👤'}</span>
           {user.hasFacialRecord || user.role === 'admin' ? 'Registrar Ponto' : 'Cadastrar Face'}
         </button>
       </div>
 
-      {/* Grid de Menus - Agora mais próximos (gap-2) e compactos */}
       <div className="grid grid-cols-3 gap-2 px-1">
         {[
           { label: 'Histórico', icon: '📝', view: 'mypoint' },
@@ -46,7 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
           <button 
             key={b.label} 
             onClick={() => onNavigate(b.view)} 
-            className="bg-white py-3 px-2 rounded-2xl border border-orange-50 flex flex-col items-center justify-center shadow-sm active:bg-orange-50 transition-colors"
+            className="bg-white py-3 px-2 rounded-2xl border border-primary-light flex flex-col items-center justify-center shadow-sm active:bg-primary-light transition-colors"
           >
             <span className="text-xl mb-0.5">{b.icon}</span>
             <span className="text-[7px] font-black text-slate-500 uppercase tracking-tighter">{b.label}</span>
@@ -54,19 +53,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
         ))}
       </div>
 
-      {/* Seção Código da Empresa (RH) */}
       {isAdmin && (
         <div 
           onClick={() => copyToClipboard(user.companyCode)}
-          className="bg-orange-50/50 p-4 rounded-[28px] border-2 border-dashed border-orange-100 flex items-center justify-between cursor-pointer hover:bg-orange-50 transition-all group"
+          className="bg-primary-light p-4 rounded-[28px] border-2 border-dashed border-primary/20 flex items-center justify-between cursor-pointer hover:bg-white transition-all group"
         >
           <div>
-            <p className="text-[8px] font-black text-orange-400 uppercase tracking-widest">Código da Empresa</p>
-            <p className="text-sm font-black text-slate-800 tracking-widest group-hover:text-orange-600 transition-colors">{user.companyCode}</p>
+            <p className="text-[8px] font-black text-primary uppercase tracking-widest">Código da Empresa</p>
+            <p className="text-sm font-black text-slate-800 tracking-widest group-hover:text-primary transition-colors">{user.companyCode}</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[7px] font-black text-slate-400 uppercase">Toque p/ copiar</span>
-            <div className="w-8 h-8 rounded-xl bg-white border border-orange-100 flex items-center justify-center text-orange-500 text-xs">📋</div>
+            <div className="w-8 h-8 rounded-xl bg-white border border-primary/20 flex items-center justify-center text-primary text-xs shadow-sm">📋</div>
           </div>
         </div>
       )}
@@ -83,9 +81,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
         </div>
       )}
 
-      {/* Info Rodapé Dashboard */}
       <div className="text-center pt-2">
-         <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em]">ForTime PRO Intelligence System</p>
+         <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em]">ForTime PRO White Label Edition</p>
       </div>
     </div>
   );

@@ -1,16 +1,17 @@
 
 import React from 'react';
-import { User } from '../types';
+import { User, Company } from '../types';
 
 interface SidebarProps {
   user: User;
+  company: Company | null;
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (view: string) => void;
   activeView: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, activeView }) => {
+const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNavigate, activeView }) => {
   const isAdmin = user.role === 'admin';
 
   const menuItems = [
@@ -22,13 +23,13 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
     ...(isAdmin ? [
       { id: 'shifts', label: 'Jornada de Trabalho', icon: '🕒' },
       { id: 'calendar', label: 'Calendário', icon: '📅' },
-      { id: 'vacations', label: 'Férias', icon: '🏖️' }
+      { id: 'vacations', label: 'Férias', icon: '🏖️' },
+      { id: 'config', label: 'Identidade Visual', icon: '🎨' }
     ] : []),
     { id: 'profile', label: 'Meu Perfil', icon: '👤' },
     { id: 'logout', label: 'Sair do App', icon: '🚪' }
   ];
 
-  // Extrair iniciais para o círculo laranja da imagem
   const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
   return (
@@ -41,16 +42,20 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
       )}
       <div className={`fixed top-0 left-0 h-full w-[280px] bg-white z-50 transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         
-        {/* Cabeçalho identico à imagem */}
         <div className="flex flex-col items-center pt-12 pb-8 px-6">
-           <div className="w-24 h-24 rounded-full bg-[#f97316] shadow-[0_10px_25px_-5px_rgba(249,115,22,0.4)] flex items-center justify-center text-white text-3xl font-bold mb-4 border-4 border-white">
-              {initials}
-           </div>
-           <h2 className="text-[#1e293b] font-black text-xl tracking-tight">{user.name}</h2>
-           <p className="text-[#f97316] text-[10px] font-black uppercase tracking-[0.2em] mt-1">ADMINISTRADOR</p>
+           {company?.logoUrl ? (
+             <div className="w-24 h-24 rounded-[32px] bg-white shadow-xl flex items-center justify-center mb-4 border border-slate-100 p-3">
+                <img src={company.logoUrl} className="max-w-full max-h-full object-contain" alt="Company Logo" />
+             </div>
+           ) : (
+             <div className="w-24 h-24 rounded-full bg-primary shadow-xl flex items-center justify-center text-white text-3xl font-bold mb-4 border-4 border-white">
+                {initials}
+             </div>
+           )}
+           <h2 className="text-slate-800 font-black text-xl tracking-tight text-center">{user.name}</h2>
+           <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mt-1">{user.role === 'admin' ? 'ADMINISTRADOR' : 'COLABORADOR'}</p>
         </div>
 
-        {/* Lista de Menu com o estilo da imagem */}
         <div className="flex-1 overflow-y-auto py-4 px-4 space-y-2 no-scrollbar">
           {menuItems.map(item => {
             const isActive = activeView === item.id;
@@ -63,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
                 }}
                 className={`w-full flex items-center gap-4 px-5 py-4 rounded-[20px] transition-all group ${
                   isActive 
-                  ? 'bg-[#fff7ed] border border-[#ffedd5] shadow-sm' 
+                  ? 'bg-primary-light border border-primary/10 shadow-sm' 
                   : 'bg-transparent border border-transparent'
                 }`}
               >
@@ -71,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
                   {item.icon}
                 </span>
                 <span className={`text-sm font-bold tracking-tight ${
-                  isActive ? 'text-[#c2410c]' : 'text-[#64748b] group-hover:text-[#1e293b]'
+                  isActive ? 'text-primary' : 'text-slate-500 group-hover:text-slate-800'
                 }`}>
                   {item.label}
                 </span>
@@ -80,10 +85,9 @@ const Sidebar: React.FC<SidebarProps> = ({ user, isOpen, onClose, onNavigate, ac
           })}
         </div>
 
-        {/* Rodapé identico à imagem */}
         <div className="px-8 py-6 flex items-center justify-between border-t border-slate-50">
-           <span className="text-[#fdba74] text-[10px] font-black uppercase tracking-widest">V: 3.5.2</span>
-           <span className="text-[#f97316] text-[10px] font-black uppercase tracking-widest">FORTIME PRO</span>
+           <span className="text-slate-300 text-[10px] font-black uppercase tracking-widest">V: 3.5.2</span>
+           <span className="text-primary text-[10px] font-black uppercase tracking-widest">FORTIME PRO</span>
         </div>
       </div>
     </>

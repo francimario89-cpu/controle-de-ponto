@@ -1,5 +1,4 @@
 
-
 export interface Company {
   id: string;
   name: string;
@@ -9,6 +8,8 @@ export interface Company {
   authorizedIP?: string;
   adminEmail: string;
   adminPassword?: string;
+  logoUrl?: string;
+  themeColor?: string;
   geofence?: {
     enabled: boolean;
     lat: number;
@@ -35,7 +36,6 @@ export interface Employee {
   hasFacialRecord: boolean;
   status: 'active' | 'inactive';
   companyCode: string;
-  // Novos campos contratuais
   roleFunction?: string; 
   workShift?: string;
 }
@@ -93,7 +93,6 @@ export interface Note {
   updatedAt: Date;
 }
 
-// Add missing NotebookSummary interface for AI-driven summaries and guides
 export interface NotebookSummary {
   overview: string;
   topics: string[];
