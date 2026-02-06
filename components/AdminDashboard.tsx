@@ -368,22 +368,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <input type="text" placeholder="BUSCAR POR COLABORADOR..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-[11px] font-black border-2 border-transparent focus:border-primary dark:text-white outline-none" />
             </div>
             
-            <button onClick={() => setShowAddModal(true)} className="w-full bg-primary text-white py-6 rounded-[28px] font-black uppercase text-[11px] shadow-xl">CADASTRAR NOVO +</button>
+            <button onClick={() => setShowAddModal(true)} className="w-full bg-emerald-500 text-white py-5 rounded-[24px] font-black uppercase text-[11px] shadow-lg hover:brightness-105 active:scale-95 transition-all">CADASTRAR NOVO +</button>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {filteredEmployees.map(e => (
-                <div key={e.id} className="bg-white dark:bg-slate-800 p-6 rounded-[40px] border dark:border-slate-700 flex flex-col gap-5 shadow-sm">
-                  <div className="flex items-center gap-5">
-                    <img src={e.photo || `https://ui-avatars.com/api/?name=${e.name}`} className="w-16 h-16 rounded-[24px] object-cover border-4 border-slate-50 dark:border-slate-700 shadow-md" />
+                <div key={e.id} className="bg-white dark:bg-slate-800 p-4 rounded-[32px] border dark:border-slate-700 flex flex-col gap-4 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-4">
+                    <img src={e.photo || `https://ui-avatars.com/api/?name=${e.name}`} className="w-12 h-12 rounded-[18px] object-cover border-2 border-slate-50 dark:border-slate-700 shadow-sm" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-black text-slate-800 dark:text-white uppercase truncate">{e.name}</p>
-                      <p className="text-[9px] font-black text-primary uppercase mt-1">MAT: {e.matricula}</p>
+                      <p className="text-[13px] font-black text-slate-800 dark:text-white uppercase truncate">{e.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-[9px] font-black text-emerald-500 uppercase">MAT: {e.matricula}</p>
+                        <p className="text-[9px] font-black text-slate-300 dark:text-slate-500 uppercase">|</p>
+                        <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase">CPF: {e.cpf || '---'}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 pt-2 border-t dark:border-slate-700">
-                    <button onClick={() => generatePrintableFolha(e, latestRecords)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-black active:scale-95 transition-all">📄 FOLHA A4</button>
-                    <button onClick={() => setResetPasswordModal({ isOpen: true, empId: e.id, empName: e.name })} className="bg-slate-100 dark:bg-slate-700 text-slate-500 px-5 py-4 rounded-2xl text-xl hover:text-primary transition-all">🔑</button>
-                    <button onClick={() => onDeleteEmployee(e.id)} className="bg-red-50 text-red-500 px-5 py-4 rounded-2xl text-xl hover:bg-red-500 hover:text-white transition-all">🗑</button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => generatePrintableFolha(e, latestRecords)} 
+                      className="flex-1 bg-slate-900 dark:bg-slate-700 text-white py-3 rounded-[16px] text-[9px] font-black uppercase flex flex-col items-center justify-center gap-1 active:scale-95 transition-all"
+                    >
+                      <svg className="w-3.5 h-3.5 text-orange-400" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1.8 18H8.2v-1.2h7.6V20zm0-2.5H8.2v-1.2h7.6v1.2zm0-2.5H8.2v-1.2h7.6v1.2zM13 9V3.5L18.5 9H13z"/></svg>
+                      FOLHA A4
+                    </button>
+                    <button 
+                      onClick={() => setResetPasswordModal({ isOpen: true, empId: e.id, empName: e.name })} 
+                      className="w-12 bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-300 rounded-[16px] flex items-center justify-center text-xl hover:text-primary active:scale-95 transition-all"
+                    >
+                      🔑
+                    </button>
+                    <button 
+                      onClick={() => onDeleteEmployee(e.id)} 
+                      className="w-12 bg-red-50 dark:bg-red-950/20 text-red-500 rounded-[16px] flex items-center justify-center text-lg hover:bg-red-500 hover:text-white active:scale-95 transition-all"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </div>
               ))}
@@ -448,7 +468,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       {/* MODAL RESET SENHA */}
       {resetPasswordModal.isOpen && (
         <div className="fixed inset-0 z-[450] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-6">
-           <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-[44px] p-10 space-y-6 shadow-2xl animate-in zoom-in duration-300">
+           <div className="bg-white dark:bg-slate-800 w-full max-sm rounded-[44px] p-10 space-y-6 shadow-2xl animate-in zoom-in duration-300">
               <div className="text-center">
                  <div className="w-16 h-16 bg-primary/10 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4">🔑</div>
                  <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-widest">ALTERAR SENHA</h3>
