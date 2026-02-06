@@ -152,7 +152,12 @@ const App: React.FC = () => {
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
                 onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', hasFacialRecord: false })} 
-                onDeleteEmployee={async (id) => confirm("Excluir?") && await deleteDoc(doc(db, "employees", id))} 
+                onDeleteEmployee={async (id) => {
+                   if(confirm("EXCLUIR COLABORADOR?")) {
+                      await deleteDoc(doc(db, "employees", id));
+                      alert("COLABORADOR EXCLUÍDO!");
+                   }
+                }} 
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}
               />
