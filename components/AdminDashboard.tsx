@@ -26,7 +26,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [viewingHistory, setViewingHistory] = useState<Employee | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newEmpData, setNewEmpData] = useState({ name: '', matricula: '', password: '', roleFunction: '', department: '' });
+  const [newEmpData, setNewEmpData] = useState({ name: '', matricula: '', cpf: '', password: '', roleFunction: '', department: '' });
 
   // Holiday State
   const [newHoliday, setNewHoliday] = useState({ date: '', description: '' });
@@ -469,6 +469,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <form onSubmit={(e) => { e.preventDefault(); onAddEmployee(newEmpData); setShowAddModal(false); }} className="space-y-4">
               <input type="text" placeholder="NOME COMPLETO" onChange={e => setNewEmpData({...newEmpData, name: e.target.value.toUpperCase()})} className="w-full p-5 bg-slate-50 dark:bg-slate-900 rounded-3xl text-[12px] font-black outline-none border-2 border-transparent focus:border-primary dark:text-white" required />
               <input type="text" placeholder="CARGO" onChange={e => setNewEmpData({...newEmpData, roleFunction: e.target.value.toUpperCase()})} className="w-full p-5 bg-slate-50 dark:bg-slate-900 rounded-3xl text-[12px] font-black outline-none border-2 border-transparent focus:border-primary dark:text-white" />
+              <input type="text" placeholder="CPF" onChange={e => setNewEmpData({...newEmpData, cpf: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-900 rounded-3xl text-[12px] font-black outline-none border-2 border-transparent focus:border-primary dark:text-white" required />
               <div className="grid grid-cols-2 gap-4">
                 <input type="text" placeholder="MATRÍCULA" onChange={e => setNewEmpData({...newEmpData, matricula: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-900 rounded-3xl text-[12px] font-black outline-none border-2 border-transparent focus:border-primary dark:text-white" required />
                 <input type="password" placeholder="SENHA" onChange={e => setNewEmpData({...newEmpData, password: e.target.value})} className="w-full p-5 bg-orange-50 dark:bg-slate-900 border-2 border-primary/20 rounded-3xl text-[12px] font-black text-primary outline-none focus:border-primary" required />

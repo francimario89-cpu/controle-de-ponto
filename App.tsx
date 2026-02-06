@@ -15,12 +15,13 @@ import AttendanceCard from './components/AttendanceCard';
 import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
 import Profile from './components/Profile';
+import HolidaysView from './components/HolidaysView';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'colaboradores' | 'profile' | 'jornada' | 'calendario' | 'vacations' | 'aprovacoes' | 'contabilidade' | 'chat' | 'relatorio' | 'saldos' | 'config'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'jornada' | 'vacations' | 'aprovacoes' | 'contabilidade' | 'relatorio' | 'saldos' | 'config'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -142,8 +143,9 @@ const App: React.FC = () => {
             {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={handleNavigation} user={user} />}
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
+            {activeView === 'holidays' && <HolidaysView company={company} />}
             {activeView === 'requests' && <Requests />}
-            {(['colaboradores', 'jornada', 'calendario', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio', 'saldos', 'config'].includes(activeView)) && 
+            {(['colaboradores', 'jornada', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio', 'saldos', 'config'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
                 onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', hasFacialRecord: false })} 
