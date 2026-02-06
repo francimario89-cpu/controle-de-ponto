@@ -1,4 +1,5 @@
 
+
 export interface Company {
   id: string;
   name: string;
@@ -8,18 +9,20 @@ export interface Company {
   authorizedIP?: string;
   adminEmail: string;
   adminPassword?: string;
-  // Novos campos de Geofencing e Escala
   geofence?: {
     enabled: boolean;
     lat: number;
     lng: number;
-    radius: number; // em metros
+    radius: number;
   };
-  workShift?: {
-    start: string; // "08:00"
-    end: string;   // "18:00"
-    breakMinutes: number;
-  };
+  holidays?: Holiday[];
+}
+
+export interface Holiday {
+  id: string;
+  date: string;
+  description: string;
+  type: 'feriado' | 'parada';
 }
 
 export interface Employee {
@@ -32,6 +35,9 @@ export interface Employee {
   hasFacialRecord: boolean;
   status: 'active' | 'inactive';
   companyCode: string;
+  // Novos campos contratuais
+  roleFunction?: string; 
+  workShift?: string;
 }
 
 export interface User {
@@ -43,6 +49,8 @@ export interface User {
   role: 'admin' | 'employee' | 'totem';
   matricula?: string;
   hasFacialRecord?: boolean;
+  roleFunction?: string;
+  workShift?: string;
 }
 
 export interface PointRecord {
@@ -55,7 +63,7 @@ export interface PointRecord {
   photo: string;
   status: 'synchronized' | 'pending';
   matricula?: string;
-  digitalSignature: string; // Hash de segurança
+  digitalSignature: string;
   type: 'entrada' | 'saida';
 }
 
@@ -68,7 +76,7 @@ export interface AttendanceRequest {
   status: 'pending' | 'approved' | 'rejected';
   date: string;
   reason: string;
-  attachment?: string; // Base64 da foto do atestado
+  attachment?: string;
   createdAt: Date;
 }
 
@@ -85,8 +93,12 @@ export interface Note {
   updatedAt: Date;
 }
 
+// Add missing NotebookSummary interface for AI-driven summaries and guides
 export interface NotebookSummary {
   overview: string;
   topics: string[];
-  faqs: Array<{ q: string; a: string; }>;
+  faqs: {
+    q: string;
+    a: string;
+  }[];
 }
