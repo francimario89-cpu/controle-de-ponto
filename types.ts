@@ -19,12 +19,23 @@ export interface Company {
     radius: number;
   };
   holidays?: Holiday[];
-  config?: {
+  schedules?: WorkSchedule[]; // Lista de escalas de trabalho
+  config?: { // Configuração padrão (fallback)
     overtimePercentage: number;
     nightShiftPercentage: number;
     weeklyHours: number;
     toleranceMinutes: number;
   };
+}
+
+export interface WorkSchedule {
+  id: string;
+  name: string;
+  weeklyHours: number;
+  toleranceMinutes: number;
+  overtimePercentage: number;
+  nightShiftPercentage: number;
+  description?: string;
 }
 
 export interface Holiday {
@@ -60,6 +71,7 @@ export interface Employee {
   companyCode: string;
   roleFunction?: string; 
   workShift?: string;
+  scheduleId?: string; // Vínculo com a escala de trabalho
 }
 
 export interface User {
@@ -77,6 +89,7 @@ export interface User {
   hasFacialRecord?: boolean;
   roleFunction?: string;
   workShift?: string;
+  scheduleId?: string;
 }
 
 export interface PointRecord {
@@ -113,7 +126,6 @@ export interface ChatMessage {
   text: string;
 }
 
-// Added Note interface to fix compilation error in NotesArea.tsx
 export interface Note {
   id: string;
   title: string;
@@ -121,7 +133,6 @@ export interface Note {
   updatedAt: Date;
 }
 
-// Added NotebookSummary interface to fix compilation error in GuideArea.tsx
 export interface NotebookSummary {
   overview: string;
   topics: string[];

@@ -21,6 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
     { id: 'card', label: 'GESTÃO DE PONTO', icon: '📇' },
     { id: 'requests', label: 'AJUSTES / SOLICITAÇÕES', icon: '💬' },
     ...(isAdmin ? [
+      { id: 'admin', label: 'GESTÃO DE EQUIPE', icon: '👥' },
       { id: 'shifts', label: 'JORNADA DE TRABALHO', icon: '🕒' },
       { id: 'calendar', label: 'CALENDÁRIO & FERIADOS', icon: '📅' },
       { id: 'vacations', label: 'GESTÃO DE FÉRIAS', icon: '🏖️' },
