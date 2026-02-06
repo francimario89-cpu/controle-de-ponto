@@ -59,16 +59,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   const generatePrintableFolha = (emp: Employee, allRecs: PointRecord[]) => {
     const empRecs = allRecs.filter(r => r.matricula === emp.matricula);
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth();
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const monthName = new Date().toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+    const monthName = viewDate.toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
     let tableRows = '';
-    for (let d = 1; d <= daysInMonth; d++) {
+    for (let d = 1; d <= 31; d++) {
+      if (d > daysInMonth) {
+        tableRows += `<tr><td>${d}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
+        continue;
+      }
       const dateStr = `${String(d).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
       const dayRecs = empRecs.filter(r => r.timestamp.toLocaleDateString('pt-BR') === dateStr)
                          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -96,62 +100,86 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <head>
           <title>Folha de Ponto - ${emp.name}</title>
           <style>
-            body { font-family: sans-serif; padding: 40px; color: #333; }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-            .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; }
-            .info-section { display: grid; grid-template-cols: 1fr 1fr; gap: 10px; margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
-            .info-item { font-size: 12px; }
-            .info-item b { display: block; text-transform: uppercase; font-size: 10px; color: #666; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border: 1px solid #000; padding: 6px; text-align: center; font-size: 11px; height: 25px; }
-            th { background: #f5f5f5; font-size: 9px; text-transform: uppercase; }
-            .footer { margin-top: 40px; display: grid; grid-template-cols: 1fr 1fr; gap: 40px; }
-            .sig-box { border-top: 1px solid #000; text-align: center; padding-top: 10px; font-size: 10px; text-transform: uppercase; font-weight: bold; }
-            .notes { margin-top: 20px; border: 1px solid #ddd; padding: 10px; font-size: 10px; height: 60px; }
+            @page { size: A4; margin: 10mm; }
+            body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; color: #000; line-height: 1.1; }
+            .no-print { text-align: right; margin-bottom: 10px; }
+            .container { width: 100%; max-width: 210mm; margin: 0 auto; border: 1px solid #000; padding: 10px; box-sizing: border-box; }
+            .header-title { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; }
+            .header-title h1 { margin: 0; font-size: 18px; text-transform: uppercase; font-weight: 900; }
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; }
+            .info-box { border: 1px solid #000; padding: 5px; border-radius: 4px; }
+            .info-item { font-size: 10px; margin-bottom: 2px; }
+            .info-item b { font-size: 8px; color: #555; text-transform: uppercase; display: block; margin-bottom: 1px; }
+
+            table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+            th, td { border: 1px solid #000; text-align: center; font-size: 9px; height: 18px; padding: 2px; }
+            th { background: #f2f2f2; font-weight: bold; font-size: 8px; text-transform: uppercase; }
+            
+            .anotacoes { margin-top: 10px; border: 1px solid #000; padding: 5px; height: 40px; font-size: 8px; text-transform: uppercase; }
+            .footer-sigs { margin-top: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; padding: 0 20px; }
+            .sig-line { border-top: 1px solid #000; text-align: center; padding-top: 5px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
+            .brand-footer { text-align: center; font-size: 7px; color: #888; margin-top: 10px; text-transform: uppercase; }
             @media print { .no-print { display: none; } }
           </style>
         </head>
         <body>
-          <div class="no-print" style="margin-bottom: 20px; text-align: right;">
-            <button onclick="window.print()" style="padding: 10px 20px; background: #f97316; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">IMPRIMIR FOLHA</button>
+          <div class="no-print">
+            <button onclick="window.print()" style="padding: 8px 16px; background: #f97316; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;">IMPRIMIR AGORA</button>
           </div>
-          <div class="header">
-            <h1>Folha de Ponto</h1>
+          <div class="container">
+            <div class="header-title">
+              <h1>FOLHA DE PONTO</h1>
+            </div>
+            
+            <div class="info-grid">
+              <div class="info-box">
+                <div class="info-item"><b>Empregador(a)</b> ${company?.name || '---'}</div>
+                <div class="info-item"><b>CNPJ</b> ${company?.cnpj || '---'}</div>
+              </div>
+              <div class="info-box">
+                <div class="info-item"><b>Período</b> ${monthName} / ${year}</div>
+                <div class="info-item"><b>Endereço</b> ${company?.address || '---'}</div>
+              </div>
+            </div>
+
+            <div class="info-box" style="margin-bottom: 10px;">
+              <div class="info-grid" style="border:none; margin:0; padding:0;">
+                <div class="info-item"><b>Empregado(a)</b> ${emp.name}</div>
+                <div class="info-item"><b>CPF</b> ${emp.cpf || '---'}</div>
+                <div class="info-item"><b>Cargo</b> ${emp.roleFunction || '---'}</div>
+                <div class="info-item"><b>Matrícula</b> ${emp.matricula}</div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th width="30">Dia</th>
+                  <th>Entrada</th>
+                  <th>Início Intervalo</th>
+                  <th>Fim Intervalo</th>
+                  <th>Saída</th>
+                  <th>Hora Extra</th>
+                  <th width="180">Assinatura do Empregado(a)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+
+            <div class="anotacoes">Anotações:</div>
+
+            <div class="footer-sigs">
+              <div class="sig-line">Assinatura do Empregado(a)</div>
+              <div class="sig-line">Assinatura do Empregador(a)</div>
+            </div>
+
+            <div class="brand-footer">
+              Gerado por ForTime PRO - Sistema de Gestão de Ponto Eletrônico v4.2
+            </div>
           </div>
-          <div class="info-section">
-            <div class="info-item"><b>Empregador(a)</b> ${company?.name || 'NÃO INFORMADO'}</div>
-            <div class="info-item"><b>Período</b> ${monthName} / ${year}</div>
-            <div class="info-item"><b>CNPJ</b> ${company?.cnpj || '---'}</div>
-            <div class="info-item"><b>Endereço</b> ${company?.address || '---'}</div>
-          </div>
-          <div class="info-section">
-            <div class="info-item"><b>Empregado(a)</b> ${emp.name}</div>
-            <div class="info-item"><b>Matrícula</b> ${emp.matricula}</div>
-            <div class="info-item"><b>Cargo</b> ${emp.roleFunction || '---'}</div>
-            <div class="info-item"><b>CPF</b> ${emp.cpf || '---'}</div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th width="30">Dia</th>
-                <th>Entrada</th>
-                <th>Início Int.</th>
-                <th>Fim Int.</th>
-                <th>Saída</th>
-                <th>H. Extra</th>
-                <th width="150">Assinatura</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tableRows}
-            </tbody>
-          </table>
-          <div class="notes">Anotações:</div>
-          <div class="footer">
-            <div class="sig-box">Assinatura do Empregado(a)</div>
-            <div class="sig-box">Assinatura do Empregador(a)</div>
-          </div>
-          <p style="text-align: center; font-size: 8px; margin-top: 20px; color: #999;">Gerado por ForTime PRO - www.fortimepro.com.br</p>
         </body>
       </html>
     `);
@@ -163,7 +191,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     employees.forEach((emp, index) => {
       setTimeout(() => {
         generatePrintableFolha(emp, latestRecords);
-      }, index * 500); // Delay para não travar o navegador
+      }, index * 500);
     });
   };
 
@@ -255,14 +283,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               </div>
            </div>
         )}
-
-        {/* ABAS ADICIONAIS CONFORME SOLICITAÇÃO ANTERIOR */}
-        {tab === 'calendario' && (
-          <div className="bg-white dark:bg-slate-900 rounded-[44px] p-6 shadow-2xl border dark:border-slate-800">
-             {/* Componente de calendário já implementado */}
-             <p className="text-center text-[10px] font-black text-slate-400 py-10 uppercase tracking-widest">Calendário de Gestão Ativo</p>
-          </div>
-        )}
       </div>
 
       {/* MODAL HISTÓRICO INDIVIDUAL (DETALHADO) */}
@@ -286,8 +306,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     </tr>
                  </thead>
                  <tbody>
-                    {/* Linhas da tabela de histórico */}
-                    <tr className="bg-white/5"><td colSpan={3} className="py-20 text-center text-white/20 uppercase font-black text-[10px]">Histórico carregado no relatório PDF</td></tr>
+                    <tr className="bg-white/5"><td colSpan={3} className="py-20 text-center text-white/20 uppercase font-black text-[10px]">Utilize o ícone de página (📄) para visualizar a folha completa.</td></tr>
                  </tbody>
               </table>
            </div>
