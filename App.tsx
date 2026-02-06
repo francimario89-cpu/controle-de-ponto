@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, PointRecord, Company, Employee, AttendanceRequest, ChatMessage } from './types';
 import { db } from './firebase';
-import { getGeminiResponse } from './geminiService';
 import { 
   collection, addDoc, query, where, onSnapshot, doc, updateDoc, Timestamp, orderBy, deleteDoc, getDocs
 } from "firebase/firestore";
@@ -21,7 +20,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'colaboradores' | 'profile' | 'jornada' | 'calendario' | 'vacations' | 'aprovacoes' | 'contabilidade' | 'chat' | 'relatorio' | 'saldos'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'colaboradores' | 'profile' | 'jornada' | 'calendario' | 'vacations' | 'aprovacoes' | 'contabilidade' | 'chat' | 'relatorio' | 'saldos' | 'config'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -144,7 +143,7 @@ const App: React.FC = () => {
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'requests' && <Requests />}
-            {(['colaboradores', 'jornada', 'calendario', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio', 'saldos'].includes(activeView)) && 
+            {(['colaboradores', 'jornada', 'calendario', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio', 'saldos', 'config'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
                 onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', hasFacialRecord: false })} 

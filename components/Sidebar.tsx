@@ -24,6 +24,8 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
       { id: 'relatorio', label: 'BATIDAS', icon: '📸' },
       { id: 'colaboradores', label: 'EQUIPE', icon: '👥' },
       { id: 'saldos', label: 'BANCO HORAS', icon: '⚖️' },
+      { id: 'aprovacoes', label: 'APROVAÇÕES', icon: '✅' },
+      { id: 'config', label: 'CONFIG REGRAS', icon: '⚙️' },
       { id: 'calendario', label: 'FERIADOS', icon: '📅' },
       { id: 'contabilidade', label: 'CONTÁBIL', icon: '📈' }
     ] : []),
