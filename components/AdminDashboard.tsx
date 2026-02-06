@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { PointRecord, Company, Employee } from '../types';
+import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
 import { db } from '../firebase';
-import { doc, updateDoc } from "firebase/firestore";
-import { auditCompliance } from '../geminiService';
+import { doc, updateDoc, collection, query, where, onSnapshot, deleteDoc } from "firebase/firestore";
 
 interface AdminDashboardProps {
   latestRecords: PointRecord[];
@@ -15,236 +14,155 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company, employees, onAddEmployee, onDeleteEmployee, onUpdateIP }) => {
-  const [tab, setTab] = useState<'colaboradores' | 'empresa' | 'logs'>('colaboradores');
-  const [showAdd, setShowAdd] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [newEmployeePassword, setNewEmployeePassword] = useState('');
-  
-  const [auditResult, setAuditResult] = useState<any>(null);
-  const [isAuditing, setIsAuditing] = useState(false);
-
-  const [name, setName] = useState('');
-  const [mat, setMat] = useState('');
-  const [pass, setPass] = useState('');
-  const [currentIP, setCurrentIP] = useState('');
+  const [tab, setTab] = useState<'colaboradores' | 'aprovacoes' | 'config'>('colaboradores');
+  const [requests, setRequests] = useState<AttendanceRequest[]>([]);
+  const [geoLat, setGeoLat] = useState(company?.geofence?.lat || 0);
+  const [geoLng, setGeoLng] = useState(company?.geofence?.lng || 0);
+  const [geoRadius, setGeoRadius] = useState(company?.geofence?.radius || 100);
 
   useEffect(() => {
-    fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => setCurrentIP(d.ip));
-  }, []);
-
-  const handleUpdatePassword = async () => {
-    if (!editingEmployee || !newEmployeePassword) return;
-    try {
-      const empRef = doc(db, "employees", editingEmployee.id);
-      await updateDoc(empRef, { password: newEmployeePassword });
-      alert(`Senha de ${editingEmployee.name} atualizada!`);
-      setEditingEmployee(null);
-      setNewEmployeePassword('');
-    } catch (e) { alert("Erro ao atualizar."); }
-  };
-
-  const runAudit = async (emp: Employee) => {
-    setIsAuditing(true);
-    const empRecords = latestRecords.filter(r => r.matricula === emp.matricula);
-    const recordStrings = empRecords.map(r => `${r.timestamp.toLocaleString()} - ${r.address}`);
-    const result = await auditCompliance(emp.name, recordStrings);
-    setAuditResult(result);
-    setIsAuditing(false);
-  };
-
-  const exportToCSV = (emp: Employee) => {
-    const empRecords = latestRecords.filter(r => r.matricula === emp.matricula);
-    if (empRecords.length === 0) return alert("Sem registros.");
-
-    let csv = "\uFEFF"; // BOM para Excel
-    csv += "Data;Hora;Colaborador;Matricula;Endereco;Latitude;Longitude\n";
-    
-    empRecords.forEach(r => {
-      csv += `${r.timestamp.toLocaleDateString()};${r.timestamp.toLocaleTimeString()};${emp.name};${emp.matricula};"${r.address}";${r.latitude};${r.longitude}\n`;
+    if (!company?.id) return;
+    const q = query(collection(db, "requests"), where("companyCode", "==", company.id));
+    return onSnapshot(q, (s) => {
+      const reqs: any[] = [];
+      s.forEach(d => reqs.push({ id: d.id, ...d.data() }));
+      setRequests(reqs);
     });
+  }, [company?.id]);
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Ponto_${emp.name.replace(/\s/g, '_')}.csv`;
-    a.click();
+  const handleApprove = async (id: string, status: 'approved' | 'rejected') => {
+    await updateDoc(doc(db, "requests", id), { status });
+    alert(`Solicitação ${status === 'approved' ? 'Aprovada' : 'Rejeitada'}!`);
   };
 
-  const copyCode = () => {
-    if (company?.accessCode) {
-      navigator.clipboard.writeText(company.accessCode);
-      alert("Código copiado!");
-    }
-  };
-
-  // Add handleSave function to fix the "Cannot find name 'handleSave'" error
-  const handleSave = () => {
-    if (!name || !mat || !pass) return alert("Preencha todos os campos.");
-    onAddEmployee({
-      name,
-      matricula: mat,
-      password: pass,
-      photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=f97316&color=fff`,
-      hasFacialRecord: false,
-      status: 'active'
+  const saveGeofence = async () => {
+    if (!company?.id) return;
+    await updateDoc(doc(db, "companies", company.id), {
+      geofence: { enabled: true, lat: geoLat, lng: geoLng, radius: geoRadius }
     });
-    setName('');
-    setMat('');
-    setPass('');
+    alert("Cerca Virtual configurada com sucesso!");
+  };
+
+  const getMyLocation = () => {
+    navigator.geolocation.getCurrentPosition(p => {
+      setGeoLat(p.coords.latitude);
+      setGeoLng(p.coords.longitude);
+    });
   };
 
   return (
-    <div className="flex flex-col h-full bg-orange-50/30">
-      {/* Banner de Código - CRÍTICO: Sempre Visível */}
-      <div className="px-6 pt-6 pb-2">
-        <div className="bg-slate-900 rounded-[32px] p-5 flex items-center justify-between shadow-2xl border border-white/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/10 blur-2xl rounded-full -mr-10 -mt-10"></div>
-          <div>
-            <p className="text-[8px] font-black text-orange-500 uppercase tracking-[0.3em] mb-1">Acesso da Unidade</p>
-            <p className="text-2xl font-black text-white tracking-[0.2em]">{company?.accessCode || '---'}</p>
-          </div>
-          <button onClick={copyCode} className="bg-orange-500 text-white px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-orange-900/20 active:scale-95 transition-all">Copiar</button>
-        </div>
-      </div>
-
-      <div className="p-4 shrink-0">
-        <div className="flex p-1 bg-white rounded-2xl border border-orange-100/50 shadow-sm">
-          {(['colaboradores', 'empresa', 'logs'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all ${tab === t ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400'}`}>
-              {t === 'empresa' ? 'Config' : t}
+    <div className="flex flex-col h-full bg-slate-50">
+      <div className="p-4 bg-white border-b border-slate-100 shrink-0">
+        <div className="flex p-1 bg-slate-100 rounded-2xl">
+          {(['colaboradores', 'aprovacoes', 'config'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${tab === t ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400'}`}>
+              {t === 'aprovacoes' ? `Justificativas (${requests.filter(r => r.status === 'pending').length})` : t}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 no-scrollbar pb-20">
         {tab === 'colaboradores' && (
           <div className="space-y-4">
-            <button onClick={() => setShowAdd(true)} className="w-full py-4 bg-slate-900 text-white rounded-[24px] font-black uppercase text-[10px] shadow-lg">+ Novo Colaborador</button>
-            <div className="grid grid-cols-1 gap-3">
-              {employees.map(e => (
-                <div key={e.id} className="bg-white rounded-[32px] p-5 border border-orange-50 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <img src={e.photo} className="w-14 h-14 rounded-2xl object-cover shadow-sm border border-orange-50" />
-                      <div>
-                        <p className="text-sm font-black text-slate-800">{e.name}</p>
-                        <p className="text-[9px] text-orange-400 font-bold uppercase tracking-widest">Matrícula: {e.matricula}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => onDeleteEmployee(e.id)} className="p-2 text-red-100 hover:text-red-500 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-2">
-                    <button onClick={() => setEditingEmployee(e)} className="bg-slate-50 py-3 rounded-2xl text-[8px] font-black text-slate-500 uppercase border border-slate-100 hover:bg-orange-50 hover:text-orange-600 transition-all">Alterar Senha</button>
-                    <button onClick={() => exportToCSV(e)} className="bg-slate-50 py-3 rounded-2xl text-[8px] font-black text-slate-500 uppercase border border-slate-100 hover:bg-emerald-50 hover:text-emerald-600 transition-all">Exportar Excel</button>
-                    <button onClick={() => runAudit(e)} className="bg-slate-50 py-3 rounded-2xl text-[8px] font-black text-slate-500 uppercase border border-slate-100 hover:bg-indigo-50 hover:text-indigo-600 transition-all">Auditoria IA</button>
+            <div className="bg-slate-900 rounded-[32px] p-6 text-white flex items-center justify-between">
+               <div>
+                  <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Status em Tempo Real</p>
+                  <p className="text-2xl font-black">{employees.length} Colaboradores</p>
+               </div>
+               <div className="flex items-center gap-2 bg-emerald-500/20 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                  <span className="text-[9px] font-black uppercase">Online</span>
+               </div>
+            </div>
+            {employees.map(e => (
+              <div key={e.id} className="bg-white p-4 rounded-[32px] border border-slate-100 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                  <img src={e.photo} className="w-12 h-12 rounded-2xl object-cover border border-slate-100" />
+                  <div>
+                    <p className="text-xs font-black text-slate-800">{e.name}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">MAT: {e.matricula}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === 'empresa' && company && (
-          <div className="space-y-4">
-            <div className="bg-white p-6 rounded-[32px] border border-orange-50 shadow-sm space-y-4">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Rede e Segurança</h3>
-              <div className="p-5 bg-orange-50/50 rounded-2xl border border-orange-100">
-                <p className="text-[9px] font-black text-orange-400 uppercase mb-2">Restrição de IP Atual:</p>
-                <p className="text-sm font-bold text-slate-700 font-mono tracking-tighter">{company.authorizedIP || 'Livre para qualquer rede'}</p>
-              </div>
-              <button onClick={() => onUpdateIP(currentIP)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] active:scale-95 transition-all">Vincular Wi-Fi Atual ({currentIP})</button>
-            </div>
-          </div>
-        )}
-
-        {tab === 'logs' && (
-          <div className="space-y-3 pb-20">
-            {latestRecords.map(r => (
-              <div key={r.id} className="bg-white p-4 rounded-3xl border border-orange-50 flex items-center gap-4 shadow-sm">
-                <img src={r.photo} className="w-12 h-12 rounded-2xl object-cover shadow-sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-slate-800 truncate">{r.userName}</p>
-                  <p className="text-[9px] text-orange-500 font-black uppercase">{r.timestamp.toLocaleTimeString()} • {r.address.substring(0, 30)}...</p>
-                </div>
+                <button onClick={() => onDeleteEmployee(e.id)} className="p-3 text-red-200 hover:text-red-500 transition-colors">✕</button>
               </div>
             ))}
           </div>
         )}
-      </div>
 
-      {/* Modal de Auditoria IA */}
-      {auditResult && (
-        <div className="fixed inset-0 z-[120] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-sm rounded-[44px] overflow-hidden shadow-2xl animate-in zoom-in duration-300">
-            <div className={`p-6 text-center ${auditResult.riskLevel === 'Alto' ? 'bg-red-500' : 'bg-indigo-600'} text-white`}>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 mb-1">Auditoria Inteligente</p>
-              <h4 className="text-2xl font-black">Risco {auditResult.riskLevel}</h4>
-            </div>
-            <div className="p-8 space-y-6">
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">{auditResult.summary}</p>
-              <div className="space-y-2">
-                {auditResult.alerts.map((a: string, i: number) => (
-                  <div key={i} className="flex gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <span className="text-orange-500 font-bold">•</span>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase leading-tight">{a}</p>
+        {tab === 'aprovacoes' && (
+          <div className="space-y-4">
+            {requests.length === 0 ? (
+               <div className="py-20 text-center opacity-30"><p className="text-4xl mb-2">📬</p><p className="text-xs font-black uppercase">Nenhuma pendência</p></div>
+            ) : (
+              requests.map(r => (
+                <div key={r.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${r.type === 'atestado' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>{r.type}</span>
+                      <h4 className="text-sm font-black text-slate-800 mt-2">{r.userName}</h4>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">{r.date}</p>
+                    </div>
+                    {r.status === 'pending' ? (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleApprove(r.id, 'rejected')} className="w-8 h-8 bg-red-50 text-red-500 rounded-xl flex items-center justify-center">✕</button>
+                        <button onClick={() => handleApprove(r.id, 'approved')} className="w-8 h-8 bg-emerald-500 text-white rounded-xl flex items-center justify-center">✓</button>
+                      </div>
+                    ) : (
+                      <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full ${r.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{r.status}</span>
+                    )}
                   </div>
-                ))}
+                  <p className="text-xs text-slate-500 italic bg-slate-50 p-4 rounded-2xl">"{r.reason}"</p>
+                  {r.attachment && (
+                    <img src={r.attachment} className="w-full h-48 object-cover rounded-2xl border border-slate-100" />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === 'config' && (
+          <div className="space-y-4">
+            <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
+              <div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-1">Cerca Virtual (Geofence)</h3>
+                <p className="text-[9px] text-slate-400 font-bold uppercase">Restringir local de batida</p>
               </div>
-              <button onClick={() => setAuditResult(null)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs">Entendido</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Loading Auditoria */}
-      {isAuditing && (
-        <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="text-center space-y-4">
-            <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="text-white font-black uppercase text-xs tracking-widest">Gemini Auditando Jornada...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Trocar Senha */}
-      {editingEmployee && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white rounded-[44px] p-8 animate-in zoom-in duration-300 shadow-2xl">
-            <h3 className="text-center font-black text-slate-800 uppercase text-xs mb-2">Redefinir Senha</h3>
-            <p className="text-center text-[10px] font-bold text-orange-500 uppercase mb-6">{editingEmployee.name}</p>
-            <div className="space-y-4">
-              <input type="password" placeholder="NOVA SENHA" value={newEmployeePassword} onChange={e => setNewEmployeePassword(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold outline-none" />
-              <div className="flex gap-3">
-                <button onClick={() => setEditingEmployee(null)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase">Sair</button>
-                <button onClick={handleUpdatePassword} className="flex-2 bg-orange-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase">Salvar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Add Colaborador */}
-      {showAdd && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-end p-4">
-          <div className="w-full bg-white rounded-[44px] p-8 animate-in slide-in-from-bottom-full duration-300">
-            <h3 className="text-center font-black text-slate-800 uppercase text-xs mb-6">Novo Colaborador</h3>
-            <div className="space-y-4">
-              <input placeholder="NOME" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold outline-none" />
-              <input placeholder="MATRÍCULA" value={mat} onChange={e => setMat(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold outline-none" />
-              <input type="password" placeholder="SENHA INICIAL" value={pass} onChange={e => setPass(e.target.value)} className="w-full p-4 bg-orange-50 rounded-2xl text-xs font-bold outline-none" />
-              <div className="flex gap-3 pt-4">
-                <button onClick={() => setShowAdd(false)} className="flex-1 py-4 text-slate-400 font-black text-[10px] uppercase">Cancelar</button>
-                <button onClick={() => {handleSave(); setShowAdd(false);}} className="flex-2 bg-orange-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase">Cadastrar</button>
+              
+              <div className="space-y-4">
+                <button onClick={getMyLocation} className="w-full py-4 bg-orange-50 text-orange-600 border border-orange-100 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
+                   📍 Capturar Coordenadas Atuais
+                </button>
+                <div className="grid grid-cols-2 gap-3">
+                   <div className="space-y-1">
+                      <label className="text-[8px] font-black text-slate-400 uppercase ml-2">Latitude</label>
+                      <input type="number" value={geoLat} onChange={e => setGeoLat(Number(e.target.value))} className="w-full p-4 bg-slate-50 rounded-2xl text-xs font-bold" />
+                   </div>
+                   <div className="space-y-1">
+                      <label className="text-[8px] font-black text-slate-400 uppercase ml-2">Longitude</label>
+                      <input type="number" value={geoLng} onChange={e => setGeoLng(Number(e.target.value))} className="w-full p-4 bg-slate-50 rounded-2xl text-xs font-bold" />
+                   </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-2">Raio de Tolerância (Metros)</label>
+                  <input type="number" value={geoRadius} onChange={e => setGeoRadius(Number(e.target.value))} className="w-full p-4 bg-slate-50 rounded-2xl text-xs font-bold" />
+                </div>
+                <button onClick={saveGeofence} className="w-full py-5 bg-orange-500 text-white rounded-[24px] font-black text-[10px] uppercase shadow-lg shadow-orange-100">Salvar Perímetro</button>
               </div>
             </div>
+
+            <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
+               <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Escala de Trabalho</h3>
+               <div className="grid grid-cols-2 gap-4">
+                  <input type="time" className="w-full p-4 bg-slate-50 rounded-2xl text-xs font-bold" placeholder="Início" />
+                  <input type="time" className="w-full p-4 bg-slate-50 rounded-2xl text-xs font-bold" placeholder="Fim" />
+               </div>
+               <button className="w-full py-4 border-2 border-slate-100 rounded-[24px] font-black text-[10px] text-slate-400 uppercase">Salvar Jornada Base</button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

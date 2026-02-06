@@ -29,6 +29,7 @@ const KioskMode: React.FC<KioskModeProps> = ({ employees, onPunch, onExit }) => 
           setLastMatch(randomEmp);
           
           const now = new Date();
+          // Fix: Added digitalSignature and type to comply with PointRecord interface
           const record: PointRecord = {
             id: Math.random().toString(36).substr(2, 9),
             userName: randomEmp.name,
@@ -38,7 +39,9 @@ const KioskMode: React.FC<KioskModeProps> = ({ employees, onPunch, onExit }) => 
             longitude: -43.93,
             photo: randomEmp.photo,
             status: 'synchronized',
-            matricula: randomEmp.matricula
+            matricula: randomEmp.matricula,
+            digitalSignature: Math.random().toString(36).substring(2, 15),
+            type: 'entrada'
           };
           
           onPunch(record);
@@ -53,7 +56,7 @@ const KioskMode: React.FC<KioskModeProps> = ({ employees, onPunch, onExit }) => 
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [employees, recognizing]);
+  }, [employees, recognizing, onPunch]);
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-between p-8 overflow-hidden">

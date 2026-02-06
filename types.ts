@@ -8,6 +8,18 @@ export interface Company {
   authorizedIP?: string;
   adminEmail: string;
   adminPassword?: string;
+  // Novos campos de Geofencing e Escala
+  geofence?: {
+    enabled: boolean;
+    lat: number;
+    lng: number;
+    radius: number; // em metros
+  };
+  workShift?: {
+    start: string; // "08:00"
+    end: string;   // "18:00"
+    breakMinutes: number;
+  };
 }
 
 export interface Employee {
@@ -43,25 +55,29 @@ export interface PointRecord {
   photo: string;
   status: 'synchronized' | 'pending';
   matricula?: string;
+  digitalSignature: string; // Hash de segurança
+  type: 'entrada' | 'saida';
 }
 
 export interface AttendanceRequest {
   id: string;
-  type: 'inclusao' | 'abono';
+  companyCode: string;
+  matricula: string;
+  userName: string;
+  type: 'ajuste' | 'atestado' | 'abono';
   status: 'pending' | 'approved' | 'rejected';
   date: string;
-  times: string[];
   reason: string;
+  attachment?: string; // Base64 da foto do atestado
+  createdAt: Date;
 }
 
-// Added missing interface for ChatArea component
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
 }
 
-// Added missing interface for NotesArea component
 export interface Note {
   id: string;
   title: string;
@@ -69,12 +85,8 @@ export interface Note {
   updatedAt: Date;
 }
 
-// Added missing interface for GuideArea component, matching the responseSchema in geminiService
 export interface NotebookSummary {
   overview: string;
   topics: string[];
-  faqs: Array<{
-    q: string;
-    a: string;
-  }>;
+  faqs: Array<{ q: string; a: string; }>;
 }
