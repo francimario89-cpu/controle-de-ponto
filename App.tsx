@@ -21,7 +21,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'colaboradores' | 'profile' | 'jornada' | 'calendario' | 'vacations' | 'aprovacoes' | 'contabilidade' | 'chat' | 'relatorio'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'colaboradores' | 'profile' | 'jornada' | 'calendario' | 'vacations' | 'aprovacoes' | 'contabilidade' | 'chat' | 'relatorio' | 'saldos'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -80,11 +80,9 @@ const App: React.FC = () => {
         if (!snap.empty) {
           const empRef = doc(db, "employees", snap.docs[0].id);
           await updateDoc(empRef, { hasFacialRecord: true, photo: photo });
-          
           const updatedUser = { ...user, hasFacialRecord: true, photo: photo };
           setUser(updatedUser);
           localStorage.setItem('fortime_user', JSON.stringify(updatedUser));
-          
           setIsPunching(false);
           alert("Biometria Facial salva!");
           return;
@@ -97,7 +95,6 @@ const App: React.FC = () => {
 
     const todayRecs = records.filter(r => r.matricula === user.matricula && r.timestamp.toLocaleDateString() === new Date().toLocaleDateString());
     const type = todayRecs.length % 2 === 0 ? 'entrada' : 'saida';
-    
     const recordData = {
       userName: user.name, address: loc.address, latitude: loc.lat, longitude: loc.lng,
       photo, status: 'synchronized', matricula: user.matricula,
@@ -147,7 +144,7 @@ const App: React.FC = () => {
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'requests' && <Requests />}
-            {(['colaboradores', 'jornada', 'calendario', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio'].includes(activeView)) && 
+            {(['colaboradores', 'jornada', 'calendario', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
                 onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', hasFacialRecord: false })} 

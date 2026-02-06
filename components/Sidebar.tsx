@@ -17,13 +17,13 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
   const menuItems = [
     { id: 'dashboard', label: 'INÍCIO', icon: '🏠' },
     { id: 'profile', label: 'PERFIL', icon: '👤' },
-    { id: 'mypoint', label: 'PONTO', icon: '📝' },
+    { id: 'mypoint', label: 'MEU PONTO', icon: '📝' },
     { id: 'card', label: 'EXTRATO', icon: '📇' },
     { id: 'requests', label: 'PEDIDOS', icon: '💬' },
     ...(isAdmin ? [
       { id: 'relatorio', label: 'BATIDAS', icon: '📸' },
       { id: 'colaboradores', label: 'EQUIPE', icon: '👥' },
-      { id: 'jornada', label: 'ESCALAS', icon: '🕒' },
+      { id: 'saldos', label: 'BANCO HORAS', icon: '⚖️' },
       { id: 'calendario', label: 'FERIADOS', icon: '📅' },
       { id: 'contabilidade', label: 'CONTÁBIL', icon: '📈' }
     ] : []),
