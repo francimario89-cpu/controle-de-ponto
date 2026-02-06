@@ -1,12 +1,13 @@
 
 import React from 'react';
-import { PointRecord, User } from '../types';
+import { PointRecord, User, Company } from '../types';
 
 interface AttendanceCardProps {
   records: PointRecord[];
+  company: Company | null;
 }
 
-const AttendanceCard: React.FC<AttendanceCardProps> = ({ records }) => {
+const AttendanceCard: React.FC<AttendanceCardProps> = ({ records, company }) => {
   const user: User = JSON.parse(localStorage.getItem('fortime_user') || '{}');
 
   const calculateTotalHours = () => {
@@ -25,34 +26,115 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ records }) => {
   const hours = Math.floor(totalHours);
   const minutes = Math.round((totalHours - hours) * 60);
 
-  const handleDownloadMirror = () => {
-    if (records.length === 0) return alert("Nenhum dado.");
+  const generatePrintableFolha = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthName = now.toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
     
-    let content = "EXTRATO DE PONTO OFICIAL - FORTIME PRO\n";
-    content += "========================================\n\n";
-    content += `COLABORADOR: ${user.name}\n`;
-    content += `MATRÍCULA: ${user.matricula || 'N/A'}\n`;
-    content += `FUNÇÃO: ${user.roleFunction || 'NÃO DEFINIDA'}\n`;
-    content += `JORNADA: ${user.workShift || 'NÃO DEFINIDA'}\n`;
-    content += `EMPRESA: ${user.companyName}\n\n`;
-    content += `TOTAL ACUMULADO NO MÊS: ${hours}h ${minutes}m\n`;
-    content += "----------------------------------------\n\n";
-    content += "REGISTROS DETALHADOS:\n";
-    
-    records.sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()).forEach(r => {
-      content += `[${r.timestamp.toLocaleDateString('pt-BR')}] ${r.timestamp.toLocaleTimeString('pt-BR')} - ${r.type.toUpperCase()} (${r.address})\n`;
-    });
+    const empRecs = records.filter(r => 
+      r.timestamp.getMonth() === month && 
+      r.timestamp.getFullYear() === year
+    );
 
-    content += "\n\n----------------------------------------\n";
-    content += "Assinatura do Colaborador: ____________________\n";
-    content += "Assinatura do Gestor: _________________________\n";
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
 
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Extrato_Ponto_${user.name}_${new Date().getMonth() + 1}.txt`;
-    a.click();
+    let tableRows = '';
+    for (let d = 1; d <= 31; d++) {
+      const dateObj = new Date(year, month, d);
+      const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+      
+      if (d > daysInMonth) {
+        tableRows += `<tr class="empty-row"><td>${d}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+        continue;
+      }
+
+      const dateStr = dateObj.toLocaleDateString('pt-BR');
+      const dayRecs = empRecs.filter(r => r.timestamp.toLocaleDateString('pt-BR') === dateStr)
+                         .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      
+      const e1 = dayRecs[0] ? dayRecs[0].timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const s1 = dayRecs[1] ? dayRecs[1].timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const e2 = dayRecs[2] ? dayRecs[2].timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const s2 = dayRecs[3] ? dayRecs[3].timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      
+      const rowClass = isWeekend ? 'weekend' : '';
+      tableRows += `<tr class="${rowClass}">
+        <td>${d}</td>
+        <td>${e1}</td>
+        <td>${s1}</td>
+        <td>${e2}</td>
+        <td>${s2}</td>
+        <td></td>
+        <td></td>
+      </tr>`;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>FOLHA DE PONTO - ${user.name}</title>
+          <style>
+            @page { size: A4; margin: 3mm; }
+            body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; color: #000; font-size: 8.5px; line-height: 1.1; }
+            .container { width: 100%; max-width: 200mm; margin: 0 auto; border: 1px solid #000; padding: 8px; box-sizing: border-box; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
+            .title { text-align: center; font-size: 12px; font-weight: 900; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin-bottom: 8px; }
+            .header-info { display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; margin-bottom: 8px; }
+            .info-box { border: 1px solid #000; padding: 4px; background: #fafafa; }
+            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            th, td { border: 1px solid #000; text-align: center; padding: 3px 1px; }
+            th { background: #f2f2f2; font-weight: 900; font-size: 7px; }
+            tr.weekend { background: #f9f9f9; }
+            .footer-sigs { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+            .sig-line { border-top: 1px solid #000; text-align: center; padding-top: 3px; font-weight: 900; font-size: 8px; }
+            .stamp { text-align: center; font-size: 7px; color: #888; margin-top: 10px; }
+          </style>
+        </head>
+        <body onload="window.print()">
+          <div class="container">
+            <div>
+              <div class="title">FOLHA DE FREQUÊNCIA INDIVIDUAL</div>
+              <div class="header-info">
+                <div class="info-box">
+                  <b>EMPRESA:</b> ${company?.name || '---'}<br/>
+                  <b>CNPJ:</b> ${company?.cnpj || '---'}<br/>
+                  <b>ENDEREÇO:</b> ${company?.address || '---'}
+                </div>
+                <div class="info-box">
+                  <b>COLABORADOR:</b> ${user.name}<br/>
+                  <b>MATRÍCULA:</b> ${user.matricula || '---'}<br/>
+                  <b>PERÍODO:</b> ${monthName} / ${year}
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th width="25">DIA</th>
+                    <th>ENTRADA 1</th>
+                    <th>SAÍDA 1</th>
+                    <th>ENTRADA 2</th>
+                    <th>SAÍDA 2</th>
+                    <th width="40">H. EXTRA</th>
+                    <th width="100">ASSINATURA</th>
+                  </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+              </table>
+            </div>
+            <div>
+              <div class="footer-sigs">
+                <div class="sig-line">Assinatura do Colaborador</div>
+                <div class="sig-line">Assinatura da Empresa</div>
+              </div>
+              <div class="stamp">Documento gerado eletronicamente em conformidade com a Portaria 671 MTP - ForTime PRO</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   return (
@@ -75,15 +157,20 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ records }) => {
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] border border-orange-50 p-6 shadow-sm space-y-4">
-        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest px-2">Comprovante Legal</h3>
+      <div className="bg-white dark:bg-slate-800 rounded-[40px] border border-orange-50 dark:border-slate-700 p-6 shadow-sm space-y-4">
+        <h3 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest px-2">Documentos Legais</h3>
+        
         <button 
-          onClick={handleDownloadMirror}
-          className="w-full py-6 bg-slate-900 text-white rounded-[28px] font-black uppercase text-xs shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+          onClick={generatePrintableFolha}
+          className="w-full py-6 bg-slate-900 dark:bg-slate-700 text-white rounded-[28px] font-black uppercase text-xs shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          Gerar Extrato p/ Assinatura
+          <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          Gerar Folha A4 Oficial
         </button>
+
+        <p className="text-center text-[8px] text-slate-400 font-bold uppercase tracking-widest px-4">
+          A Folha de Ponto A4 é o documento oficial para assinatura e comprovação de jornada.
+        </p>
       </div>
     </div>
   );

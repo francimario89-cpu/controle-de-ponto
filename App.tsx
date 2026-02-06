@@ -141,7 +141,7 @@ const App: React.FC = () => {
           <div className="max-w-md mx-auto w-full h-full">
             {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={handleNavigation} user={user} />}
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
-            {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
+            {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
             {activeView === 'requests' && <Requests />}
             {(['colaboradores', 'jornada', 'calendario', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio', 'saldos', 'config'].includes(activeView)) && 
               <AdminDashboard 
