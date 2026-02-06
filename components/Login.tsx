@@ -17,7 +17,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   
   const [companyName, setCompanyName] = useState('');
-  const [cnpj, setCnpj] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [masterKey, setMasterKey] = useState('');
@@ -28,20 +27,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true); setError('');
     try {
       if (adminMode === 'signup') {
-        if (masterKey !== MASTER_KEY) { setError('Chave inválida.'); setLoading(false); return; }
+        if (masterKey !== MASTER_KEY) { setError('CHAVE INVÁLIDA'); setLoading(false); return; }
         const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const comp: Company = { id: code, name: companyName, cnpj, address: '', accessCode: code, adminEmail: email, adminPassword: password };
+        const comp: Company = { id: code, name: companyName, cnpj: '', address: '', accessCode: code, adminEmail: email, adminPassword: password };
         await setDoc(doc(db, "companies", code), comp);
-        onLogin({ name: "Gestor RH", email, companyCode: code, role: 'admin' }, comp);
+        onLogin({ name: "ADMIN", email, companyCode: code, role: 'admin' }, comp);
       } else {
         const q = query(collection(db, "companies"), where("adminEmail", "==", email), limit(1));
         const snap = await getDocs(q);
         if (!snap.empty && snap.docs[0].data().adminPassword === password) {
           const c = snap.docs[0].data() as Company;
-          onLogin({ name: "Gestor RH", email: c.adminEmail, companyCode: c.accessCode, role: 'admin' }, c);
-        } else setError('Erro de credenciais.');
+          onLogin({ name: "ADMIN", email: c.adminEmail, companyCode: c.accessCode, role: 'admin' }, c);
+        } else setError('DADOS INCORRETOS');
       }
-    } catch { setError('Erro técnico.'); }
+    } catch { setError('ERRO TÉCNICO'); }
     setLoading(false);
   };
 
@@ -49,7 +48,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true); setError('');
     try {
       const compDoc = await getDoc(doc(db, "companies", companyCode));
-      if (!compDoc.exists()) throw new Error('Empresa inválida');
+      if (!compDoc.exists()) throw new Error('CÓDIGO INVÁLIDO');
       const q = query(collection(db, "employees"), where("companyCode", "==", companyCode), where("matricula", "==", matricula));
       const snap = await getDocs(q);
       if (!snap.empty) {
@@ -59,9 +58,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             name: emp.name, companyCode, companyName: compDoc.data().name, role: 'employee', 
             matricula, photo: emp.photo || '', hasFacialRecord: emp.hasFacialRecord === true
           });
-        } else setError('Senha incorreta.');
-      } else setError('Não encontrado.');
-    } catch (e: any) { setError(e.message); }
+        } else setError('SENHA ERRADA');
+      } else setError('NÃO CADASTRADO');
+    } catch (e: any) { setError(e.message.toUpperCase()); }
     setLoading(false);
   };
 
@@ -76,13 +75,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         {error && <p className="text-[10px] text-red-500 font-black mb-4 text-center bg-red-50 dark:bg-red-950/20 p-3 rounded-2xl">{error}</p>}
         {!role ? (
           <div className="space-y-3">
-            <button onClick={() => setRole('admin')} className="w-full p-6 border-2 dark:border-slate-800 rounded-3xl flex items-center gap-4 hover:bg-orange-50 dark:hover:bg-slate-800/50 transition-all text-left">
+            <button onClick={() => setRole('admin')} className="w-full p-6 border-2 dark:border-slate-800 rounded-3xl flex items-center gap-4 hover:bg-orange-50 transition-all text-left">
               <span className="text-3xl">📊</span>
-              <div><p className="font-black text-orange-600 text-xs uppercase">GESTOR</p></div>
+              <p className="font-black text-orange-600 text-xs uppercase">GESTOR</p>
             </button>
-            <button onClick={() => setRole('employee')} className="w-full p-6 border-2 dark:border-slate-800 rounded-3xl flex items-center gap-4 hover:bg-orange-50 dark:hover:bg-slate-800/50 transition-all text-left">
+            <button onClick={() => setRole('employee')} className="w-full p-6 border-2 dark:border-slate-800 rounded-3xl flex items-center gap-4 hover:bg-orange-50 transition-all text-left">
               <span className="text-3xl">👤</span>
-              <div><p className="font-black text-orange-600 text-xs uppercase">COLABORADOR</p></div>
+              <p className="font-black text-orange-600 text-xs uppercase">COLABORADOR</p>
+            </button>
+            <button onClick={() => setRole('totem')} className="w-full p-6 border-2 dark:border-slate-800 rounded-3xl flex items-center gap-4 hover:bg-orange-50 transition-all text-left">
+              <span className="text-3xl">📟</span>
+              <p className="font-black text-orange-600 text-xs uppercase">MODO TOTEM</p>
             </button>
           </div>
         ) : (
@@ -90,20 +93,36 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             {role === 'admin' ? (
               <>
                 <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
-                  <button onClick={() => setAdminMode('login')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl ${adminMode === 'login' ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-white' : 'text-slate-400'}`}>ENTRAR</button>
-                  <button onClick={() => setAdminMode('signup')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl ${adminMode === 'signup' ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-white' : 'text-slate-400'}`}>NOVO</button>
+                  <button onClick={() => setAdminMode('login')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl ${adminMode === 'login' ? 'bg-white dark:bg-slate-700 text-orange-600' : 'text-slate-400'}`}>ENTRAR</button>
+                  <button onClick={() => setAdminMode('signup')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl ${adminMode === 'signup' ? 'bg-white dark:bg-slate-700 text-orange-600' : 'text-slate-400'}`}>NOVO</button>
                 </div>
-                {adminMode === 'signup' && <input type="text" placeholder="CHAVE MESTRA" value={masterKey} onChange={e => setMasterKey(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-bold outline-none dark:text-white" />}
-                <input type="email" placeholder="E-MAIL" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-bold outline-none dark:text-white" />
-                <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-bold outline-none dark:text-white" />
+                {adminMode === 'signup' && (
+                  <>
+                    <input type="text" placeholder="CHAVE MESTRA" value={masterKey} onChange={e => setMasterKey(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                    <input type="text" placeholder="NOME EMPRESA" value={companyName} onChange={e => setCompanyName(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                  </>
+                )}
+                <input type="email" placeholder="E-MAIL" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
                 <button onClick={handleAdminAuth} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl">{loading ? '...' : 'ACESSAR'}</button>
+              </>
+            ) : role === 'employee' ? (
+              <>
+                <input type="text" placeholder="CÓDIGO" value={companyCode} onChange={e => setCompanyCode(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black text-center tracking-widest outline-none dark:text-white" />
+                <input type="text" placeholder="MATRÍCULA" value={matricula} onChange={e => setMatricula(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                <button onClick={handleEmployeeLogin} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl">{loading ? '...' : 'ENTRAR'}</button>
               </>
             ) : (
               <>
-                <input type="text" placeholder="CÓDIGO EMPRESA" value={companyCode} onChange={e => setCompanyCode(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-bold text-center tracking-widest outline-none dark:text-white" />
-                <input type="text" placeholder="MATRÍCULA" value={matricula} onChange={e => setMatricula(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-bold outline-none dark:text-white" />
-                <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs font-bold outline-none dark:text-white" />
-                <button onClick={handleEmployeeLogin} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl">{loading ? '...' : 'ENTRAR'}</button>
+                <input type="text" placeholder="CÓDIGO EMPRESA" value={companyCode} onChange={e => setCompanyCode(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black text-center tracking-widest outline-none dark:text-white" />
+                <button onClick={async () => {
+                  try {
+                    const docSnap = await getDoc(doc(db, "companies", companyCode));
+                    if (docSnap.exists()) onLogin({ name: "TOTEM", email: '', companyCode, role: 'totem' }, docSnap.data() as Company);
+                    else setError('CÓDIGO INVÁLIDO');
+                  } catch { setError('ERRO'); }
+                }} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs">ATIVAR TOTEM</button>
               </>
             )}
             <button onClick={() => setRole(null)} className="w-full text-[9px] text-slate-400 font-black uppercase text-center mt-2 tracking-widest">VOLTAR</button>
