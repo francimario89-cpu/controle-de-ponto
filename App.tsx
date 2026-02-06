@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, PointRecord, Company, Employee } from './types';
+import { User, PointRecord, Company, Employee, AttendanceRequest } from './types';
 import { db } from './firebase';
 import { 
   collection, addDoc, query, where, onSnapshot, doc, updateDoc, Timestamp, orderBy, deleteDoc
@@ -21,11 +21,12 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'admin' | 'totem' | 'profile' | 'shifts' | 'calendar' | 'vacations'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'admin' | 'totem' | 'profile' | 'shifts' | 'calendar' | 'vacations' | 'aprovacoes'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [records, setRecords] = useState<PointRecord[]>([]);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
@@ -36,14 +37,20 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!user?.companyCode) return;
+    
+    // Listen to Company Data
     const unsubComp = onSnapshot(doc(db, "companies", user.companyCode), (d) => {
       if (d.exists()) setCompany({ id: d.id, ...d.data() } as Company);
     });
+
+    // Listen to Employees
     const unsubEmps = onSnapshot(query(collection(db, "employees"), where("companyCode", "==", user.companyCode)), (s) => {
       const emps: Employee[] = [];
       s.forEach(d => emps.push({ id: d.id, ...d.data() } as Employee));
       setEmployees(emps);
     });
+
+    // Listen to Point Records
     const unsubRecs = onSnapshot(query(collection(db, "records"), where("companyCode", "==", user.companyCode), orderBy("timestamp", "desc")), (s) => {
       const recs: PointRecord[] = [];
       s.forEach(d => {
@@ -52,7 +59,13 @@ const App: React.FC = () => {
       });
       setRecords(recs);
     });
-    return () => { unsubComp(); unsubEmps(); unsubRecs(); };
+
+    // Listen to Pending Requests (Notifications)
+    const unsubReqs = onSnapshot(query(collection(db, "requests"), where("companyCode", "==", user.companyCode), where("status", "==", "pending")), (s) => {
+      setPendingRequestsCount(s.size);
+    });
+
+    return () => { unsubComp(); unsubEmps(); unsubRecs(); unsubReqs(); };
   }, [user?.companyCode]);
 
   const handleLogin = (newUser: User, newCompany?: Company) => {
@@ -93,9 +106,11 @@ const App: React.FC = () => {
   if (!isInitialized) return null;
   if (!user) return <Login onLogin={handleLogin} />;
 
+  const isAdmin = user.role === 'admin';
+
   return (
     <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans">
-      <div className="h-full w-full max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-slate-200">
+      <div className="h-full w-full max-md:max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-slate-200">
         <Sidebar 
           user={user} 
           isOpen={isSidebarOpen} 
@@ -105,24 +120,39 @@ const App: React.FC = () => {
         />
         
         <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-800 focus:outline-none">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 8h16M4 16h16" /></svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-800 focus:outline-none hover:bg-slate-50 rounded-xl transition-colors">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 8h16M4 16h16" /></svg>
+            </button>
+            {isAdmin && pendingRequestsCount > 0 && (
+              <button 
+                onClick={() => setActiveView('aprovacoes')}
+                className="relative p-2 text-orange-500 hover:bg-orange-50 rounded-xl transition-all animate-bounce"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                  {pendingRequestsCount}
+                </span>
+              </button>
+            )}
+          </div>
+
           <div className="text-center">
             <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>
             <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{activeView}</p>
           </div>
-          <button onClick={() => setActiveView('profile')} className="w-10 h-10 rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+
+          <button onClick={() => setActiveView('profile')} className="w-10 h-10 rounded-2xl overflow-hidden border border-slate-100 shadow-sm transition-transform active:scale-90">
              <img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" />
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
+        <main className="flex-1 overflow-y-auto no-scrollbar pb-10 bg-slate-50/30">
           {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={setActiveView} user={user} />}
           {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
           {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
           {activeView === 'requests' && <Requests />}
-          {(['admin', 'shifts', 'calendar', 'vacations'].includes(activeView)) && 
+          {(['admin', 'shifts', 'calendar', 'vacations', 'aprovacoes'].includes(activeView)) && 
             <AdminDashboard 
               latestRecords={records} 
               company={company} 
@@ -130,7 +160,13 @@ const App: React.FC = () => {
               onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode })} 
               onDeleteEmployee={async (id) => confirm("Excluir?") && await deleteDoc(doc(db, "employees", id))} 
               onUpdateIP={async (ip) => await updateDoc(doc(db, "companies", user.companyCode), { authorizedIP: ip })}
-              initialTab={activeView === 'shifts' ? 'jornada' : activeView === 'calendar' ? 'calendario' : activeView === 'vacations' ? 'ferias' : 'colaboradores'}
+              initialTab={
+                activeView === 'shifts' ? 'jornada' : 
+                activeView === 'calendar' ? 'calendario' : 
+                activeView === 'vacations' ? 'ferias' : 
+                activeView === 'aprovacoes' ? 'aprovacoes' :
+                'colaboradores'
+              }
             />
           }
           {activeView === 'profile' && <Profile user={user} />}
