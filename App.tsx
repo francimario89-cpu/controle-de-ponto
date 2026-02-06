@@ -42,10 +42,9 @@ const App: React.FC = () => {
         const data = { id: d.id, ...d.data() } as Company;
         setCompany(data);
         
-        // Aplicação de Cor Dinâmica
         const themeColor = data.themeColor || '#f97316';
         document.documentElement.style.setProperty('--primary-color', themeColor);
-        document.documentElement.style.setProperty('--primary-light', themeColor + '20'); // 20 opacity
+        document.documentElement.style.setProperty('--primary-light', themeColor + '20');
       }
     });
 
@@ -112,7 +111,7 @@ const App: React.FC = () => {
   const isAdmin = user.role === 'admin';
 
   return (
-    <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans justify-center items-center p-0 md:p-4">
       <style>{`
         :root {
           --primary-color: #f97316;
@@ -125,7 +124,7 @@ const App: React.FC = () => {
         .shadow-primary { shadow-color: var(--primary-color) !important; }
       `}</style>
 
-      <div className="h-full w-full max-md:max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-slate-200">
+      <div className="h-full w-full max-w-lg bg-white shadow-2xl flex flex-col relative border-x border-slate-200 overflow-hidden md:rounded-[40px]">
         <Sidebar 
           user={user} 
           company={company}
@@ -135,7 +134,7 @@ const App: React.FC = () => {
           activeView={activeView} 
         />
         
-        <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10">
+        <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-2">
             <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-800 focus:outline-none hover:bg-slate-50 rounded-xl transition-colors">
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 8h16M4 16h16" /></svg>
@@ -153,13 +152,13 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <div className="text-center">
+          <div className="text-center flex flex-col items-center">
             {company?.logoUrl ? (
-              <img src={company.logoUrl} className="h-6 mx-auto object-contain mb-0.5" alt="Logo" />
+              <img src={company.logoUrl} className="h-6 object-contain mb-0.5" alt="Logo" />
             ) : (
               <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>
             )}
-            <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{activeView}</p>
+            <p className="text-[7px] text-slate-400 font-bold uppercase tracking-[0.3em]">{activeView === 'dashboard' ? 'INÍCIO' : activeView.toUpperCase()}</p>
           </div>
 
           <button onClick={() => setActiveView('profile')} className="w-10 h-10 rounded-2xl overflow-hidden border border-slate-100 shadow-sm transition-transform active:scale-90">
@@ -168,28 +167,30 @@ const App: React.FC = () => {
         </header>
 
         <main className="flex-1 overflow-y-auto no-scrollbar pb-10 bg-slate-50/30">
-          {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={setActiveView} user={user} />}
-          {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
-          {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
-          {activeView === 'requests' && <Requests />}
-          {(['admin', 'shifts', 'calendar', 'vacations', 'aprovacoes'].includes(activeView)) && 
-            <AdminDashboard 
-              latestRecords={records} 
-              company={company} 
-              employees={employees} 
-              onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode })} 
-              onDeleteEmployee={async (id) => confirm("Excluir?") && await deleteDoc(doc(db, "employees", id))} 
-              onUpdateIP={async (ip) => await updateDoc(doc(db, "companies", user.companyCode), { authorizedIP: ip })}
-              initialTab={
-                activeView === 'shifts' ? 'jornada' : 
-                activeView === 'calendar' ? 'calendario' : 
-                activeView === 'vacations' ? 'ferias' : 
-                activeView === 'aprovacoes' ? 'aprovacoes' :
-                'colaboradores'
-              }
-            />
-          }
-          {activeView === 'profile' && <Profile user={user} />}
+          <div className="max-w-md mx-auto w-full">
+            {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={setActiveView} user={user} />}
+            {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
+            {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
+            {activeView === 'requests' && <Requests />}
+            {(['admin', 'shifts', 'calendar', 'vacations', 'aprovacoes'].includes(activeView)) && 
+              <AdminDashboard 
+                latestRecords={records} 
+                company={company} 
+                employees={employees} 
+                onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode })} 
+                onDeleteEmployee={async (id) => confirm("Excluir?") && await deleteDoc(doc(db, "employees", id))} 
+                onUpdateIP={async (ip) => await updateDoc(doc(db, "companies", user.companyCode), { authorizedIP: ip })}
+                initialTab={
+                  activeView === 'shifts' ? 'jornada' : 
+                  activeView === 'calendar' ? 'calendario' : 
+                  activeView === 'vacations' ? 'ferias' : 
+                  activeView === 'aprovacoes' ? 'aprovacoes' :
+                  'colaboradores'
+                }
+              />
+            }
+            {activeView === 'profile' && <Profile user={user} company={company} />}
+          </div>
         </main>
 
         {isPunching && <PunchCamera geofenceConfig={company?.geofence} onCapture={handleCameraCapture} onCancel={() => setIsPunching(false)} />}
