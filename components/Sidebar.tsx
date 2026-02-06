@@ -21,10 +21,10 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
     { id: 'card', label: 'EXTRATO', icon: '📇' },
     { id: 'requests', label: 'PEDIDOS', icon: '💬' },
     ...(isAdmin ? [
+      { id: 'relatorio', label: 'BATIDAS', icon: '📸' },
       { id: 'colaboradores', label: 'EQUIPE', icon: '👥' },
       { id: 'jornada', label: 'ESCALAS', icon: '🕒' },
       { id: 'calendario', label: 'FERIADOS', icon: '📅' },
-      { id: 'vacations', label: 'FÉRIAS', icon: '🏖️' },
       { id: 'contabilidade', label: 'CONTÁBIL', icon: '📈' }
     ] : []),
     { id: 'logout', label: 'SAIR', icon: '🚪' }
