@@ -15,19 +15,19 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
   const isAdmin = user.role === 'admin';
 
   const menuItems = [
-    { id: 'dashboard', label: 'INÍCIO / DASHBOARD', icon: '🏠' },
-    { id: 'profile', label: 'PERFIL & IDENTIDADE', icon: '👤' },
-    { id: 'mypoint', label: 'MEUS REGISTROS', icon: '📝' },
-    { id: 'card', label: 'GESTÃO DE PONTO', icon: '📇' },
-    { id: 'requests', label: 'AJUSTES / SOLICITAÇÕES', icon: '💬' },
+    { id: 'dashboard', label: 'INÍCIO', icon: '🏠' },
+    { id: 'profile', label: 'MEU PERFIL', icon: '👤' },
+    { id: 'mypoint', label: 'REGISTROS', icon: '📝' },
+    { id: 'card', label: 'EXTRATO', icon: '📇' },
+    { id: 'requests', label: 'SOLICITAÇÕES', icon: '💬' },
     ...(isAdmin ? [
-      { id: 'admin', label: 'GESTÃO DE EQUIPE', icon: '👥' },
-      { id: 'shifts', label: 'JORNADA DE TRABALHO', icon: '🕒' },
-      { id: 'calendar', label: 'CALENDÁRIO & FERIADOS', icon: '📅' },
-      { id: 'vacations', label: 'GESTÃO DE FÉRIAS', icon: '🏖️' },
-      { id: 'contabilidade', label: 'CONTABILIDADE / FOLHA', icon: '📈' }
+      { id: 'colaboradores', label: 'GESTÃO DE EQUIPE', icon: '👥' },
+      { id: 'jornada', label: 'ESCALAS', icon: '🕒' },
+      { id: 'calendario', label: 'CALENDÁRIO', icon: '📅' },
+      { id: 'vacations', label: 'FÉRIAS', icon: '🏖️' },
+      { id: 'contabilidade', label: 'CONTABILIDADE', icon: '📈' }
     ] : []),
-    { id: 'logout', label: 'SAIR DO SISTEMA', icon: '🚪' }
+    { id: 'logout', label: 'SAIR', icon: '🚪' }
   ];
 
   const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
