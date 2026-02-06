@@ -1,6 +1,6 @@
 
 // @google/genai coding standards: Use Type from @google/genai
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 
 export const getGeminiResponse = async (prompt: string, records: string[]) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -48,6 +48,25 @@ export const auditCompliance = async (employeeName: string, records: string[]) =
   } catch {
     return { riskLevel: "Erro", summary: "Não foi possível auditar.", alerts: [] };
   }
+};
+
+export const generateDailyBriefingAudio = async (summaryText: string) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: `Leia este resumo de RH de forma profissional e encorajadora: ${summaryText}` }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: 'Kore' },
+        },
+      },
+    },
+  });
+
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  return base64Audio;
 };
 
 export async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {

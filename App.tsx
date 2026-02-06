@@ -27,11 +27,9 @@ const App: React.FC = () => {
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [records, setRecords] = useState<PointRecord[]>([]);
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('theme') === 'dark');
 
   useEffect(() => {
     const savedUser = localStorage.getItem('fortime_user');
@@ -45,6 +43,15 @@ const App: React.FC = () => {
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
   const syncOfflineRecords = async () => {
     const offline = JSON.parse(localStorage.getItem('offline_punches') || '[]');
     if (offline.length === 0) return;
@@ -52,7 +59,6 @@ const App: React.FC = () => {
       await addDoc(collection(db, "records"), { ...rec, timestamp: Timestamp.fromDate(new Date(rec.timestamp)) });
     }
     localStorage.removeItem('offline_punches');
-    alert("Registros offline sincronizados!");
   };
 
   useEffect(() => {
@@ -84,8 +90,6 @@ const App: React.FC = () => {
 
   const handleCameraCapture = async (photo: string, loc: any) => {
     if (!user) return;
-
-    // Se é o primeiro acesso (sem facial record), atualizamos o cadastro
     if (!user.hasFacialRecord) {
       try {
         const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode), where("matricula", "==", user.matricula));
@@ -93,38 +97,26 @@ const App: React.FC = () => {
         if (!snap.empty) {
           const empRef = doc(db, "employees", snap.docs[0].id);
           await updateDoc(empRef, { hasFacialRecord: true, photo: photo });
-          
           const updatedUser = { ...user, hasFacialRecord: true, photo: photo };
           setUser(updatedUser);
           localStorage.setItem('fortime_user', JSON.stringify(updatedUser));
-          
-          alert("Biometria Facial gravada com sucesso! Agora você pode registrar seu ponto.");
           setIsPunching(false);
           return;
         }
       } catch (err) {
-        alert("Erro ao gravar biometria. Tente novamente.");
         setIsPunching(false);
         return;
       }
     }
 
-    // Fluxo normal de registro de ponto
     const todayRecs = records.filter(r => r.matricula === user.matricula && r.timestamp.toLocaleDateString() === new Date().toLocaleDateString());
     const type = todayRecs.length % 2 === 0 ? 'entrada' : 'saida';
     
     const recordData = {
-      userName: user.name,
-      address: loc.address,
-      latitude: loc.lat,
-      longitude: loc.lng,
-      photo,
-      status: isOffline ? 'pending' : 'synchronized',
-      matricula: user.matricula,
-      digitalSignature: Math.random().toString(36).substring(2, 15),
-      type,
-      companyCode: user.companyCode,
-      timestamp: new Date()
+      userName: user.name, address: loc.address, latitude: loc.lat, longitude: loc.lng,
+      photo, status: isOffline ? 'pending' : 'synchronized', matricula: user.matricula,
+      digitalSignature: Math.random().toString(36).substring(2, 15), type,
+      companyCode: user.companyCode, timestamp: new Date()
     };
 
     if (isOffline) {
@@ -134,7 +126,6 @@ const App: React.FC = () => {
     } else {
       await addDoc(collection(db, "records"), { ...recordData, timestamp: Timestamp.fromDate(recordData.timestamp) });
     }
-
     setLastPunch({ ...recordData, id: 'temp' } as PointRecord);
     setIsPunching(false);
   };
@@ -158,37 +149,37 @@ const App: React.FC = () => {
   if (!user) return <Login onLogin={handleLogin} />;
 
   return (
-    <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans justify-center items-center p-0 md:p-4">
+    <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-orange-50 text-slate-900'}`}>
       <style>{`
         :root { --primary-color: #f97316; --primary-light: #fff7ed; }
+        .dark { --primary-light: rgba(249, 115, 22, 0.1); }
         .bg-primary { background-color: var(--primary-color) !important; }
         .text-primary { color: var(--primary-color) !important; }
         .border-primary { border-color: var(--primary-color) !important; }
         .bg-primary-light { background-color: var(--primary-light) !important; }
       `}</style>
       
-      <div className="h-full w-full max-w-lg bg-white shadow-2xl flex flex-col relative border-x border-slate-200 overflow-hidden md:rounded-[40px]">
+      <div className={`h-full w-full max-w-lg shadow-2xl flex flex-col relative border-x overflow-hidden md:rounded-[40px] transition-all duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
         <Sidebar user={user} company={company} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={handleNavigation} activeView={activeView} />
         
-        <header className="px-6 py-6 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10 shrink-0">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 focus:outline-none hover:bg-slate-50 rounded-2xl transition-colors">
+        <header className={`px-6 py-6 flex items-center justify-between border-b sticky top-0 z-10 shrink-0 transition-colors ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-50'}`}>
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 dark:text-slate-300 focus:outline-none hover:bg-primary/10 rounded-2xl transition-colors">
             <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8h16M4 16h16" /></svg>
           </button>
-          <div className="text-center">
-            {company?.logoUrl ? <img src={company.logoUrl} className="h-10 object-contain mb-1" /> : <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>}
+          <div className="text-center flex items-center gap-3">
+            {company?.logoUrl ? <img src={company.logoUrl} className="h-10 object-contain" /> : <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>}
           </div>
-          <button onClick={() => setActiveView('profile')} className="w-11 h-11 rounded-2xl overflow-hidden border border-slate-100 shadow-sm transition-transform active:scale-90">
-             <img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" />
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${isDarkMode ? 'bg-slate-800 text-yellow-400' : 'bg-orange-50 text-slate-400'}`}>
+            {isDarkMode ? '☀️' : '🌙'}
           </button>
         </header>
 
-        <main className="flex-1 overflow-y-auto no-scrollbar pb-10 bg-slate-50/30">
+        <main className={`flex-1 overflow-y-auto no-scrollbar pb-10 transition-colors ${isDarkMode ? 'bg-slate-900/50' : 'bg-slate-50/30'}`}>
           <div className="max-w-md mx-auto w-full h-full">
             {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={setActiveView} user={user} />}
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'requests' && <Requests />}
-            {activeView === 'chat' && <ChatArea messages={chatMessages} onSendMessage={() => {}} isLoading={isChatLoading} />}
             {(['admin', 'shifts', 'calendar', 'vacations', 'aprovacoes', 'contabilidade'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
