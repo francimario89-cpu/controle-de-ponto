@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { PointRecord, User } from '../types';
 
@@ -24,7 +25,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
 
   return (
     <div className="p-4 space-y-4">
-      {/* Seção Relógio */}
       <div className="bg-white rounded-[40px] p-8 shadow-sm border border-primary-light text-center">
         <p className="text-6xl font-bold text-slate-800 tracking-tighter mb-2">{time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
         <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-8">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(time)}</p>
@@ -35,19 +35,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 px-1">
+      <div className="grid grid-cols-2 gap-3">
+         <button onClick={() => onNavigate('chat')} className="bg-indigo-50 p-6 rounded-[32px] border border-indigo-100 flex flex-col items-center justify-center text-center group">
+            <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">🤖</span>
+            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Assistente Virtual</p>
+            <p className="text-[7px] text-indigo-400 uppercase font-bold mt-1">Dúvidas sobre CLT</p>
+         </button>
+         <button onClick={() => onNavigate('requests')} className="bg-white p-6 rounded-[32px] border border-slate-100 flex flex-col items-center justify-center text-center shadow-sm">
+            <span className="text-3xl mb-2">📄</span>
+            <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Justificativas</p>
+            <p className="text-[7px] text-slate-400 uppercase font-bold mt-1">Atestados e Faltas</p>
+         </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 px-1">
         {[
           { label: 'Histórico', icon: '📝', view: 'mypoint' },
-          { label: 'Folha', icon: '📇', view: 'card' },
-          { label: 'Ajustes', icon: '💬', view: 'requests' }
+          { label: 'Extrato P.671', icon: '📇', view: 'card' }
         ].map(b => (
           <button 
             key={b.label} 
             onClick={() => onNavigate(b.view)} 
-            className="bg-white py-4 px-2 rounded-[24px] border border-primary-light flex flex-col items-center justify-center shadow-sm active:bg-primary-light transition-colors"
+            className="bg-white py-5 px-2 rounded-[24px] border border-primary-light flex flex-col items-center justify-center shadow-sm active:bg-primary-light transition-colors"
           >
             <span className="text-2xl mb-1">{b.icon}</span>
-            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{b.label}</span>
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{b.label}</span>
           </button>
         ))}
       </div>
@@ -80,8 +92,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
         </div>
       )}
 
-      <div className="text-center pt-4">
-         <p className="text-[9px] font-semibold text-slate-300 uppercase tracking-[0.3em]">ForTime PRO White Label Edition</p>
+      <div className="text-center pt-4 opacity-30">
+         <p className="text-[9px] font-semibold text-slate-300 uppercase tracking-[0.4em]">Sincronizado com Portaria 671 MTP</p>
       </div>
     </div>
   );

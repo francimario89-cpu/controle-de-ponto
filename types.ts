@@ -2,7 +2,9 @@
 export interface Company {
   id: string;
   name: string;
+  socialReason?: string;
   cnpj: string;
+  phone?: string;
   address: string;
   accessCode: string;
   authorizedIP?: string;
@@ -17,6 +19,12 @@ export interface Company {
     radius: number;
   };
   holidays?: Holiday[];
+  config?: {
+    overtimePercentage: number;
+    nightShiftPercentage: number;
+    weeklyHours: number;
+    toleranceMinutes: number;
+  };
 }
 
 export interface Holiday {
@@ -26,11 +34,25 @@ export interface Holiday {
   type: 'feriado' | 'parada';
 }
 
+export interface Vacation {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  startDate: string;
+  endDate: string;
+  status: 'planned' | 'active' | 'completed';
+}
+
 export interface Employee {
   id: string;
   name: string;
   email: string;
   matricula: string;
+  cpf?: string;
+  phone?: string;
+  birthDate?: string;
+  admissionDate?: string;
+  department?: string;
   password?: string;
   photo: string;
   hasFacialRecord: boolean;
@@ -48,6 +70,10 @@ export interface User {
   companyName?: string;
   role: 'admin' | 'employee' | 'totem';
   matricula?: string;
+  cpf?: string;
+  phone?: string;
+  admissionDate?: string;
+  department?: string;
   hasFacialRecord?: boolean;
   roleFunction?: string;
   workShift?: string;
@@ -76,6 +102,7 @@ export interface AttendanceRequest {
   status: 'pending' | 'approved' | 'rejected';
   date: string;
   reason: string;
+  managerFeedback?: string;
   attachment?: string;
   createdAt: Date;
 }
@@ -86,6 +113,7 @@ export interface ChatMessage {
   text: string;
 }
 
+// Added Note interface to fix compilation error in NotesArea.tsx
 export interface Note {
   id: string;
   title: string;
@@ -93,6 +121,7 @@ export interface Note {
   updatedAt: Date;
 }
 
+// Added NotebookSummary interface to fix compilation error in GuideArea.tsx
 export interface NotebookSummary {
   overview: string;
   topics: string[];

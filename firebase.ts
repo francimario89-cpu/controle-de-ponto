@@ -1,5 +1,4 @@
-
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -12,13 +11,10 @@ const firebaseConfig = {
   measurementId: "G-PLBL6WXZ5N"
 };
 
-let db: any;
-try {
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  console.log("✅ Firebase Inicializado com Sucesso: fortimepro-8d3d6");
-} catch (error) {
-  console.error("❌ Erro ao conectar ao Firebase:", error);
-}
+// Singleton initialization pattern to prevent multiple app initializations
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+
+console.log("✅ Firebase Inicializado com Sucesso: " + app.name);
 
 export { db };
