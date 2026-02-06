@@ -21,7 +21,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'admin' | 'totem' | 'profile'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'admin' | 'totem' | 'profile' | 'shifts' | 'calendar' | 'vacations'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -69,14 +69,8 @@ const App: React.FC = () => {
     setActiveView('dashboard');
   };
 
-  const generateSignature = () => {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-  };
-
   const handleCameraCapture = async (photo: string, loc: any) => {
     if (!user) return;
-    
-    // Simulação de Auditoria de Tipo (Entrada/Saída)
     const todayRecs = records.filter(r => 
       r.matricula === user.matricula && 
       r.timestamp.toLocaleDateString() === new Date().toLocaleDateString()
@@ -87,7 +81,7 @@ const App: React.FC = () => {
       id: '', userName: user.name, timestamp: new Date(), 
       photo, latitude: loc.lat, longitude: loc.lng, address: loc.address,
       status: 'synchronized', matricula: user.matricula,
-      digitalSignature: generateSignature(),
+      digitalSignature: Math.random().toString(36).substring(2, 15),
       type
     };
 
@@ -98,20 +92,29 @@ const App: React.FC = () => {
 
   if (!isInitialized) return null;
   if (!user) return <Login onLogin={handleLogin} />;
-  if (activeView === 'totem') return <KioskMode employees={employees} onPunch={() => {}} onExit={handleLogout} />;
 
   return (
     <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans">
       <div className="h-full w-full max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-slate-200">
-        <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => v === 'logout' ? handleLogout() : (setActiveView(v as any), setIsSidebarOpen(false))} activeView={activeView} />
+        <Sidebar 
+          user={user} 
+          isOpen={isSidebarOpen} 
+          onClose={() => setIsSidebarOpen(false)} 
+          onNavigate={(v) => v === 'logout' ? handleLogout() : (setActiveView(v as any), setIsSidebarOpen(false))} 
+          activeView={activeView} 
+        />
         
         <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-800"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 8h16M4 16h16" /></svg></button>
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-800 focus:outline-none">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 8h16M4 16h16" /></svg>
+          </button>
           <div className="text-center">
             <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>
             <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{activeView}</p>
           </div>
-          <button onClick={() => setActiveView('profile')} className="w-10 h-10 rounded-2xl overflow-hidden border border-slate-100"><img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" /></button>
+          <button onClick={() => setActiveView('profile')} className="w-10 h-10 rounded-2xl overflow-hidden border border-slate-100 shadow-sm">
+             <img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" />
+          </button>
         </header>
 
         <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
@@ -119,7 +122,17 @@ const App: React.FC = () => {
           {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
           {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} />}
           {activeView === 'requests' && <Requests />}
-          {activeView === 'admin' && <AdminDashboard latestRecords={records} company={company} employees={employees} onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode })} onDeleteEmployee={async (id) => confirm("Excluir?") && await deleteDoc(doc(db, "employees", id))} onUpdateIP={async (ip) => await updateDoc(doc(db, "companies", user.companyCode), { authorizedIP: ip })} />}
+          {(['admin', 'shifts', 'calendar', 'vacations'].includes(activeView)) && 
+            <AdminDashboard 
+              latestRecords={records} 
+              company={company} 
+              employees={employees} 
+              onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode })} 
+              onDeleteEmployee={async (id) => confirm("Excluir?") && await deleteDoc(doc(db, "employees", id))} 
+              onUpdateIP={async (ip) => await updateDoc(doc(db, "companies", user.companyCode), { authorizedIP: ip })}
+              initialTab={activeView === 'shifts' ? 'jornada' : activeView === 'calendar' ? 'calendario' : activeView === 'vacations' ? 'ferias' : 'colaboradores'}
+            />
+          }
           {activeView === 'profile' && <Profile user={user} />}
         </main>
 
