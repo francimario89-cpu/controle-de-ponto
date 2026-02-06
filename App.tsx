@@ -41,11 +41,9 @@ const App: React.FC = () => {
       if (d.exists()) {
         const data = { id: d.id, ...d.data() } as Company;
         setCompany(data);
-        
-        // Aplicação de Cor Dinâmica
         const themeColor = data.themeColor || '#f97316';
         document.documentElement.style.setProperty('--primary-color', themeColor);
-        document.documentElement.style.setProperty('--primary-light', themeColor + '20'); // 20 opacity
+        document.documentElement.style.setProperty('--primary-light', themeColor + '20');
       }
     });
 
@@ -112,7 +110,7 @@ const App: React.FC = () => {
   const isAdmin = user.role === 'admin';
 
   return (
-    <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-slate-100 overflow-hidden font-sans justify-center items-center p-0 md:p-4">
       <style>{`
         :root {
           --primary-color: #f97316;
@@ -125,7 +123,7 @@ const App: React.FC = () => {
         .shadow-primary { shadow-color: var(--primary-color) !important; }
       `}</style>
 
-      <div className="h-full w-full max-md:max-w-md mx-auto bg-white shadow-2xl flex flex-col relative border-x border-slate-200">
+      <div className="h-full w-full max-w-lg bg-white shadow-2xl flex flex-col relative border-x border-slate-200 overflow-hidden md:rounded-[40px]">
         <Sidebar 
           user={user} 
           company={company}
@@ -135,7 +133,7 @@ const App: React.FC = () => {
           activeView={activeView} 
         />
         
-        <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10">
+        <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-2">
             <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-800 focus:outline-none hover:bg-slate-50 rounded-xl transition-colors">
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 8h16M4 16h16" /></svg>
@@ -189,7 +187,7 @@ const App: React.FC = () => {
               }
             />
           }
-          {activeView === 'profile' && <Profile user={user} />}
+          {activeView === 'profile' && <Profile user={user} company={company} />}
         </main>
 
         {isPunching && <PunchCamera geofenceConfig={company?.geofence} onCapture={handleCameraCapture} onCancel={() => setIsPunching(false)} />}
