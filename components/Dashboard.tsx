@@ -11,17 +11,12 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNavigate, user }) => {
   const [time, setTime] = useState(new Date());
-  const isAdmin = user.role === 'admin';
+  const needsFacialRecord = !user.hasFacialRecord && user.role === 'employee';
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('Código copiado para a área de transferência!');
-  };
 
   return (
     <div className="p-4 space-y-4">
@@ -29,71 +24,57 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
         <p className="text-6xl font-bold text-slate-800 tracking-tighter mb-2">{time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
         <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-8">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(time)}</p>
         
-        <button onClick={onPunchClick} className="w-full bg-primary text-white py-5 rounded-[28px] font-semibold text-sm uppercase tracking-widest shadow-xl shadow-primary-light flex items-center justify-center gap-3 active:scale-95 transition-all">
-          <span className="text-2xl">{user.hasFacialRecord || user.role === 'admin' ? '📸' : '👤'}</span>
-          {user.hasFacialRecord || user.role === 'admin' ? 'REGISTRAR PONTO' : 'CADASTRAR FACE'}
+        <button 
+          onClick={onPunchClick} 
+          className={`w-full py-5 rounded-[28px] font-semibold text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all ${needsFacialRecord ? 'bg-indigo-600 text-white shadow-indigo-100' : 'bg-primary text-white shadow-primary-light'}`}
+        >
+          <span className="text-2xl">{needsFacialRecord ? '👤' : '📸'}</span>
+          {needsFacialRecord ? 'GRAVAR BIOMETRIA FACIAL' : 'REGISTRAR PONTO'}
         </button>
+
+        {needsFacialRecord && (
+          <p className="mt-4 text-[9px] text-indigo-400 font-bold uppercase tracking-widest animate-pulse">Primeiro acesso: Realize o cadastro facial</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
          <button onClick={() => onNavigate('chat')} className="bg-indigo-50 p-6 rounded-[32px] border border-indigo-100 flex flex-col items-center justify-center text-center group">
-            <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">🤖</span>
-            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Assistente Virtual</p>
-            <p className="text-[7px] text-indigo-400 uppercase font-bold mt-1">Dúvidas sobre CLT</p>
+            <span className="text-3xl mb-2">🤖</span>
+            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">IA ForTime</p>
+            <p className="text-[7px] text-indigo-400 uppercase font-bold mt-1">Dúvidas CLT</p>
          </button>
          <button onClick={() => onNavigate('requests')} className="bg-white p-6 rounded-[32px] border border-slate-100 flex flex-col items-center justify-center text-center shadow-sm">
             <span className="text-3xl mb-2">📄</span>
             <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Justificativas</p>
-            <p className="text-[7px] text-slate-400 uppercase font-bold mt-1">Atestados e Faltas</p>
+            <p className="text-[7px] text-slate-400 uppercase font-bold mt-1">Atestados/Faltas</p>
          </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 px-1">
-        {[
-          { label: 'Histórico', icon: '📝', view: 'mypoint' },
-          { label: 'Extrato P.671', icon: '📇', view: 'card' }
-        ].map(b => (
-          <button 
-            key={b.label} 
-            onClick={() => onNavigate(b.view)} 
-            className="bg-white py-5 px-2 rounded-[24px] border border-primary-light flex flex-col items-center justify-center shadow-sm active:bg-primary-light transition-colors"
-          >
-            <span className="text-2xl mb-1">{b.icon}</span>
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{b.label}</span>
-          </button>
-        ))}
+        <button onClick={() => onNavigate('mypoint')} className="bg-white py-5 px-2 rounded-[24px] border border-primary-light flex flex-col items-center justify-center shadow-sm">
+          <span className="text-2xl mb-1">📝</span>
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Histórico</span>
+        </button>
+        <button onClick={() => onNavigate('card')} className="bg-white py-5 px-2 rounded-[24px] border border-primary-light flex flex-col items-center justify-center shadow-sm">
+          <span className="text-2xl mb-1">📇</span>
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Extrato P.671</span>
+        </button>
       </div>
 
-      {isAdmin && (
-        <div 
-          onClick={() => copyToClipboard(user.companyCode)}
-          className="bg-primary-light p-5 rounded-[32px] border-2 border-dashed border-primary/20 flex items-center justify-between cursor-pointer hover:bg-white transition-all group"
-        >
-          <div>
-            <p className="text-[9px] font-bold text-primary uppercase tracking-widest">Código da Empresa</p>
-            <p className="text-base font-bold text-slate-800 tracking-widest group-hover:text-primary transition-colors">{user.companyCode}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[8px] font-semibold text-slate-400 uppercase">Toque p/ copiar</span>
-            <div className="w-9 h-9 rounded-2xl bg-white border border-primary/20 flex items-center justify-center text-primary text-sm shadow-sm">📋</div>
-          </div>
-        </div>
-      )}
-
       {lastPunch && (
-        <div className="bg-emerald-50 p-5 rounded-[32px] border border-emerald-100 flex items-center justify-between animate-in slide-in-from-bottom-2 shadow-sm shadow-emerald-50">
+        <div className="bg-emerald-50 p-5 rounded-[32px] border border-emerald-100 flex items-center justify-between animate-in slide-in-from-bottom-2">
           <div>
-            <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Última Marcação</p>
+            <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Último Registro</p>
             <p className="text-base font-bold text-emerald-700">{lastPunch.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-100">
+          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
           </div>
         </div>
       )}
 
       <div className="text-center pt-4 opacity-30">
-         <p className="text-[9px] font-semibold text-slate-300 uppercase tracking-[0.4em]">Sincronizado com Portaria 671 MTP</p>
+         <p className="text-[9px] font-semibold text-slate-300 uppercase tracking-[0.4em]">Ponto autorizado apenas na empresa</p>
       </div>
     </div>
   );
