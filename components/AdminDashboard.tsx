@@ -28,6 +28,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [newVacation, setNewVacation] = useState({ employeeId: '', startDate: '', endDate: '' });
   const [journeyConfig, setJourneyConfig] = useState(company?.config || { overtimePercentage: 50, nightShiftPercentage: 20, weeklyHours: 44, toleranceMinutes: 10 });
 
+  // Estado para novo colaborador com todos os campos solicitados
+  const [newEmpData, setNewEmpData] = useState<Partial<Employee>>({
+    name: '', email: '', matricula: '', password: '', 
+    cpf: '', phone: '', department: '', roleFunction: '', 
+    workShift: '08:00 - 17:00', photo: ''
+  });
+
   useEffect(() => {
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
@@ -68,6 +75,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   const present = getPresentEmployees();
 
+  const handleCreateEmployee = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmpData.name || !newEmpData.matricula || !newEmpData.password) {
+      alert("Campos Nome, Matrícula e Senha são obrigatórios.");
+      return;
+    }
+    onAddEmployee({
+      ...newEmpData,
+      photo: newEmpData.photo || `https://ui-avatars.com/api/?name=${newEmpData.name}&background=random`
+    });
+    setShowAddModal(false);
+    setNewEmpData({ name: '', email: '', matricula: '', password: '', cpf: '', phone: '', department: '', roleFunction: '', workShift: '08:00 - 17:00', photo: '' });
+  };
+
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEmp) return;
+    try {
+      const { id, ...data } = editingEmp;
+      await updateDoc(doc(db, "employees", id), data);
+      setEditingEmp(null);
+      alert("Dados do colaborador atualizados!");
+    } catch (err) {
+      alert("Erro ao atualizar.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50 items-center">
       <div className="w-full p-4 bg-white border-b border-slate-100 shrink-0 overflow-x-auto no-scrollbar flex justify-center sticky top-0 z-20">
@@ -101,20 +135,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                  {isAuditing ? 'Analisando...' : '🔍 Auditoria CLT via IA'}
                </button>
             </div>
-
-            {auditResult && (
-              <div className="bg-white p-6 rounded-[32px] border-2 border-indigo-100 shadow-xl space-y-3 animate-in zoom-in">
-                 <div className="flex justify-between items-center">
-                    <h4 className="text-[10px] font-black text-indigo-600 uppercase">Resultado da Auditoria</h4>
-                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${auditResult.riskLevel === 'Baixo' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>Risco {auditResult.riskLevel}</span>
-                 </div>
-                 <p className="text-[10px] text-slate-600 leading-relaxed italic">"{auditResult.summary}"</p>
-                 <ul className="space-y-1">
-                    {auditResult.alerts.map((a: string, i: number) => <li key={i} className="text-[9px] font-bold text-red-500 flex items-start gap-2"><span>⚠️</span> {a}</li>)}
-                 </ul>
-                 <button onClick={() => setAuditResult(null)} className="w-full text-[8px] text-slate-300 uppercase font-bold pt-2">Fechar Relatório</button>
-              </div>
-            )}
 
             <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
@@ -154,7 +174,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </div>
         )}
 
-        {/* ... Outras abas (ferias, jornada, etc) seguem a mesma lógica ... */}
         {tab === 'aprovacoes' && (
           <div className="space-y-4">
              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] text-center">Ajustes Pendentes</h3>
@@ -177,6 +196,92 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </div>
         )}
       </div>
+
+      {/* MODAL ADICIONAR COLABORADOR - COMPLETO */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-md rounded-[44px] p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div className="flex justify-between items-center sticky top-0 bg-white pb-4">
+              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Novo Colaborador</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-300 text-xl">✕</button>
+            </div>
+            
+            <form onSubmit={handleCreateEmployee} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[8px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Dados Pessoais</label>
+                <input type="text" placeholder="Nome Completo *" value={newEmpData.name} onChange={e => setNewEmpData({...newEmpData, name: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" required />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="CPF" value={newEmpData.cpf} onChange={e => setNewEmpData({...newEmpData, cpf: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" />
+                  <input type="text" placeholder="Telefone" value={newEmpData.phone} onChange={e => setNewEmpData({...newEmpData, phone: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" />
+                </div>
+                <input type="email" placeholder="E-mail" value={newEmpData.email} onChange={e => setNewEmpData({...newEmpData, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[8px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Dados Profissionais</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Matrícula *" value={newEmpData.matricula} onChange={e => setNewEmpData({...newEmpData, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" required />
+                  <input type="text" placeholder="Departamento" value={newEmpData.department} onChange={e => setNewEmpData({...newEmpData, department: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" />
+                </div>
+                <input type="text" placeholder="Cargo / Função" value={newEmpData.roleFunction} onChange={e => setNewEmpData({...newEmpData, roleFunction: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" />
+                <input type="text" placeholder="Jornada (Ex: 08:00 - 17:00)" value={newEmpData.workShift} onChange={e => setNewEmpData({...newEmpData, workShift: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100 focus:bg-white" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[8px] font-bold text-slate-400 uppercase ml-2 tracking-widest text-primary">Credenciais de Acesso</label>
+                <input type="text" placeholder="Definir Senha de Acesso *" value={newEmpData.password} onChange={e => setNewEmpData({...newEmpData, password: e.target.value})} className="w-full p-4 bg-primary-light border border-primary/20 rounded-2xl text-[11px] font-bold text-primary outline-none focus:bg-white" required />
+              </div>
+
+              <button type="submit" className="w-full bg-primary text-white py-5 rounded-3xl font-black uppercase text-[10px] shadow-xl shadow-primary/20 active:scale-95 transition-all mt-4">Salvar Cadastro</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR COLABORADOR - COMPLETO */}
+      {editingEmp && (
+        <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-md rounded-[44px] p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div className="flex justify-between items-center sticky top-0 bg-white pb-4">
+              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Editar Colaborador</h3>
+              <button onClick={() => setEditingEmp(null)} className="text-slate-300 text-xl">✕</button>
+            </div>
+            
+            <form onSubmit={handleUpdateEmployee} className="space-y-4">
+              <div className="space-y-2 text-center">
+                 <img src={editingEmp.photo} className="w-20 h-20 rounded-3xl mx-auto object-cover border-4 border-slate-50 shadow-sm" />
+                 <input type="text" placeholder="URL da Foto" value={editingEmp.photo} onChange={e => setEditingEmp({...editingEmp, photo: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl text-[9px] font-semibold outline-none border border-slate-100 text-center" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[8px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Identificação</label>
+                <input type="text" placeholder="Nome" value={editingEmp.name} onChange={e => setEditingEmp({...editingEmp, name: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Matrícula" value={editingEmp.matricula} onChange={e => setEditingEmp({...editingEmp, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100" />
+                  <input type="text" placeholder="CPF" value={editingEmp.cpf} onChange={e => setEditingEmp({...editingEmp, cpf: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[8px] font-bold text-slate-400 uppercase ml-2 tracking-widest">Cargo & Equipe</label>
+                <input type="text" placeholder="Departamento" value={editingEmp.department} onChange={e => setEditingEmp({...editingEmp, department: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100" />
+                <input type="text" placeholder="Função" value={editingEmp.roleFunction} onChange={e => setEditingEmp({...editingEmp, roleFunction: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100" />
+                <input type="text" placeholder="Jornada" value={editingEmp.workShift} onChange={e => setEditingEmp({...editingEmp, workShift: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-semibold outline-none border border-slate-100" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[8px] font-bold text-slate-400 uppercase ml-2 tracking-widest text-primary">Alterar Senha</label>
+                <input type="text" placeholder="Nova Senha" value={editingEmp.password} onChange={e => setEditingEmp({...editingEmp, password: e.target.value})} className="w-full p-4 bg-primary-light border border-primary/20 rounded-2xl text-[11px] font-bold text-primary outline-none" />
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <button type="button" onClick={() => { if(confirm("Deseja mesmo excluir?")) { onDeleteEmployee(editingEmp.id); setEditingEmp(null); } }} className="flex-1 py-4 bg-red-50 text-red-600 rounded-2xl font-black uppercase text-[9px]">Excluir</button>
+                <button type="submit" className="flex-[2] bg-primary text-white py-4 rounded-2xl font-black uppercase text-[9px] shadow-lg">Salvar Alterações</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
