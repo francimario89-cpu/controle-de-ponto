@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { PointRecord, User } from '../types';
 
@@ -26,17 +25,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
   return (
     <div className="p-4 space-y-4">
       {/* Seção Relógio */}
-      <div className="bg-white rounded-[40px] p-6 shadow-sm border border-primary-light text-center">
-        <p className="text-5xl font-black text-slate-800 tracking-tighter mb-1">{time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-        <p className="text-[9px] font-black text-primary uppercase tracking-[0.2em] mb-6">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(time)}</p>
+      <div className="bg-white rounded-[40px] p-8 shadow-sm border border-primary-light text-center">
+        <p className="text-6xl font-bold text-slate-800 tracking-tighter mb-2">{time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+        <p className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-8">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(time)}</p>
         
-        <button onClick={onPunchClick} className="w-full bg-primary text-white py-5 rounded-[28px] font-black text-xs uppercase tracking-widest shadow-xl shadow-primary-light flex items-center justify-center gap-3 active:scale-95 transition-all">
-          <span className="text-xl">{user.hasFacialRecord || user.role === 'admin' ? '📸' : '👤'}</span>
-          {user.hasFacialRecord || user.role === 'admin' ? 'Registrar Ponto' : 'Cadastrar Face'}
+        <button onClick={onPunchClick} className="w-full bg-primary text-white py-5 rounded-[28px] font-semibold text-sm uppercase tracking-widest shadow-xl shadow-primary-light flex items-center justify-center gap-3 active:scale-95 transition-all">
+          <span className="text-2xl">{user.hasFacialRecord || user.role === 'admin' ? '📸' : '👤'}</span>
+          {user.hasFacialRecord || user.role === 'admin' ? 'REGISTRAR PONTO' : 'CADASTRAR FACE'}
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 px-1">
+      <div className="grid grid-cols-3 gap-3 px-1">
         {[
           { label: 'Histórico', icon: '📝', view: 'mypoint' },
           { label: 'Folha', icon: '📇', view: 'card' },
@@ -45,10 +44,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
           <button 
             key={b.label} 
             onClick={() => onNavigate(b.view)} 
-            className="bg-white py-3 px-2 rounded-2xl border border-primary-light flex flex-col items-center justify-center shadow-sm active:bg-primary-light transition-colors"
+            className="bg-white py-4 px-2 rounded-[24px] border border-primary-light flex flex-col items-center justify-center shadow-sm active:bg-primary-light transition-colors"
           >
-            <span className="text-xl mb-0.5">{b.icon}</span>
-            <span className="text-[7px] font-black text-slate-500 uppercase tracking-tighter">{b.label}</span>
+            <span className="text-2xl mb-1">{b.icon}</span>
+            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{b.label}</span>
           </button>
         ))}
       </div>
@@ -56,33 +55,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
       {isAdmin && (
         <div 
           onClick={() => copyToClipboard(user.companyCode)}
-          className="bg-primary-light p-4 rounded-[28px] border-2 border-dashed border-primary/20 flex items-center justify-between cursor-pointer hover:bg-white transition-all group"
+          className="bg-primary-light p-5 rounded-[32px] border-2 border-dashed border-primary/20 flex items-center justify-between cursor-pointer hover:bg-white transition-all group"
         >
           <div>
-            <p className="text-[8px] font-black text-primary uppercase tracking-widest">Código da Empresa</p>
-            <p className="text-sm font-black text-slate-800 tracking-widest group-hover:text-primary transition-colors">{user.companyCode}</p>
+            <p className="text-[9px] font-bold text-primary uppercase tracking-widest">Código da Empresa</p>
+            <p className="text-base font-bold text-slate-800 tracking-widest group-hover:text-primary transition-colors">{user.companyCode}</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[7px] font-black text-slate-400 uppercase">Toque p/ copiar</span>
-            <div className="w-8 h-8 rounded-xl bg-white border border-primary/20 flex items-center justify-center text-primary text-xs shadow-sm">📋</div>
+            <span className="text-[8px] font-semibold text-slate-400 uppercase">Toque p/ copiar</span>
+            <div className="w-9 h-9 rounded-2xl bg-white border border-primary/20 flex items-center justify-center text-primary text-sm shadow-sm">📋</div>
           </div>
         </div>
       )}
 
       {lastPunch && (
-        <div className="bg-emerald-50 p-4 rounded-3xl border border-emerald-100 flex items-center justify-between animate-in slide-in-from-bottom-2">
+        <div className="bg-emerald-50 p-5 rounded-[32px] border border-emerald-100 flex items-center justify-between animate-in slide-in-from-bottom-2 shadow-sm shadow-emerald-50">
           <div>
-            <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Última Marcação</p>
-            <p className="text-sm font-black text-emerald-700">{lastPunch.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+            <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Última Marcação</p>
+            <p className="text-base font-bold text-emerald-700">{lastPunch.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
           </div>
-          <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-100">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-100">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
           </div>
         </div>
       )}
 
-      <div className="text-center pt-2">
-         <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em]">ForTime PRO White Label Edition</p>
+      <div className="text-center pt-4">
+         <p className="text-[9px] font-semibold text-slate-300 uppercase tracking-[0.3em]">ForTime PRO White Label Edition</p>
       </div>
     </div>
   );

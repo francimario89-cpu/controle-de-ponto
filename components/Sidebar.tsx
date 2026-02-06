@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { User, Company } from '../types';
 
@@ -14,19 +13,18 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNavigate, activeView }) => {
   const isAdmin = user.role === 'admin';
 
-  // Menu extremamente compacto com nomes diretos conforme solicitado
   const menuItems = [
-    { id: 'dashboard', label: 'Início', icon: '🏠' },
-    { id: 'mypoint', label: 'Meus Registros', icon: '📝' },
-    { id: 'card', label: 'Folha de Ponto', icon: '📇' },
-    { id: 'requests', label: 'Ajustes', icon: '💬' },
+    { id: 'dashboard', label: 'INÍCIO / DASHBOARD', icon: '🏠' },
+    { id: 'profile', label: 'PERFIL & IDENTIDADE', icon: '👤' },
+    { id: 'mypoint', label: 'MEUS REGISTROS', icon: '📝' },
+    { id: 'card', label: 'GESTÃO DE PONTO', icon: '📇' },
+    { id: 'requests', label: 'AJUSTES / SOLICITAÇÕES', icon: '💬' },
     ...(isAdmin ? [
-      { id: 'shifts', label: 'Jornada de Trabalho', icon: '🕒' },
-      { id: 'calendar', label: 'Calendário', icon: '📅' },
-      { id: 'vacations', label: 'Férias', icon: '🏖️' }
+      { id: 'shifts', label: 'JORNADA DE TRABALHO', icon: '🕒' },
+      { id: 'calendar', label: 'CALENDÁRIO & FERIADOS', icon: '📅' },
+      { id: 'vacations', label: 'GESTÃO DE FÉRIAS', icon: '🏖️' }
     ] : []),
-    { id: 'profile', label: 'Meu Perfil', icon: '👤' },
-    { id: 'logout', label: 'Sair do App', icon: '🚪' }
+    { id: 'logout', label: 'SAIR DO SISTEMA', icon: '🚪' }
   ];
 
   const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -39,28 +37,31 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
           onClick={onClose}
         />
       )}
-      <div className={`fixed top-0 left-0 h-full w-[240px] bg-white z-50 transform transition-transform duration-300 ease-out flex flex-col shadow-2xl ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className={`fixed top-0 left-0 h-full w-[280px] bg-white z-50 transform transition-transform duration-300 ease-out flex flex-col shadow-2xl ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         
-        {/* Cabeçalho Compacto Centralizado */}
-        <div className="flex flex-col items-center pt-8 pb-4 px-6 shrink-0 bg-slate-50/50">
+        {/* Header - Centered Logo and User Info */}
+        <div className="flex flex-col items-center pt-10 pb-8 px-6 shrink-0 border-b border-slate-50">
            {company?.logoUrl ? (
-             <div className="w-16 h-16 rounded-[24px] bg-white shadow-lg flex items-center justify-center mb-2 border border-slate-100 p-2.5">
+             <div className="w-24 h-24 rounded-full bg-white shadow-xl flex items-center justify-center mb-4 border border-slate-100 p-4 transition-transform hover:scale-105">
                 <img src={company.logoUrl} className="max-w-full max-h-full object-contain" alt="Logo" />
              </div>
            ) : (
-             <div className="w-16 h-16 rounded-2xl bg-primary shadow-lg flex items-center justify-center text-white text-xl font-black mb-2 border-4 border-white shadow-primary/20">
+             <div className="w-24 h-24 rounded-full bg-emerald-500 shadow-xl flex items-center justify-center text-white text-2xl font-semibold mb-4 border-4 border-white">
                 {initials}
              </div>
            )}
-           <h2 className="text-slate-800 font-black text-sm tracking-tight text-center leading-tight truncate w-full">{user.name}</h2>
-           <p className="text-primary text-[7px] font-black uppercase tracking-[0.4em] mt-0.5">{isAdmin ? 'ADMINISTRADOR' : 'COLABORADOR'}</p>
+           <h2 className="text-slate-800 font-bold text-lg tracking-tight text-center leading-tight truncate w-full">{user.name}</h2>
+           <p className="text-emerald-500 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">
+             {isAdmin ? 'ADMINISTRADOR' : 'COLABORADOR'}
+           </p>
         </div>
 
-        {/* Menu "Pai" - Itens mais juntos e compactos */}
-        <div className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5 no-scrollbar">
+        {/* Navigation Menu */}
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2 no-scrollbar">
           {menuItems.map(item => {
             const isActive = activeView === item.id;
             const isCritical = item.id === 'logout';
+            
             return (
               <button
                 key={item.id}
@@ -68,17 +69,17 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
                   onNavigate(item.id);
                   if (item.id !== 'logout') onClose();
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all group ${
+                className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl transition-all group ${
                   isActive 
-                  ? 'bg-primary text-white shadow-sm scale-[1.02]' 
-                  : 'bg-transparent text-slate-500 hover:bg-slate-50'
+                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200 scale-[1.02]' 
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <span className={`text-base ${isActive ? 'grayscale-0' : 'opacity-40 group-hover:opacity-100'}`}>
+                <span className={`text-xl ${isActive ? 'grayscale-0' : 'opacity-60 group-hover:opacity-100'}`}>
                   {item.icon}
                 </span>
-                <span className={`text-[10px] font-black uppercase tracking-tighter ${
-                  isActive ? 'text-white' : isCritical ? 'text-red-400' : 'text-slate-600'
+                <span className={`text-[11px] font-semibold tracking-tight ${
+                  isActive ? 'text-white' : isCritical ? 'text-red-500' : 'text-slate-700'
                 }`}>
                   {item.label}
                 </span>
@@ -87,10 +88,10 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
           })}
         </div>
 
-        {/* Rodapé do Menu */}
-        <div className="px-6 py-4 flex flex-col items-center gap-0.5 border-t border-slate-50 shrink-0 bg-slate-50/30">
-           <span className="text-primary text-[7px] font-black uppercase tracking-[0.5em]">FORTIME PRO</span>
-           <span className="text-slate-300 text-[6px] font-bold uppercase tracking-widest">v3.5.2 Cloud</span>
+        {/* Footer */}
+        <div className="px-6 py-6 flex flex-col items-center gap-1 border-t border-slate-50 shrink-0 bg-slate-50/30">
+           <span className="text-emerald-500 text-[8px] font-bold uppercase tracking-[0.4em]">FORTIME PRO</span>
+           <span className="text-slate-400 text-[7px] font-medium uppercase tracking-widest">Tecnologia em Gestão</span>
         </div>
       </div>
     </>

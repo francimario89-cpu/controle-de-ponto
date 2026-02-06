@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, PointRecord, Company, Employee, AttendanceRequest } from './types';
 import { db } from './firebase';
@@ -134,18 +133,18 @@ const App: React.FC = () => {
           activeView={activeView} 
         />
         
-        <header className="px-6 py-5 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10 shrink-0">
+        <header className="px-6 py-6 flex items-center justify-between border-b border-slate-50 bg-white sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-2">
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-800 focus:outline-none hover:bg-slate-50 rounded-xl transition-colors">
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 8h16M4 16h16" /></svg>
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 focus:outline-none hover:bg-slate-50 rounded-2xl transition-colors">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8h16M4 16h16" /></svg>
             </button>
             {isAdmin && pendingRequestsCount > 0 && (
               <button 
                 onClick={() => setActiveView('aprovacoes')}
-                className="relative p-2 text-primary hover:bg-primary-light rounded-xl transition-all animate-bounce"
+                className="relative p-2.5 text-primary hover:bg-primary-light rounded-2xl transition-all animate-bounce"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                <span className="absolute top-1 right-1 w-4.5 h-4.5 bg-red-500 text-white text-[8px] font-bold flex items-center justify-center rounded-full border-2 border-white shadow-sm">
                   {pendingRequestsCount}
                 </span>
               </button>
@@ -154,14 +153,14 @@ const App: React.FC = () => {
 
           <div className="text-center flex flex-col items-center">
             {company?.logoUrl ? (
-              <img src={company.logoUrl} className="h-6 object-contain mb-0.5" alt="Logo" />
+              <img src={company.logoUrl} className="h-10 object-contain mb-1" alt="Logo" />
             ) : (
-              <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>
+              <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">{company?.name || 'ForTime PRO'}</p>
             )}
-            <p className="text-[7px] text-slate-400 font-bold uppercase tracking-[0.3em]">{activeView === 'dashboard' ? 'INÍCIO' : activeView.toUpperCase()}</p>
+            <p className="text-[7px] text-slate-400 font-semibold uppercase tracking-[0.3em]">{activeView === 'dashboard' ? 'INÍCIO' : activeView.toUpperCase()}</p>
           </div>
 
-          <button onClick={() => setActiveView('profile')} className="w-10 h-10 rounded-2xl overflow-hidden border border-slate-100 shadow-sm transition-transform active:scale-90">
+          <button onClick={() => setActiveView('profile')} className="w-11 h-11 rounded-2xl overflow-hidden border border-slate-100 shadow-sm transition-transform active:scale-90">
              <img src={user.photo || `https://ui-avatars.com/api/?name=${user.name}`} className="w-full h-full object-cover" />
           </button>
         </header>
