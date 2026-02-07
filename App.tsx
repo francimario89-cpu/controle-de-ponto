@@ -24,12 +24,13 @@ import BenefitsView from './components/BenefitsView';
 import FeedbackView from './components/FeedbackView';
 import VacationView from './components/VacationView';
 import SettingsView from './components/SettingsView';
+import ScheduleView from './components/ScheduleView';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation' | 'settings'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation' | 'settings' | 'schedule'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -151,8 +152,7 @@ const App: React.FC = () => {
       <div className={`h-full w-full max-w-lg shadow-2xl flex flex-col relative border-x overflow-hidden md:rounded-[40px] transition-all duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
         <Sidebar user={user} company={company} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => { if(v==='logout'){localStorage.clear(); setUser(null);} else {setActiveView(v as any); setIsSidebarOpen(false);}}} activeView={activeView} />
         
-        {/* Renderização condicional do header (oculto na view de settings pois ela tem header próprio) */}
-        {activeView !== 'settings' && (
+        {activeView !== 'settings' && activeView !== 'schedule' && (
           <header className={`px-6 py-6 flex items-center justify-between border-b sticky top-0 z-10 shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-50'}`}>
             <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 dark:text-slate-300"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8h16M4 16h16" /></svg></button>
             <div className="text-center">{company?.logoUrl ? <img src={company.logoUrl} className="h-10 object-contain" /> : <p className="text-[11px] font-bold text-primary uppercase tracking-widest">{company?.name || 'ForTime PRO'}</p>}</div>
@@ -175,6 +175,7 @@ const App: React.FC = () => {
             {activeView === 'feedback' && <FeedbackView user={user} />}
             {activeView === 'vacation' && <VacationView />}
             {activeView === 'settings' && <SettingsView user={user} onBack={() => setActiveView('dashboard')} />}
+            {activeView === 'schedule' && <ScheduleView />}
             {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 

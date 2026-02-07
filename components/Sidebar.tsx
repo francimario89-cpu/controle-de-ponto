@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
     { id: 'dashboard', label: 'INÍCIO', icon: '🏠' },
     { id: 'profile', label: 'PERFIL', icon: '👤' },
     { id: 'mypoint', label: 'MEU PONTO', icon: '📅' },
+    { id: 'schedule', label: 'MEU HORÁRIO', icon: '🕒' },
     { id: 'benefits', label: 'BENEFÍCIOS', icon: '💳' },
     { id: 'feedback', label: 'FEEDBACK', icon: '💬' },
     { id: 'vacation', label: 'FÉRIAS', icon: '🏖️' },
