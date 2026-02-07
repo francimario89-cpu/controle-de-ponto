@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, PointRecord, Company, Employee, AttendanceRequest, ChatMessage } from './types';
+import { User, PointRecord, Company, Employee, AttendanceRequest } from './types';
 import { db } from './firebase';
 import { 
   collection, addDoc, query, where, onSnapshot, doc, updateDoc, Timestamp, orderBy, deleteDoc, getDocs
@@ -16,6 +16,7 @@ import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
 import Profile from './components/Profile';
 import HolidaysView from './components/HolidaysView';
+import KioskMode from './components/KioskMode';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -37,11 +38,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (isDarkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
   useEffect(() => {
@@ -74,20 +72,13 @@ const App: React.FC = () => {
     if (!user) return;
     
     if (!user.hasFacialRecord) {
-      try {
-        const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode), where("matricula", "==", user.matricula));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const empRef = doc(db, "employees", snap.docs[0].id);
-          await updateDoc(empRef, { hasFacialRecord: true, photo: photo });
-          const updatedUser = { ...user, hasFacialRecord: true, photo: photo };
-          setUser(updatedUser);
-          localStorage.setItem('fortime_user', JSON.stringify(updatedUser));
-          setIsPunching(false);
-          alert("Biometria Facial salva!");
-          return;
-        }
-      } catch (err) {
+      const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode), where("matricula", "==", user.matricula));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        await updateDoc(doc(db, "employees", snap.docs[0].id), { hasFacialRecord: true, photo: photo });
+        const updatedUser = { ...user, hasFacialRecord: true, photo: photo };
+        setUser(updatedUser);
+        localStorage.setItem('fortime_user', JSON.stringify(updatedUser));
         setIsPunching(false);
         return;
       }
@@ -107,30 +98,19 @@ const App: React.FC = () => {
     setIsPunching(false);
   };
 
-  const handleLogin = (newUser: User, newCompany?: Company) => {
-    setUser(newUser);
-    if (newCompany) setCompany(newCompany);
-    localStorage.setItem('fortime_user', JSON.stringify(newUser));
-    setActiveView(newUser.role === 'admin' ? 'relatorio' : 'dashboard');
-  };
-
-  const handleLogout = () => { localStorage.clear(); setUser(null); setCompany(null); setActiveView('dashboard'); };
-
-  const handleNavigation = (view: string) => {
-    if (view === 'logout') { handleLogout(); return; }
-    setActiveView(view as any);
-    setIsSidebarOpen(false);
-  };
-
   if (!isInitialized) return null;
-  if (!user) return <Login onLogin={handleLogin} />;
+  if (!user) return <Login onLogin={(u, c) => { setUser(u); if(c) setCompany(c); localStorage.setItem('fortime_user', JSON.stringify(u)); setActiveView(u.role === 'admin' ? 'relatorio' : 'dashboard'); }} />;
+
+  if (user.role === 'totem') {
+    return <KioskMode employees={employees} onPunch={(rec) => setLastPunch(rec)} onExit={() => { localStorage.clear(); setUser(null); }} />;
+  }
 
   return (
     <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-orange-50 text-slate-900'}`}>
       <style>{`:root { --primary-color: #f97316; } .bg-primary { background-color: var(--primary-color) !important; } .text-primary { color: var(--primary-color) !important; }`}</style>
       
       <div className={`h-full w-full max-w-lg shadow-2xl flex flex-col relative border-x overflow-hidden md:rounded-[40px] transition-all duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <Sidebar user={user} company={company} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={handleNavigation} activeView={activeView} />
+        <Sidebar user={user} company={company} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => { if(v==='logout'){localStorage.clear(); setUser(null);} else {setActiveView(v as any); setIsSidebarOpen(false);}}} activeView={activeView} />
         
         <header className={`px-6 py-6 flex items-center justify-between border-b sticky top-0 z-10 shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-50'}`}>
           <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 dark:text-slate-300"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8h16M4 16h16" /></svg></button>
@@ -140,26 +120,21 @@ const App: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
           <div className="max-w-md mx-auto w-full h-full">
-            {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={handleNavigation} user={user} />}
+            {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={(v) => setActiveView(v)} user={user} />}
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
             {activeView === 'holidays' && <HolidaysView company={company} />}
             {activeView === 'requests' && <Requests />}
-            {(['colaboradores', 'jornada', 'vacations', 'aprovacoes', 'contabilidade', 'relatorio', 'saldos', 'config'].includes(activeView)) && 
+            {activeView === 'profile' && <Profile user={user} company={company} />}
+            {(['colaboradores', 'aprovacoes', 'calendario', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
                 onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', hasFacialRecord: false })} 
-                onDeleteEmployee={async (id) => {
-                   if(confirm("EXCLUIR COLABORADOR?")) {
-                      await deleteDoc(doc(db, "employees", id));
-                      alert("COLABORADOR EXCLUÍDO!");
-                   }
-                }} 
+                onDeleteEmployee={async (id) => { if(confirm("EXCLUIR?")) await deleteDoc(doc(db, "employees", id)); }} 
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}
               />
             }
-            {activeView === 'profile' && <Profile user={user} company={company} />}
           </div>
         </main>
 

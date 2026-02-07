@@ -28,31 +28,40 @@ const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
     calendarDays.push(d);
   }
 
-  // Função robusta para normalizar e comparar datas YYYY-MM-DD
-  const normalizeDate = (dateStr: string) => {
+  // Normaliza qualquer string de data para o formato comparável YYYY-MM-DD
+  const formatForComparison = (dateStr: string) => {
     if (!dateStr) return "";
-    const parts = dateStr.split('-');
+    // Aceita tanto 2024-02-24 quanto 24/02/2024
+    const separator = dateStr.includes('-') ? '-' : '/';
+    const parts = dateStr.split(separator);
+    
     if (parts.length !== 3) return dateStr;
-    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+
+    let y, m, d;
+    if (parts[0].length === 4) { // YYYY-MM-DD
+      [y, m, d] = parts;
+    } else { // DD/MM/YYYY
+      [d, m, y] = parts;
+    }
+    
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   };
 
   const getHolidayForDay = (day: number) => {
-    const targetDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return holidays.find(h => normalizeDate(h.date) === targetDateStr);
+    const target = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return holidays.find(h => formatForComparison(h.date) === target);
   };
 
-  // Filtrar feriados do mês atual para a lista
   const currentMonthHolidays = holidays.filter(h => {
-    const norm = normalizeDate(h.date);
-    return norm.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`);
-  }).sort((a, b) => a.date.localeCompare(b.date));
+    const formatted = formatForComparison(h.date);
+    return formatted.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`);
+  }).sort((a, b) => formatForComparison(a.date).localeCompare(formatForComparison(b.date)));
 
   return (
     <div className="p-4 space-y-6 animate-in fade-in duration-500 pb-24">
       <div className="flex flex-col items-center text-center">
         <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-2xl mb-2">📅</div>
-        <h2 className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Gestão de Calendário</h2>
-        <p className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight">Feriados e Datas Oficiais</p>
+        <h2 className="text-[14px] font-black text-slate-800 dark:text-white uppercase tracking-tight">CALENDÁRIO DE FERIADOS</h2>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border dark:border-slate-800 overflow-hidden">
@@ -67,7 +76,7 @@ const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
 
         <div className="p-4">
           <div className="grid grid-cols-7 gap-1 mb-2">
-            {['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'].map(d => (
+            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(d => (
               <div key={d} className="text-center text-[8px] font-black text-slate-300 dark:text-slate-600 py-1">{d}</div>
             ))}
           </div>
@@ -80,16 +89,12 @@ const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
                   key={i} 
                   className={`aspect-square flex flex-col items-center justify-center rounded-2xl relative transition-all border ${
                     holiday 
-                    ? 'bg-orange-500 text-white border-orange-400 shadow-lg scale-105 z-10' 
+                    ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg scale-105 z-10' 
                     : 'bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border-transparent'
                   }`}
                 >
                   <span className="text-[11px] font-black">{d}</span>
-                  {holiday && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full flex items-center justify-center shadow-sm">
-                      <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
-                    </div>
-                  )}
+                  {holiday && <div className="absolute bottom-1.5 w-1 h-1 bg-white rounded-full"></div>}
                 </div>
               );
             })}
@@ -98,27 +103,22 @@ const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center gap-2">
-           <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
-           Eventos em {monthName}
-        </h3>
-        
+        <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2">LISTA DE EVENTOS</h3>
         {currentMonthHolidays.length > 0 ? (
           currentMonthHolidays.map(h => (
-            <div key={h.id} className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border dark:border-slate-700 flex items-center gap-4 shadow-sm group">
-              <div className="w-11 h-11 bg-orange-50 dark:bg-orange-950/20 rounded-xl flex flex-col items-center justify-center border border-orange-100 dark:border-orange-900/30 shrink-0 group-hover:bg-orange-500 group-hover:border-orange-500 transition-all">
-                 <span className="text-[14px] font-black text-orange-600 dark:text-orange-400 group-hover:text-white">{h.date.split('-')[2]}</span>
+            <div key={h.id} className="bg-white dark:bg-slate-800 p-4 rounded-3xl border dark:border-slate-700 flex items-center gap-4 shadow-sm">
+              <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl flex flex-col items-center justify-center border border-emerald-100 dark:border-emerald-900/30 shrink-0">
+                 <span className="text-[16px] font-black text-emerald-600 dark:text-emerald-400">{formatForComparison(h.date).split('-')[2]}</span>
               </div>
               <div className="min-w-0 flex-1">
-                 <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase truncate">{h.description}</p>
-                 <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Feriado Nacional / Estadual</p>
+                 <p className="text-[12px] font-black text-slate-800 dark:text-white uppercase truncate">{h.description}</p>
+                 <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Feriado • {monthName}</p>
               </div>
             </div>
           ))
         ) : (
           <div className="py-12 text-center bg-slate-50 dark:bg-slate-900/30 rounded-[32px] border-2 border-dashed border-slate-200 dark:border-slate-800">
-             <span className="text-3xl grayscale opacity-20 block mb-3">🏖️</span>
-             <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Nenhum feriado registrado</p>
+             <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Nenhum feriado para este mês</p>
           </div>
         )}
       </div>
