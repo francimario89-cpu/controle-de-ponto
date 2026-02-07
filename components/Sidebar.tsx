@@ -17,17 +17,18 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
   const menuItems = [
     { id: 'dashboard', label: 'INÍCIO', icon: '🏠' },
     { id: 'profile', label: 'PERFIL', icon: '👤' },
+    { id: 'assistant', label: 'ASSISTENTE IA', icon: '🤖' },
     { id: 'mypoint', label: 'MEU PONTO', icon: '📝' },
     { id: 'card', label: 'EXTRATO', icon: '📇' },
     { id: 'holidays', label: 'FERIADOS', icon: '📅' },
     { id: 'requests', label: 'PEDIDOS', icon: '💬' },
     ...(isAdmin ? [
+      { id: 'audit', label: 'COMPLIANCE CLT', icon: '⚖️' },
       { id: 'relatorio', label: 'BATIDAS', icon: '📸' },
       { id: 'colaboradores', label: 'EQUIPE', icon: '👥' },
-      { id: 'saldos', label: 'BANCO HORAS', icon: '⚖️' },
+      { id: 'saldos', label: 'BANCO HORAS', icon: '📊' },
       { id: 'aprovacoes', label: 'APROVAÇÕES', icon: '✅' },
-      { id: 'config', label: 'CONFIG REGRAS', icon: '⚙️' },
-      { id: 'contabilidade', label: 'CONTÁBIL', icon: '📈' }
+      { id: 'config', label: 'CONFIG REGRAS', icon: '⚙️' }
     ] : []),
     { id: 'logout', label: 'SAIR', icon: '🚪' }
   ];

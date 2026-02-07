@@ -17,12 +17,14 @@ import AdminDashboard from './components/AdminDashboard';
 import Profile from './components/Profile';
 import HolidaysView from './components/HolidaysView';
 import KioskMode from './components/KioskMode';
+import AiAssistant from './components/AiAssistant';
+import ComplianceAudit from './components/ComplianceAudit';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'jornada' | 'vacations' | 'aprovacoes' | 'contabilidade' | 'relatorio' | 'saldos' | 'config'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -105,6 +107,8 @@ const App: React.FC = () => {
     return <KioskMode employees={employees} onPunch={(rec) => setLastPunch(rec)} onExit={() => { localStorage.clear(); setUser(null); }} />;
   }
 
+  const userRecords = records.filter(r => r.matricula === user.matricula);
+
   return (
     <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-orange-50 text-slate-900'}`}>
       <style>{`:root { --primary-color: #f97316; } .bg-primary { background-color: var(--primary-color) !important; } .text-primary { color: var(--primary-color) !important; }`}</style>
@@ -120,13 +124,15 @@ const App: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
           <div className="max-w-md mx-auto w-full h-full">
-            {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={records.filter(r => r.matricula === user.matricula)[0]} onNavigate={(v) => setActiveView(v)} user={user} />}
-            {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
-            {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
+            {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={userRecords[0]} onNavigate={(v) => setActiveView(v)} user={user} />}
+            {activeView === 'mypoint' && <MyPoint records={userRecords} />}
+            {activeView === 'card' && <AttendanceCard records={userRecords} company={company} />}
             {activeView === 'holidays' && <HolidaysView company={company} />}
             {activeView === 'requests' && <Requests />}
             {activeView === 'profile' && <Profile user={user} company={company} />}
-            {(['colaboradores', 'aprovacoes', 'calendario', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
+            {activeView === 'assistant' && <AiAssistant user={user} records={userRecords} />}
+            {activeView === 'audit' && <ComplianceAudit records={records} employees={employees} />}
+            {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
                 onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', hasFacialRecord: false })} 
