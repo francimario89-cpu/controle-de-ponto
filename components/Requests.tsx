@@ -14,12 +14,14 @@ const Requests: React.FC = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [times, setTimes] = useState<string[]>(['08:00', '12:00', '13:00', '18:00']);
   const [reason, setReason] = useState('Esquecimento');
+  const [hasAttachment, setHasAttachment] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const user = JSON.parse(localStorage.getItem('fortime_user') || '{}');
+  const userStr = localStorage.getItem('fortime_user');
+  const user = userStr ? JSON.parse(userStr) : null;
 
   useEffect(() => {
-    if (!user.companyCode) return;
+    if (!user?.companyCode) return;
     const q = query(
       collection(db, "requests"), 
       where("companyCode", "==", user.companyCode),
@@ -30,9 +32,11 @@ const Requests: React.FC = () => {
       const reqs: any[] = [];
       snap.forEach(d => reqs.push({ id: d.id, ...d.data() }));
       setRequests(reqs);
+    }, (err) => {
+      console.error("Erro ao carregar solicitações:", err);
     });
     return () => unsub();
-  }, [user.companyCode, user.matricula]);
+  }, [user?.companyCode, user?.matricula]);
 
   const filteredRequests = requests.filter(r => {
     if (activeTab === 'pending') return r.status === 'pending';
@@ -41,6 +45,7 @@ const Requests: React.FC = () => {
   });
 
   const handleSubmit = async () => {
+    if (!user) return;
     setLoading(true);
     try {
       await addDoc(collection(db, "requests"), {
@@ -52,18 +57,20 @@ const Requests: React.FC = () => {
         date,
         times: type === 'inclusão' ? times : [],
         status: 'pending',
+        attachment: hasAttachment ? "simulado_doc.pdf" : null,
         createdAt: new Date()
       });
       setShowCreateMode(false);
+      setHasAttachment(false);
     } catch (e) {
-      alert("Erro ao enviar solicitação.");
+      alert("Erro ao enviar solicitação. Verifique sua conexão.");
     }
     setLoading(false);
   };
 
   if (showCreateMode) {
     return (
-      <div className="flex flex-col h-full bg-white dark:bg-slate-900">
+      <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in slide-in-from-right duration-300">
         <header className="px-4 py-4 flex items-center border-b dark:border-slate-800">
           <button onClick={() => setShowCreateMode(false)} className="p-2 text-[#0057ff]">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,7 +81,6 @@ const Requests: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar pb-24">
-          {/* Date Selector Card */}
           <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-100 dark:border-slate-700">
             <div className="text-xl">📅</div>
             <input 
@@ -85,7 +91,6 @@ const Requests: React.FC = () => {
             />
           </div>
 
-          {/* Type Toggle Buttons */}
           <div className="flex gap-4">
             <button 
               onClick={() => setType('inclusão')}
@@ -107,7 +112,7 @@ const Requests: React.FC = () => {
             </button>
           </div>
 
-          {type === 'inclusão' && (
+          {type === 'inclusão' ? (
             <div className="space-y-4">
               <p className="text-[11px] font-bold text-slate-500 uppercase px-1">Quais horários você gostaria de incluir?</p>
               <div className="grid grid-cols-2 gap-3">
@@ -128,6 +133,13 @@ const Requests: React.FC = () => {
                 ))}
               </div>
             </div>
+          ) : (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                 <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase">Deseja abonar o dia por completo?</p>
+                 <div className="w-10 h-5 bg-slate-300 rounded-full relative"><div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full"></div></div>
+              </div>
+            </div>
           )}
 
           <div className="space-y-2">
@@ -141,21 +153,31 @@ const Requests: React.FC = () => {
                 <option value="Esquecimento">Esquecimento</option>
                 <option value="Problemas Técnicos">Problemas Técnicos</option>
                 <option value="Trabalho Externo">Trabalho Externo</option>
+                <option value="Atestado Médico">Atestado Médico</option>
                 <option value="Outros">Outros</option>
               </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
-              </div>
             </div>
           </div>
 
-          <button 
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-5 bg-[#0057ff] text-white rounded-[25px] font-black uppercase text-xs shadow-xl active:scale-95 transition-all mt-6"
-          >
-            {loading ? 'ENVIANDO...' : 'Realizar Solicitação'}
-          </button>
+          <div className="space-y-3">
+            <button 
+              onClick={() => setHasAttachment(!hasAttachment)}
+              className={`w-full p-4 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 transition-all ${hasAttachment ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-slate-200 text-slate-400'}`}
+            >
+              <span>{hasAttachment ? '📄 Documento Anexado' : '➕ Adicionar documento'}</span>
+            </button>
+          </div>
+
+          <div className="flex gap-4 mt-6">
+            <button onClick={() => setShowCreateMode(false)} className="flex-1 py-4 border-2 border-[#0057ff] text-[#0057ff] rounded-2xl font-black uppercase text-[10px]">Cancelar</button>
+            <button 
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-[2] py-4 bg-[#0057ff] text-white rounded-2xl font-black uppercase text-[10px] shadow-xl disabled:opacity-50"
+            >
+              {loading ? 'ENVIANDO...' : 'Realizar Solicitação'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -166,26 +188,16 @@ const Requests: React.FC = () => {
       <header className="px-4 py-4 border-b dark:border-slate-800 flex flex-col items-center">
         <h1 className="font-bold text-slate-800 dark:text-white text-sm mb-4">Minhas Solicitações</h1>
         
-        {/* Tab Switcher */}
         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full">
-          <button 
-            onClick={() => setActiveTab('pending')} 
-            className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg transition-all ${activeTab === 'pending' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400'}`}
-          >
-            Em andamento
-          </button>
-          <button 
-            onClick={() => setActiveTab('approved')} 
-            className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg transition-all ${activeTab === 'approved' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400'}`}
-          >
-            Aprovadas
-          </button>
-          <button 
-            onClick={() => setActiveTab('rejected')} 
-            className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg transition-all ${activeTab === 'rejected' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400'}`}
-          >
-            Reprovadas
-          </button>
+          {(['pending', 'approved', 'rejected'] as const).map(t => (
+            <button 
+              key={t}
+              onClick={() => setActiveTab(t)} 
+              className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg transition-all ${activeTab === t ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400'}`}
+            >
+              {t === 'pending' ? 'Em andamento' : t === 'approved' ? 'Aprovadas' : 'Reprovadas'}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -193,20 +205,17 @@ const Requests: React.FC = () => {
         {filteredRequests.map((req) => (
           <div key={req.id} className="bg-[#f8faff] dark:bg-slate-800/50 p-6 rounded-2xl flex items-center justify-between border border-slate-50 dark:border-slate-800 group active:scale-[0.98] transition-all">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm text-xl border border-orange-100 dark:border-orange-900/20">
-                <span className="text-orange-400">⏳</span>
+              <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm border border-orange-100">
+                <span className="text-orange-400 text-xl">⏳</span>
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                   <p className="text-[11px] font-black text-slate-500 uppercase tracking-tight">#{req.id.substring(0, 7)} - {req.type === 'inclusão' ? 'Inclusões' : 'Abono'} -</p>
+              <div>
+                <p className="text-[11px] font-black text-slate-500 uppercase tracking-tight">#{req.id.substring(0, 7)} - {req.type === 'inclusão' ? 'Inclusões' : 'Abono'}</p>
+                <div className="flex gap-2 mt-1">
+                  {req.times?.map((t, i) => (
+                    <span key={i} className="bg-white px-2 py-0.5 rounded text-[9px] font-bold text-slate-500 border border-slate-100">{t}</span>
+                  ))}
+                  {req.attachment && <span className="bg-blue-50 text-blue-500 px-2 py-0.5 rounded text-[9px] font-bold border border-blue-100">📄 DOC</span>}
                 </div>
-                {req.times && req.times.length > 0 && (
-                  <div className="flex gap-2">
-                    {req.times.filter(t => t !== '').map((t, i) => (
-                      <span key={i} className="bg-white dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-700">{t}</span>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
             <div className="text-slate-300">
@@ -216,8 +225,9 @@ const Requests: React.FC = () => {
         ))}
 
         {filteredRequests.length === 0 && (
-          <div className="py-20 text-center opacity-30">
-             <p className="text-xs font-black uppercase tracking-widest text-slate-400">Nenhuma solicitação encontrada</p>
+          <div className="py-20 text-center opacity-30 flex flex-col items-center">
+             <span className="text-4xl mb-4">🔎</span>
+             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nenhuma solicitação encontrada</p>
           </div>
         )}
       </div>
