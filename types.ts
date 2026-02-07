@@ -103,13 +103,14 @@ export interface AttendanceRequest {
   companyCode: string;
   matricula: string;
   userName: string;
-  type: 'ajuste' | 'atestado' | 'abono';
+  type: 'ajuste' | 'atestado' | 'abono' | 'inclusão';
   status: 'pending' | 'approved' | 'rejected';
   date: string;
   reason: string;
   managerFeedback?: string;
   attachment?: string;
   createdAt: Date;
+  times?: string[];
 }
 
 export interface ChatMessage {
