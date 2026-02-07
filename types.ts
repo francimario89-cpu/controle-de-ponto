@@ -95,6 +95,7 @@ export interface PointRecord {
   matricula?: string;
   digitalSignature: string;
   type: 'entrada' | 'saida';
+  mood?: string;
 }
 
 export interface AttendanceRequest {
@@ -117,7 +118,23 @@ export interface ChatMessage {
   text: string;
 }
 
-// Fixed missing interface used in NotesArea.tsx
+export interface Feedback {
+  id: string;
+  from: string;
+  to: string;
+  rating: number;
+  comment: string;
+  date: Date;
+}
+
+export interface BenefitCategory {
+  id: string;
+  name: string;
+  balance: number;
+  icon: string;
+}
+
+// Added fix for: Module '"../types"' has no exported member 'Note'
 export interface Note {
   id: string;
   title: string;
@@ -125,7 +142,7 @@ export interface Note {
   updatedAt: Date;
 }
 
-// Fixed missing interface used in GuideArea.tsx
+// Added fix for: Module '"../types"' has no exported member 'NotebookSummary'
 export interface NotebookSummary {
   overview: string;
   topics: string[];

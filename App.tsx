@@ -20,12 +20,15 @@ import KioskMode from './components/KioskMode';
 import AiAssistant from './components/AiAssistant';
 import ComplianceAudit from './components/ComplianceAudit';
 import CompanyFeatures from './components/CompanyFeatures';
+import BenefitsView from './components/BenefitsView';
+import FeedbackView from './components/FeedbackView';
+import VacationView from './components/VacationView';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -60,7 +63,6 @@ const App: React.FC = () => {
     const offlineRecords = JSON.parse(offlineData);
     if (offlineRecords.length === 0) return;
 
-    console.log("Iniciando sincronização offline...");
     for (const rec of offlineRecords) {
       try {
         await addDoc(collection(db, "records"), { 
@@ -72,7 +74,6 @@ const App: React.FC = () => {
       }
     }
     localStorage.setItem('offline_records', JSON.stringify([]));
-    console.log("Sincronização concluída!");
   };
 
   useEffect(() => {
@@ -166,6 +167,9 @@ const App: React.FC = () => {
             {activeView === 'assistant' && <AiAssistant user={user} records={userRecords} />}
             {activeView === 'audit' && <ComplianceAudit records={records} employees={employees} />}
             {activeView === 'features' && <CompanyFeatures />}
+            {activeView === 'benefits' && <BenefitsView />}
+            {activeView === 'feedback' && <FeedbackView user={user} />}
+            {activeView === 'vacation' && <VacationView />}
             {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 

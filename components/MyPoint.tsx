@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { PointRecord } from '../types';
 
 interface MyPointProps {
@@ -7,6 +7,8 @@ interface MyPointProps {
 }
 
 const MyPoint: React.FC<MyPointProps> = ({ records }) => {
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
   const grouped = records.reduce((acc: any, curr) => {
     const day = curr.timestamp.toLocaleDateString('pt-BR');
     if (!acc[day]) acc[day] = [];
@@ -14,63 +16,81 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
     return acc;
   }, {});
 
-  const handleDownloadCSV = () => {
-    if (records.length === 0) return alert("Sem registros.");
-
-    let csv = "\uFEFF"; // BOM para o Excel entender acentos
-    csv += "Data;Hora;Tipo;Endereco\n";
-
-    const sorted = [...records].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-    
-    sorted.forEach((r, idx) => {
-      const date = r.timestamp.toLocaleDateString('pt-BR');
-      const time = r.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const type = idx % 2 === 0 ? "ENTRADA" : "SAIDA";
-      csv += `${date};${time};${type};"${r.address}"\n`;
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Meu_Ponto_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
+  const days = Object.keys(grouped).sort((a, b) => {
+    const dateA = new Date(a.split('/').reverse().join('-'));
+    const dateB = new Date(b.split('/').reverse().join('-'));
+    return dateB.getTime() - dateA.getTime();
+  });
 
   return (
     <div className="p-6 space-y-6 pb-24">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-black text-slate-800 tracking-tighter uppercase text-xs">Meus Registros</h2>
-          <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Histórico em nuvem</p>
+        <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase text-xs">Histórico de Ponto</h2>
+        <div className="flex gap-2">
+           <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+           <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sincronizado</span>
         </div>
-        <button 
-          onClick={handleDownloadCSV}
-          className="bg-slate-900 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase shadow-lg flex items-center gap-2 active:scale-95 transition-all"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          Exportar Excel
-        </button>
       </div>
 
-      <div className="space-y-4">
-        {Object.keys(grouped).map(date => (
-          <div key={date} className="bg-white rounded-[32px] p-5 border border-orange-50 shadow-sm space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{date}</span>
-              <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg font-black uppercase">Sincronizado</span>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {grouped[date].sort((a: any, b: any) => a.timestamp - b.timestamp).map((r: PointRecord, idx: number) => (
-                <div key={idx} className="bg-orange-50/50 p-2.5 rounded-2xl border border-orange-100 text-center">
-                  <p className="text-[10px] font-black text-slate-700">{r.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</p>
-                  <p className="text-[7px] font-black text-orange-400 uppercase mt-0.5">{idx % 2 === 0 ? 'Entrada' : 'Saída'}</p>
+      <div className="space-y-3">
+        {days.map(date => {
+          const dayRecords = grouped[date].sort((a: any, b: any) => a.timestamp - b.timestamp);
+          const isSelected = selectedDay === date;
+
+          return (
+            <div key={date} className={`bg-white dark:bg-slate-900 rounded-[35px] border transition-all duration-300 ${isSelected ? 'shadow-xl border-primary/20 scale-[1.02]' : 'border-slate-50 dark:border-slate-800'}`}>
+              <button 
+                onClick={() => setSelectedDay(isSelected ? null : date)}
+                className="w-full p-6 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex flex-col items-center justify-center">
+                    <span className="text-[12px] font-black text-slate-800 dark:text-white">{date.split('/')[0]}</span>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase">{date.split('/')[1] === '01' ? 'JAN' : date.split('/')[1] === '02' ? 'FEV' : 'MAR'}</span>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-tight">{dayRecords.length} Marcações</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Clique para ver detalhes</p>
+                  </div>
                 </div>
-              ))}
+                
+                <div className="bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-full">
+                  <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">+00:15</span>
+                </div>
+              </button>
+
+              {isSelected && (
+                <div className="px-6 pb-8 pt-2 space-y-6 animate-in slide-in-from-top-4">
+                   <div className="grid grid-cols-2 gap-3">
+                      {dayRecords.map((r: PointRecord, idx: number) => (
+                        <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-[24px] border border-slate-100 dark:border-slate-800">
+                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{r.type}</p>
+                           <p className="text-sm font-black text-slate-800 dark:text-white">{r.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                           <p className="text-[7px] text-slate-400 mt-1 truncate">{r.address}</p>
+                        </div>
+                      ))}
+                   </div>
+
+                   <div className="bg-[#5c67f2]/5 p-5 rounded-[28px] border border-[#5c67f2]/10 space-y-3">
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-tight">
+                         <span className="text-slate-400">Jornada Necessária</span>
+                         <span className="text-slate-800 dark:text-white">08:00</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-tight">
+                         <span className="text-slate-400">Trabalhado</span>
+                         <span className="text-emerald-500">08:15</span>
+                      </div>
+                   </div>
+
+                   <div className="flex gap-2">
+                      <button className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[9px] font-black uppercase shadow-lg">Comprovante</button>
+                      <button className="flex-1 py-4 bg-white dark:bg-slate-800 border dark:border-slate-700 text-slate-800 dark:text-white rounded-2xl text-[9px] font-black uppercase">Ajuste</button>
+                   </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
