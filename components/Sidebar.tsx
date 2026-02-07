@@ -26,13 +26,14 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
     { id: 'holidays', label: 'FERIADOS', icon: '🎉' },
     { id: 'requests', label: 'SOLICITAÇÕES', icon: '✉️' },
     { id: 'features', label: 'FUNCIONALIDADES', icon: '🏢' },
+    { id: 'settings', label: 'CONFIGURAÇÕES', icon: '⚙️' },
     ...(isAdmin ? [
       { id: 'audit', label: 'COMPLIANCE CLT', icon: '⚖️' },
       { id: 'relatorio', label: 'BATIDAS', icon: '📸' },
       { id: 'colaboradores', label: 'EQUIPE', icon: '👥' },
       { id: 'saldos', label: 'BANCO HORAS', icon: '📊' },
       { id: 'aprovacoes', label: 'APROVAÇÕES', icon: '✅' },
-      { id: 'config', label: 'CONFIG REGRAS', icon: '⚙️' }
+      { id: 'config', label: 'REGRAS EMPRESA', icon: '🛡️' }
     ] : []),
     { id: 'logout', label: 'SAIR', icon: '🚪' }
   ];

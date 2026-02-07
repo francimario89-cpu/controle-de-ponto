@@ -23,12 +23,13 @@ import CompanyFeatures from './components/CompanyFeatures';
 import BenefitsView from './components/BenefitsView';
 import FeedbackView from './components/FeedbackView';
 import VacationView from './components/VacationView';
+import SettingsView from './components/SettingsView';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation' | 'settings'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -63,7 +64,6 @@ const App: React.FC = () => {
     const offlineRecords = JSON.parse(offlineData);
     if (offlineRecords.length === 0) return;
 
-    console.log("Iniciando sincronização offline...");
     for (const rec of offlineRecords) {
       try {
         await addDoc(collection(db, "records"), { 
@@ -75,7 +75,6 @@ const App: React.FC = () => {
       }
     }
     localStorage.setItem('offline_records', JSON.stringify([]));
-    console.log("Sincronização concluída!");
   };
 
   useEffect(() => {
@@ -152,11 +151,14 @@ const App: React.FC = () => {
       <div className={`h-full w-full max-w-lg shadow-2xl flex flex-col relative border-x overflow-hidden md:rounded-[40px] transition-all duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
         <Sidebar user={user} company={company} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => { if(v==='logout'){localStorage.clear(); setUser(null);} else {setActiveView(v as any); setIsSidebarOpen(false);}}} activeView={activeView} />
         
-        <header className={`px-6 py-6 flex items-center justify-between border-b sticky top-0 z-10 shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-50'}`}>
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 dark:text-slate-300"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8h16M4 16h16" /></svg></button>
-          <div className="text-center">{company?.logoUrl ? <img src={company.logoUrl} className="h-10 object-contain" /> : <p className="text-[11px] font-bold text-primary uppercase tracking-widest">{company?.name || 'ForTime PRO'}</p>}</div>
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-11 h-11 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-800">{isDarkMode ? '☀️' : '🌙'}</button>
-        </header>
+        {/* Renderização condicional do header (oculto na view de settings pois ela tem header próprio) */}
+        {activeView !== 'settings' && (
+          <header className={`px-6 py-6 flex items-center justify-between border-b sticky top-0 z-10 shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-50'}`}>
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 dark:text-slate-300"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8h16M4 16h16" /></svg></button>
+            <div className="text-center">{company?.logoUrl ? <img src={company.logoUrl} className="h-10 object-contain" /> : <p className="text-[11px] font-bold text-primary uppercase tracking-widest">{company?.name || 'ForTime PRO'}</p>}</div>
+            <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-11 h-11 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-800">{isDarkMode ? '☀️' : '🌙'}</button>
+          </header>
+        )}
 
         <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
           <div className="max-w-md mx-auto w-full h-full">
@@ -172,6 +174,7 @@ const App: React.FC = () => {
             {activeView === 'benefits' && <BenefitsView />}
             {activeView === 'feedback' && <FeedbackView user={user} />}
             {activeView === 'vacation' && <VacationView />}
+            {activeView === 'settings' && <SettingsView user={user} onBack={() => setActiveView('dashboard')} />}
             {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
