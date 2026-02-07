@@ -136,7 +136,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </div>
         )}
 
-        {/* ... manter outras abas existentes ... */}
         {tab === 'relatorio' && (
            <div className="space-y-2">
              <input type="text" placeholder="BUSCAR COLABORADOR..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 bg-white dark:bg-slate-800 rounded-2xl text-[10px] font-black border dark:border-slate-700 outline-none mb-2" />
@@ -152,7 +151,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
            </div>
         )}
         
-        {/* Outras abas (colaboradores, aprovacoes, saldos, calendario) permanecem conforme original */}
+        {tab === 'colaboradores' && (
+          <div className="space-y-3">
+             <button onClick={() => setShowAddModal(true)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg mb-4">+ ADICIONAR COLABORADOR</button>
+             {employees.map(emp => (
+               <div key={emp.id} className="bg-white dark:bg-slate-900 p-5 rounded-[32px] border dark:border-slate-800 flex items-center gap-4 group">
+                  <img src={emp.photo || `https://ui-avatars.com/api/?name=${emp.name}`} className="w-14 h-14 rounded-2xl object-cover" />
+                  <div className="flex-1">
+                     <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase mb-1">{emp.name}</p>
+                     <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Matrícula: {emp.matricula}</p>
+                     <div className="flex gap-2 mt-2">
+                        <span className="text-[7px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase">Saldo: {calculateHours(emp.matricula)}h</span>
+                        {!emp.hasFacialRecord && <span className="text-[7px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-black uppercase">Sem Biometria</span>}
+                     </div>
+                  </div>
+                  <button onClick={() => onDeleteEmployee(emp.id)} className="p-2 opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
+               </div>
+             ))}
+          </div>
+        )}
       </div>
     </div>
   );

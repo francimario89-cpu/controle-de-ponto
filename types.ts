@@ -134,7 +134,6 @@ export interface BenefitCategory {
   icon: string;
 }
 
-// Added fix for: Module '"../types"' has no exported member 'Note'
 export interface Note {
   id: string;
   title: string;
@@ -142,7 +141,6 @@ export interface Note {
   updatedAt: Date;
 }
 
-// Added fix for: Module '"../types"' has no exported member 'NotebookSummary'
 export interface NotebookSummary {
   overview: string;
   topics: string[];

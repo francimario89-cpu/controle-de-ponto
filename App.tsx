@@ -63,6 +63,7 @@ const App: React.FC = () => {
     const offlineRecords = JSON.parse(offlineData);
     if (offlineRecords.length === 0) return;
 
+    console.log("Iniciando sincronização offline...");
     for (const rec of offlineRecords) {
       try {
         await addDoc(collection(db, "records"), { 
@@ -74,6 +75,7 @@ const App: React.FC = () => {
       }
     }
     localStorage.setItem('offline_records', JSON.stringify([]));
+    console.log("Sincronização concluída!");
   };
 
   useEffect(() => {
