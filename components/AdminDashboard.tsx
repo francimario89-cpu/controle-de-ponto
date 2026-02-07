@@ -22,6 +22,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
   const [newEmpData, setNewEmpData] = useState({ name: '', matricula: '', cpf: '', password: '', roleFunction: '', department: '' });
 
+  // Fix for missing newHoliday state in the calendar section
+  const [newHoliday, setNewHoliday] = useState({ date: '', description: '' });
+
   // Password reset logic
   const [resetPasswordModal, setResetPasswordModal] = useState<{ isOpen: boolean, empId: string, empName: string }>({ isOpen: false, empId: '', empName: '' });
   const [newPasswordValue, setNewPasswordValue] = useState('');
