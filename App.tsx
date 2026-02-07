@@ -19,24 +19,61 @@ import HolidaysView from './components/HolidaysView';
 import KioskMode from './components/KioskMode';
 import AiAssistant from './components/AiAssistant';
 import ComplianceAudit from './components/ComplianceAudit';
+import CompanyFeatures from './components/CompanyFeatures';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [records, setRecords] = useState<PointRecord[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('theme') === 'dark');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('fortime_user');
     if (savedUser) setUser(JSON.parse(savedUser));
     setIsInitialized(true);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncOfflineRecords();
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  const syncOfflineRecords = async () => {
+    const offlineData = localStorage.getItem('offline_records');
+    if (!offlineData) return;
+    
+    const offlineRecords = JSON.parse(offlineData);
+    if (offlineRecords.length === 0) return;
+
+    console.log("Iniciando sincronização offline...");
+    for (const rec of offlineRecords) {
+      try {
+        await addDoc(collection(db, "records"), { 
+          ...rec, 
+          timestamp: Timestamp.fromDate(new Date(rec.timestamp)) 
+        });
+      } catch (e) {
+        console.error("Erro ao sincronizar registro:", e);
+      }
+    }
+    localStorage.setItem('offline_records', JSON.stringify([]));
+    console.log("Sincronização concluída!");
+  };
 
   useEffect(() => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
@@ -73,29 +110,23 @@ const App: React.FC = () => {
   const handleCameraCapture = async (photo: string, loc: any) => {
     if (!user) return;
     
-    if (!user.hasFacialRecord) {
-      const q = query(collection(db, "employees"), where("companyCode", "==", user.companyCode), where("matricula", "==", user.matricula));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        await updateDoc(doc(db, "employees", snap.docs[0].id), { hasFacialRecord: true, photo: photo });
-        const updatedUser = { ...user, hasFacialRecord: true, photo: photo };
-        setUser(updatedUser);
-        localStorage.setItem('fortime_user', JSON.stringify(updatedUser));
-        setIsPunching(false);
-        return;
-      }
-    }
-
     const todayRecs = records.filter(r => r.matricula === user.matricula && r.timestamp.toLocaleDateString() === new Date().toLocaleDateString());
     const type = todayRecs.length % 2 === 0 ? 'entrada' : 'saida';
     const recordData = {
       userName: user.name, address: loc.address, latitude: loc.lat, longitude: loc.lng,
-      photo, status: 'synchronized', matricula: user.matricula,
+      photo, status: isOnline ? 'synchronized' : 'pending', matricula: user.matricula,
       digitalSignature: Math.random().toString(36).substring(2, 15), type,
       companyCode: user.companyCode, timestamp: new Date()
     };
 
-    await addDoc(collection(db, "records"), { ...recordData, timestamp: Timestamp.fromDate(recordData.timestamp) });
+    if (isOnline) {
+      await addDoc(collection(db, "records"), { ...recordData, timestamp: Timestamp.fromDate(recordData.timestamp) });
+    } else {
+      const offline = JSON.parse(localStorage.getItem('offline_records') || '[]');
+      offline.push(recordData);
+      localStorage.setItem('offline_records', JSON.stringify(offline));
+    }
+
     setLastPunch({ ...recordData, id: 'temp' } as PointRecord);
     setIsPunching(false);
   };
@@ -103,16 +134,18 @@ const App: React.FC = () => {
   if (!isInitialized) return null;
   if (!user) return <Login onLogin={(u, c) => { setUser(u); if(c) setCompany(c); localStorage.setItem('fortime_user', JSON.stringify(u)); setActiveView(u.role === 'admin' ? 'relatorio' : 'dashboard'); }} />;
 
-  if (user.role === 'totem') {
-    return <KioskMode employees={employees} onPunch={(rec) => setLastPunch(rec)} onExit={() => { localStorage.clear(); setUser(null); }} />;
-  }
-
   const userRecords = records.filter(r => r.matricula === user.matricula);
 
   return (
     <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-orange-50 text-slate-900'}`}>
       <style>{`:root { --primary-color: #f97316; } .bg-primary { background-color: var(--primary-color) !important; } .text-primary { color: var(--primary-color) !important; }`}</style>
       
+      {!isOnline && (
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] bg-red-500 text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-lg animate-bounce">
+          ⚡ Modo Offline Ativo
+        </div>
+      )}
+
       <div className={`h-full w-full max-w-lg shadow-2xl flex flex-col relative border-x overflow-hidden md:rounded-[40px] transition-all duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
         <Sidebar user={user} company={company} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => { if(v==='logout'){localStorage.clear(); setUser(null);} else {setActiveView(v as any); setIsSidebarOpen(false);}}} activeView={activeView} />
         
@@ -132,6 +165,7 @@ const App: React.FC = () => {
             {activeView === 'profile' && <Profile user={user} company={company} />}
             {activeView === 'assistant' && <AiAssistant user={user} records={userRecords} />}
             {activeView === 'audit' && <ComplianceAudit records={records} employees={employees} />}
+            {activeView === 'features' && <CompanyFeatures />}
             {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 

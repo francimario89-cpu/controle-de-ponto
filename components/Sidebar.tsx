@@ -17,6 +17,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
   const menuItems = [
     { id: 'dashboard', label: 'INÍCIO', icon: '🏠' },
     { id: 'profile', label: 'PERFIL', icon: '👤' },
+    { id: 'features', label: 'PARA EMPRESAS', icon: '🏢' },
     { id: 'assistant', label: 'ASSISTENTE IA', icon: '🤖' },
     { id: 'mypoint', label: 'MEU PONTO', icon: '📝' },
     { id: 'card', label: 'EXTRATO', icon: '📇' },

@@ -19,8 +19,8 @@ export interface Company {
     radius: number;
   };
   holidays?: Holiday[];
-  schedules?: WorkSchedule[]; // Lista de escalas de trabalho
-  config?: { // Configuração padrão (fallback)
+  schedules?: WorkSchedule[];
+  config?: { 
     overtimePercentage: number;
     nightShiftPercentage: number;
     weeklyHours: number;
@@ -45,15 +45,6 @@ export interface Holiday {
   type: 'feriado' | 'parada';
 }
 
-export interface Vacation {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  startDate: string;
-  endDate: string;
-  status: 'planned' | 'active' | 'completed';
-}
-
 export interface Employee {
   id: string;
   name: string;
@@ -71,7 +62,7 @@ export interface Employee {
   companyCode: string;
   roleFunction?: string; 
   workShift?: string;
-  scheduleId?: string; // Vínculo com a escala de trabalho
+  scheduleId?: string;
 }
 
 export interface User {
@@ -126,6 +117,7 @@ export interface ChatMessage {
   text: string;
 }
 
+// Fixed missing interface used in NotesArea.tsx
 export interface Note {
   id: string;
   title: string;
@@ -133,6 +125,7 @@ export interface Note {
   updatedAt: Date;
 }
 
+// Fixed missing interface used in GuideArea.tsx
 export interface NotebookSummary {
   overview: string;
   topics: string[];
