@@ -41,7 +41,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('fortime_user');
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      setUser(parsed);
+      if (parsed.role === 'admin') setActiveView('colaboradores');
+    }
     setIsInitialized(true);
 
     const handleOnline = () => {
@@ -135,7 +139,7 @@ const App: React.FC = () => {
   };
 
   if (!isInitialized) return null;
-  if (!user) return <Login onLogin={(u, c) => { setUser(u); if(c) setCompany(c); localStorage.setItem('fortime_user', JSON.stringify(u)); setActiveView(u.role === 'admin' ? 'relatorio' : 'dashboard'); }} />;
+  if (!user) return <Login onLogin={(u, c) => { setUser(u); if(c) setCompany(c); localStorage.setItem('fortime_user', JSON.stringify(u)); setActiveView(u.role === 'admin' ? 'colaboradores' : 'dashboard'); }} />;
 
   const userRecords = records.filter(r => r.matricula === user.matricula);
 
@@ -179,8 +183,22 @@ const App: React.FC = () => {
             {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
-                onAddEmployee={async (e) => await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', hasFacialRecord: false })} 
-                onDeleteEmployee={async (id) => { if(confirm("EXCLUIR?")) await deleteDoc(doc(db, "employees", id)); }} 
+                onAddEmployee={async (e) => {
+                  try {
+                    await addDoc(collection(db, "employees"), { 
+                      ...e, 
+                      companyCode: user.companyCode, 
+                      status: 'active', 
+                      hasFacialRecord: false,
+                      photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.name)}&background=0057ff&color=fff`
+                    });
+                    alert("COLABORADOR ADICIONADO COM SUCESSO!");
+                  } catch (err) {
+                    console.error("Erro ao adicionar:", err);
+                    alert("ERRO AO SALVAR COLABORADOR.");
+                  }
+                }} 
+                onDeleteEmployee={async (id) => { if(confirm("EXCLUIR COLABORADOR?")) await deleteDoc(doc(db, "employees", id)); }} 
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}
               />

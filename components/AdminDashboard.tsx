@@ -15,14 +15,15 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company, employees, onAddEmployee, onDeleteEmployee, initialTab }) => {
-  const [tab, setTab] = useState(initialTab || 'relatorio');
+  const [tab, setTab] = useState(initialTab || 'colaboradores');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewDate, setViewDate] = useState(new Date());
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
+  
   const [newEmpData, setNewEmpData] = useState({ name: '', matricula: '', cpf: '', password: '', roleFunction: '', department: '' });
-  const [resetPasswordModal, setResetPasswordModal] = useState<{ isOpen: boolean, empId: string, empName: string }>({ isOpen: false, empId: '', empName: '' });
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [newPasswordValue, setNewPasswordValue] = useState('');
 
   useEffect(() => {
@@ -41,18 +42,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   }, [company?.id]);
 
   const handleUpdatePassword = async () => {
-    if (!resetPasswordModal.empId || !newPasswordValue) {
+    if (!selectedEmployee?.id || !newPasswordValue) {
       alert("POR FAVOR, DIGITE A NOVA SENHA");
       return;
     }
     try {
-      await updateDoc(doc(db, "employees", resetPasswordModal.empId), {
+      await updateDoc(doc(db, "employees", selectedEmployee.id), {
         password: newPasswordValue
       });
       alert("SENHA ATUALIZADA COM SUCESSO!");
-      setResetPasswordModal({ isOpen: false, empId: '', empName: '' });
+      setIsResettingPassword(false);
       setNewPasswordValue('');
-      setSelectedEmployee(null); // Fecha o modal de detalhes também
     } catch (error) {
       console.error("Erro ao atualizar senha:", error);
       alert("ERRO AO ATUALIZAR SENHA NO BANCO DE DADOS");
@@ -88,6 +88,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     alert("CONFIGURAÇÕES SALVAS!");
   };
 
+  const filteredEmployees = employees.filter(e => 
+    e.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    e.matricula.includes(searchTerm)
+  );
+
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 items-center relative">
       <div className="w-full bg-primary/5 p-2 flex justify-center gap-4 items-center border-b dark:border-slate-800">
@@ -100,65 +105,71 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       <div className="w-full p-2 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex justify-center sticky top-0 z-20 overflow-x-auto no-scrollbar">
         <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl">
-          {(['relatorio', 'colaboradores', 'aprovacoes', 'saldos', 'calendario', 'config'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`px-3 py-1.5 text-[8px] font-black uppercase rounded-lg transition-all ${tab === t ? 'bg-primary text-white shadow-sm' : 'text-slate-400'}`}>
-              {t === 'relatorio' ? 'BATIDAS' : t.toUpperCase()}
+          {(['colaboradores', 'aprovacoes', 'saldos', 'config'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${tab === t ? 'bg-primary text-white shadow-sm' : 'text-slate-400'}`}>
+              {t.toUpperCase()}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex-1 w-full max-w-4xl overflow-y-auto p-3 no-scrollbar pb-24 space-y-3">
+      <div className="flex-1 w-full max-w-4xl overflow-y-auto p-4 no-scrollbar pb-24 space-y-4">
         {tab === 'config' && (
           <div className="space-y-4">
-             <div className="p-6 bg-white dark:bg-slate-800 rounded-[40px] border dark:border-slate-800 space-y-6">
-                <h3 className="text-[10px] font-black uppercase text-primary tracking-[0.2em]">Cálculo de Horas e Adicionais</h3>
-                <div className="grid grid-cols-2 gap-4">
+             <div className="p-8 bg-white dark:bg-slate-800 rounded-[40px] border dark:border-slate-800 space-y-6">
+                <h3 className="text-[12px] font-black uppercase text-primary tracking-[0.2em]">Cálculo de Horas e Adicionais</h3>
+                <div className="grid grid-cols-2 gap-6">
                    <div className="space-y-2">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">H. Extra Semanal (%)</p>
-                      <input type="number" defaultValue={company?.config?.overtimePercentage || 50} onBlur={e => handleUpdateConfig({ overtimePercentage: parseInt(e.target.value) })} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-[10px] font-black outline-none" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase">H. Extra Semanal (%)</p>
+                      <input type="number" defaultValue={company?.config?.overtimePercentage || 50} onBlur={e => handleUpdateConfig({ overtimePercentage: parseInt(e.target.value) })} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-[12px] font-black outline-none" />
                    </div>
                    <div className="space-y-2">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Adic. Noturno (%)</p>
-                      <input type="number" defaultValue={company?.config?.nightShiftPercentage || 20} onBlur={e => handleUpdateConfig({ nightShiftPercentage: parseInt(e.target.value) })} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-[10px] font-black outline-none" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase">Adic. Noturno (%)</p>
+                      <input type="number" defaultValue={company?.config?.nightShiftPercentage || 20} onBlur={e => handleUpdateConfig({ nightShiftPercentage: parseInt(e.target.value) })} className="w-full p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-[12px] font-black outline-none" />
                    </div>
                 </div>
              </div>
           </div>
         )}
 
-        {tab === 'relatorio' && (
-           <div className="space-y-2">
-             <input type="text" placeholder="BUSCAR COLABORADOR..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 bg-white dark:bg-slate-800 rounded-2xl text-[10px] font-black border dark:border-slate-700 outline-none mb-2" />
-             {latestRecords.filter(r => r.userName.toLowerCase().includes(searchTerm.toLowerCase())).map(record => (
-               <div key={record.id} className="bg-white dark:bg-slate-800 p-3 rounded-2xl border dark:border-slate-700 shadow-sm flex items-center gap-4">
-                 <img src={record.photo} className="w-10 h-10 rounded-lg object-cover" />
-                 <div>
-                   <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none mb-1">{record.userName}</p>
-                   <p className="text-[8px] font-black text-primary uppercase">{record.timestamp.toLocaleDateString()} • {record.timestamp.toLocaleTimeString()} ({record.type})</p>
-                 </div>
-               </div>
-             ))}
-           </div>
-        )}
-        
         {tab === 'colaboradores' && (
-          <div className="space-y-3">
-             <button onClick={() => setShowAddModal(true)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg mb-4">+ ADICIONAR COLABORADOR</button>
-             {employees.map(emp => (
-               <div key={emp.id} onClick={() => setSelectedEmployee(emp)} className="bg-white dark:bg-slate-900 p-5 rounded-[32px] border dark:border-slate-800 flex items-center gap-4 group cursor-pointer active:scale-95 transition-all">
-                  <img src={emp.photo || `https://ui-avatars.com/api/?name=${emp.name}`} className="w-14 h-14 rounded-2xl object-cover" />
-                  <div className="flex-1">
-                     <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase mb-1">{emp.name}</p>
-                     <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Matrícula: {emp.matricula}</p>
-                     <div className="flex gap-2 mt-2">
-                        <span className="text-[7px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase">Saldo: {calculateHours(emp.matricula)}h</span>
-                        {!emp.hasFacialRecord && <span className="text-[7px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-black uppercase">Sem Biometria</span>}
-                     </div>
-                  </div>
-                  <button onClick={(e) => { e.stopPropagation(); onDeleteEmployee(emp.id); }} className="p-2 opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
-               </div>
-             ))}
+          <div className="space-y-4">
+             <div className="flex gap-2">
+               <input 
+                 type="text" 
+                 placeholder="BUSCAR COLABORADOR POR NOME OU MATRÍCULA..." 
+                 value={searchTerm} 
+                 onChange={e => setSearchTerm(e.target.value)} 
+                 className="flex-1 p-4 bg-white dark:bg-slate-800 rounded-2xl text-[10px] font-black border dark:border-slate-700 outline-none shadow-sm" 
+               />
+               <button onClick={() => setShowAddModal(true)} className="bg-slate-900 dark:bg-slate-800 text-white p-4 rounded-2xl font-black text-[10px] uppercase shadow-lg">
+                 + ADICIONAR
+               </button>
+             </div>
+
+             <div className="space-y-3">
+               {filteredEmployees.map(emp => (
+                 <div key={emp.id} onClick={() => setSelectedEmployee(emp)} className="bg-white dark:bg-slate-900 p-5 rounded-[32px] border dark:border-slate-800 flex items-center gap-4 group cursor-pointer active:scale-95 transition-all shadow-sm">
+                    <img src={emp.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}`} className="w-14 h-14 rounded-2xl object-cover" />
+                    <div className="flex-1">
+                       <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase mb-1">{emp.name}</p>
+                       <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Matrícula: {emp.matricula}</p>
+                       <div className="flex gap-2 mt-2">
+                          <span className="text-[7px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase">Saldo: {calculateHours(emp.matricula)}h</span>
+                          {!emp.hasFacialRecord && <span className="text-[7px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-black uppercase">Sem Biometria</span>}
+                       </div>
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); onDeleteEmployee(emp.id); }} className="p-2 text-slate-300 hover:text-red-500 transition-colors">🗑️</button>
+                 </div>
+               ))}
+
+               {filteredEmployees.length === 0 && (
+                 <div className="py-20 text-center opacity-30 flex flex-col items-center">
+                   <span className="text-5xl mb-4">👥</span>
+                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nenhum colaborador encontrado</p>
+                 </div>
+               )}
+             </div>
           </div>
         )}
       </div>
@@ -177,7 +188,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               
               <div className="flex gap-2 pt-4">
                 <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 border-2 border-slate-200 rounded-2xl text-[10px] font-black uppercase">Cancelar</button>
-                <button onClick={handleCreateEmployee} className="flex-[2] py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-orange-100 dark:shadow-none">Cadastrar</button>
+                <button onClick={handleCreateEmployee} className="flex-[2] py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase shadow-lg">Salvar</button>
               </div>
             </div>
           </div>
@@ -189,38 +200,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-sm p-8 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
             <div className="flex justify-between items-center mb-6">
-              <button onClick={() => setSelectedEmployee(null)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl">✖</button>
-              <p className="text-[10px] font-black text-primary uppercase tracking-widest">Detalhes do Colaborador</p>
+              <button onClick={() => { setSelectedEmployee(null); setIsResettingPassword(false); }} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl">✖</button>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest">Painel do Colaborador</p>
               <div className="w-8"></div>
             </div>
 
             <div className="flex flex-col items-center mb-8">
-               <img src={selectedEmployee.photo || `https://ui-avatars.com/api/?name=${selectedEmployee.name}`} className="w-20 h-20 rounded-[30px] object-cover border-4 border-white shadow-xl mb-4" />
-               <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase text-center">{selectedEmployee.name}</h3>
-               <p className="text-[10px] font-bold text-slate-400 uppercase">{selectedEmployee.roleFunction || 'Cargo não definido'}</p>
+               <img src={selectedEmployee.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedEmployee.name)}`} className="w-20 h-20 rounded-[30px] object-cover border-4 border-white shadow-xl mb-4" />
+               <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase text-center leading-tight">{selectedEmployee.name}</h3>
+               <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 tracking-tight">{selectedEmployee.roleFunction || 'Função não definida'}</p>
             </div>
 
             <div className="space-y-6">
-              {/* HISTÓRICO DE BATIDAS NO MODAL */}
               <div className="space-y-3">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Últimas Batidas</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Últimos Registros</p>
                 <div className="space-y-2 max-h-40 overflow-y-auto pr-2 no-scrollbar">
                   {latestRecords.filter(r => r.matricula === selectedEmployee.matricula).slice(0, 10).map(r => (
-                    <div key={r.id} className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border dark:border-slate-700 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-slate-600 dark:text-slate-300">{r.timestamp.toLocaleDateString()}</span>
-                      <span className="text-[10px] font-black text-primary uppercase">{r.type}: {r.timestamp.toLocaleTimeString()}</span>
+                    <div key={r.id} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 flex justify-between items-center">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-slate-800 dark:text-white">{r.timestamp.toLocaleDateString()}</span>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase">{r.address.substring(0, 20)}...</span>
+                      </div>
+                      <span className="text-[11px] font-black text-primary uppercase">{r.type}: {r.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   ))}
                   {latestRecords.filter(r => r.matricula === selectedEmployee.matricula).length === 0 && (
-                    <p className="text-[9px] text-slate-300 font-bold uppercase text-center py-4">Nenhum registro encontrado</p>
+                    <p className="text-[9px] text-slate-300 font-bold uppercase text-center py-6 border-2 border-dashed rounded-2xl">Nenhum ponto registrado</p>
                   )}
                 </div>
               </div>
 
-              {/* OPÇÃO DE TROCA DE SENHA */}
               <div className="pt-4 border-t dark:border-slate-800">
-                {resetPasswordModal.isOpen ? (
+                {isResettingPassword ? (
                    <div className="space-y-3 animate-in fade-in">
+                     <p className="text-[9px] font-black text-primary uppercase tracking-widest text-center">Nova Senha de Acesso</p>
                      <input 
                        type="text" 
                        placeholder="DIGITE A NOVA SENHA" 
@@ -229,16 +242,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                        className="w-full p-4 bg-orange-50 dark:bg-slate-800 rounded-2xl text-[10px] font-black outline-none border-2 border-primary" 
                      />
                      <div className="flex gap-2">
-                       <button onClick={() => setResetPasswordModal({ isOpen: false, empId: '', empName: '' })} className="flex-1 py-3 text-[9px] font-black uppercase text-slate-400">Cancelar</button>
-                       <button onClick={handleUpdatePassword} className="flex-[2] py-3 bg-primary text-white rounded-xl text-[9px] font-black uppercase">Confirmar Troca</button>
+                       <button onClick={() => setIsResettingPassword(false)} className="flex-1 py-4 text-[9px] font-black uppercase text-slate-400">Cancelar</button>
+                       <button onClick={handleUpdatePassword} className="flex-[2] py-4 bg-primary text-white rounded-2xl text-[9px] font-black uppercase shadow-lg">Confirmar Troca</button>
                      </div>
                    </div>
                 ) : (
                   <button 
-                    onClick={() => setResetPasswordModal({ isOpen: true, empId: selectedEmployee.id, empName: selectedEmployee.name })}
-                    className="w-full py-4 border-2 border-slate-100 dark:border-slate-800 text-slate-500 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-3"
+                    onClick={() => setIsResettingPassword(true)}
+                    className="w-full py-5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-[28px] text-[10px] font-black uppercase flex items-center justify-center gap-3 active:scale-95 transition-all"
                   >
-                    🔑 Redefinir Senha de Acesso
+                    🔐 Alterar Senha do Colaborador
                   </button>
                 )}
               </div>
