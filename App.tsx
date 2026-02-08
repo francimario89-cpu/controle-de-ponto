@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { User, Company, Employee, PointRecord } from './types';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
@@ -26,7 +26,6 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<PointRecord[]>([]);
   const [activeView, setActiveView] = useState('dashboard');
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPunchCamera, setShowPunchCamera] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -79,13 +78,9 @@ const App: React.FC = () => {
     setActiveView('dashboard');
   };
 
-  // Implementação da função handlePunch para processar o registro de ponto
   const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }) => {
     if (!user) return;
-    
-    // Gerar uma assinatura digital simulada para o registro
     const signature = `FT-${user.matricula || 'N/A'}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    
     const newRecordData = {
       userName: user.name,
       matricula: user.matricula || 'N/A',
@@ -96,21 +91,27 @@ const App: React.FC = () => {
       photo: photo,
       status: 'synchronized' as const,
       digitalSignature: signature,
-      type: 'entrada' as const, // Lógica base poderia alternar entre entrada/saída conforme o histórico
+      type: 'entrada' as const,
       companyCode: user.companyCode
     };
 
     try {
-      // Salva o registro no banco de dados Firestore
       const docRef = await addDoc(collection(db, "records"), newRecordData);
-      
-      // Cria o objeto completo com ID gerado para exibição do comprovante
       const recordWithId = { ...newRecordData, id: docRef.id } as PointRecord;
       setLastPunch(recordWithId);
       setShowPunchCamera(false);
     } catch (err) {
       console.error("Erro ao registrar ponto:", err);
-      alert("Falha ao salvar o ponto eletrônico. Verifique sua conexão.");
+      alert("Falha ao salvar o ponto eletrônico.");
+    }
+  };
+
+  const handleUpdateEmployee = async (id: string, data: any) => {
+    try {
+      await updateDoc(doc(db, "employees", id), data);
+      alert("COLABORADOR ATUALIZADO!");
+    } catch (err) {
+      alert("ERRO AO ATUALIZAR.");
     }
   };
 
@@ -120,9 +121,7 @@ const App: React.FC = () => {
   if (!user) return <Login onLogin={handleLogin} />;
 
   return (
-    <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
-      
-      {/* SIDEBAR FIXA (DESKTOP) E DRAWER (MOBILE) */}
+    <div className="flex h-screen w-screen bg-white text-slate-900 overflow-hidden font-sans">
       <Sidebar 
         user={user} 
         company={company} 
@@ -133,39 +132,31 @@ const App: React.FC = () => {
       />
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        
-        {/* HEADER MOBILE */}
-        <header className="md:hidden p-4 flex justify-between items-center border-b dark:border-slate-800 bg-white dark:bg-slate-900 z-30">
-           <button onClick={() => setIsSidebarOpen(true)} className="p-2">
+        <header className="md:hidden p-4 flex justify-between items-center border-b bg-white z-30">
+           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
            </button>
-           <h1 className="text-sm font-black tracking-tighter uppercase">ForTime <span className="text-primary">PRO</span></h1>
-           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 text-xl">{isDarkMode ? '🌞' : '🌙'}</button>
+           <h1 className="text-sm font-black tracking-tighter uppercase">ForTime <span className="text-orange-600">PRO</span></h1>
+           <div className="w-10"></div>
         </header>
 
-        {/* HEADER DESKTOP (APENAS PARA ADMIN) */}
         {isAdmin && (
-          <header className="hidden md:flex p-6 justify-between items-center bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-10">
+          <header className="hidden md:flex p-6 justify-between items-center bg-white border-b px-10">
              <div>
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Módulo Administrativo</p>
-               <h2 className="text-xl font-black tracking-tighter uppercase text-slate-800 dark:text-white">
+               <h2 className="text-xl font-black tracking-tighter uppercase text-slate-800">
                  Gestão de RH - {company?.name}
                </h2>
              </div>
              <div className="flex items-center gap-4">
-                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl hover:scale-105 transition-all text-sm font-bold">
-                  {isDarkMode ? '🌞 Modo Claro' : '🌙 Modo Escuro'}
-                </button>
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xl">🛡️</div>
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 text-xl">🛡️</div>
              </div>
           </header>
         )}
 
         <main className="flex-1 overflow-y-auto no-scrollbar">
           <div className={`mx-auto w-full h-full ${isAdminView ? 'p-6 md:p-10' : 'max-w-md p-4'}`}>
-            
-            {/* CONTEÚDO COLABORADOR */}
-            {!isAdmin && (
+            {!isAdmin ? (
               <>
                 {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
                 {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
@@ -174,38 +165,28 @@ const App: React.FC = () => {
                 {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
                 {activeView === 'profile' && <Profile user={user} company={company} onLogout={handleLogout} />}
               </>
-            )}
-
-            {/* CONTEÚDO ADMINISTRADOR */}
-            {isAdmin && (
+            ) : (
               <AdminDashboard 
                 latestRecords={records} 
                 company={company} 
                 employees={employees} 
                 onAddEmployee={async (e) => {
                   try {
-                    await addDoc(collection(db, "employees"), { 
-                      ...e, 
-                      companyCode: user.companyCode, 
-                      status: 'active', 
-                      photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.name)}&background=0057ff&color=fff`
-                    });
+                    await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.name)}&background=f97316&color=fff` });
                     alert("CADASTRADO!");
                   } catch (err) { alert("ERRO AO SALVAR."); }
                 }} 
                 onDeleteEmployee={async (id) => { if(confirm("EXCLUIR?")) await deleteDoc(doc(db, "employees", id)); }} 
+                onUpdateEmployee={handleUpdateEmployee}
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}
                 onNavigate={setActiveView}
               />
             )}
-
-            {/* VIEWS COMUNS (SE NECESSÁRIO) */}
             {activeView === 'company_profile' && <CompanyProfile company={company} />}
           </div>
         </main>
 
-        {/* MODAIS DE PONTO (APENAS COLABORADOR) */}
         {!isAdmin && showPunchCamera && <PunchCamera geofenceConfig={company?.geofence} onCapture={handlePunch} onCancel={() => setShowPunchCamera(false)} />}
         {!isAdmin && lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
       </div>
