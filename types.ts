@@ -96,6 +96,7 @@ export interface PointRecord {
   digitalSignature: string;
   type: 'entrada' | 'saida';
   mood?: string;
+  isAdjustment?: boolean; // Novo campo para destaque visual
 }
 
 export interface AttendanceRequest {
@@ -109,6 +110,7 @@ export interface AttendanceRequest {
   reason: string;
   managerFeedback?: string;
   attachment?: string;
+  attachmentName?: string; // Nome do arquivo anexo
   createdAt: Date;
   times?: string[];
 }

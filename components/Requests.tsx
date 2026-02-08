@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { AttendanceRequest } from '../types';
@@ -8,13 +8,14 @@ const Requests: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [showCreateMode, setShowCreateMode] = useState(false);
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Form State
   const [type, setType] = useState<'inclusão' | 'abono'>('inclusão');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [times, setTimes] = useState<string[]>(['08:00', '12:00', '13:00', '18:00']);
   const [reason, setReason] = useState('Esquecimento');
-  const [hasAttachment, setHasAttachment] = useState(false);
+  const [attachmentName, setAttachmentName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const userStr = localStorage.getItem('fortime_user');
@@ -44,6 +45,13 @@ const Requests: React.FC = () => {
     return r.status === 'rejected';
   });
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAttachmentName(file.name);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!user) return;
     setLoading(true);
@@ -52,16 +60,17 @@ const Requests: React.FC = () => {
         companyCode: user.companyCode,
         matricula: user.matricula,
         userName: user.name,
-        type,
+        type: type === 'abono' ? 'atestado' : 'inclusão',
         reason,
         date,
         times: type === 'inclusão' ? times : [],
         status: 'pending',
-        attachment: hasAttachment ? "simulado_doc.pdf" : null,
+        attachment: attachmentName ? "base64_simulado" : null,
+        attachmentName: attachmentName,
         createdAt: new Date()
       });
       setShowCreateMode(false);
-      setHasAttachment(false);
+      setAttachmentName(null);
     } catch (e) {
       alert("Erro ao enviar solicitação. Verifique sua conexão.");
     }
@@ -135,7 +144,7 @@ const Requests: React.FC = () => {
           ) : (
             <div className="space-y-4 animate-in fade-in">
               <div className="p-5 bg-orange-50 dark:bg-orange-950/20 rounded-3xl border border-orange-100 dark:border-orange-900/30">
-                 <p className="text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase leading-relaxed text-center">Ao selecionar Abono, o RH irá avaliar a justificativa para abonar o dia completo.</p>
+                 <p className="text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase leading-relaxed text-center">Ao selecionar Abono, o RH irá avaliar o atestado para abonar o período.</p>
               </div>
             </div>
           )}
@@ -157,12 +166,21 @@ const Requests: React.FC = () => {
           </div>
 
           <div className="space-y-3">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              onChange={handleFileSelect}
+              accept="image/*,application/pdf"
+            />
             <button 
-              onClick={() => setHasAttachment(!hasAttachment)}
-              className={`w-full p-5 rounded-3xl border-2 border-dashed flex items-center justify-center gap-3 transition-all ${hasAttachment ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-slate-200 text-slate-400'}`}
+              onClick={() => fileInputRef.current?.click()}
+              className={`w-full p-5 rounded-3xl border-2 border-dashed flex items-center justify-center gap-3 transition-all ${attachmentName ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-slate-200 text-slate-400'}`}
             >
-              <span className="text-lg">{hasAttachment ? '✅' : '📎'}</span>
-              <span className="text-[10px] font-black uppercase tracking-widest">{hasAttachment ? 'Documento Anexado' : 'Anexar Comprovante / Atestado'}</span>
+              <span className="text-lg">{attachmentName ? '✅' : '📎'}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {attachmentName ? `Anexado: ${attachmentName}` : 'Anexar Comprovante / Atestado'}
+              </span>
             </button>
           </div>
 
@@ -210,7 +228,7 @@ const Requests: React.FC = () => {
               <div>
                 <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">{req.type === 'inclusão' ? 'Ajuste de Ponto' : 'Abono / Atestado'}</p>
                 <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Data: {new Date(req.date).toLocaleDateString('pt-BR')}</p>
-                {req.attachment && <span className="inline-block bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[7px] font-black mt-1 uppercase">Comprovante Anexo</span>}
+                {req.attachmentName && <span className="inline-block bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[7px] font-black mt-1 uppercase truncate max-w-[120px]">{req.attachmentName}</span>}
               </div>
             </div>
             <div className="text-slate-300">

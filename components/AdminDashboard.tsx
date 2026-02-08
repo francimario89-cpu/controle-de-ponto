@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { auditCompliance } from '../geminiService';
 
@@ -104,6 +104,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       pendingRequests: requests.filter(r => r.status === 'pending').length
     };
   }, [employees, latestRecords, requests]);
+
+  const handleApproveRequest = async (req: AttendanceRequest) => {
+    try {
+      await updateDoc(doc(db, "requests", req.id), { status: 'approved' });
+      
+      // Se for inclusão de pontos, cria os registros no banco
+      if (req.type === 'inclusão' && req.times) {
+        for (const timeStr of req.times) {
+          if (!timeStr) continue;
+          const [h, m] = timeStr.split(':');
+          const timestamp = new Date(req.date);
+          timestamp.setHours(parseInt(h), parseInt(m), 0);
+          
+          await addDoc(collection(db, "records"), {
+            userName: req.userName,
+            matricula: req.matricula,
+            timestamp: timestamp,
+            address: "AJUSTE MANUAL RH",
+            latitude: 0,
+            longitude: 0,
+            photo: "",
+            status: 'synchronized',
+            digitalSignature: `AJUSTE-${req.id}-${Math.random().toString(36).substr(2, 5)}`,
+            type: 'entrada',
+            companyCode: req.companyCode,
+            isAdjustment: true // Marca para destaque visual
+          });
+        }
+      }
+      alert("SOLICITAÇÃO APROVADA E PONTOS SINCRONIZADOS!");
+    } catch (e) {
+      alert("ERRO AO PROCESSAR APROVAÇÃO.");
+    }
+  };
+
+  const handleRejectRequest = async (id: string) => {
+    if (!confirm("Deseja realmente recusar esta solicitação?")) return;
+    await updateDoc(doc(db, "requests", id), { status: 'rejected' });
+  };
 
   const handleDownloadReport = () => {
     if (reportFilter.matricula === 'todos') {
@@ -260,13 +299,81 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     <tr key={r.id} className="border-b hover:bg-slate-50 transition-colors">
                        <td className="p-5">{r.userName}</td>
                        <td className="p-5">{new Date(r.timestamp).toLocaleDateString('pt-BR')}</td>
-                       <td className="p-5 text-orange-600 font-black">{new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+                       <td className={`p-5 font-black ${r.isAdjustment ? 'text-orange-600' : 'text-slate-800'}`}>
+                         {new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                         {r.isAdjustment && <span className="ml-2 text-[7px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">AJUSTADO</span>}
+                       </td>
                        <td className="p-5 uppercase">{r.type}</td>
                     </tr>
                  ))}
               </tbody>
            </table>
         </div>
+      </div>
+    );
+  }
+
+  if (activeTab === 'aprovacoes') {
+    const pending = requests.filter(r => r.status === 'pending');
+    return (
+      <div className="space-y-6 animate-in fade-in">
+         <div className="flex justify-between items-center px-2">
+            <h3 className="text-sm font-black uppercase text-slate-900">Solicitações Pendentes ({pending.length})</h3>
+         </div>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {pending.map(req => (
+              <div key={req.id} className="bg-white p-6 rounded-[40px] border shadow-sm space-y-4">
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-xl">
+                      {req.type === 'inclusão' ? '📝' : '🏥'}
+                    </div>
+                    <div>
+                       <p className="text-xs font-black uppercase text-slate-900 leading-none">{req.userName}</p>
+                       <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">MAT: {req.matricula}</p>
+                    </div>
+                 </div>
+                 <div className="bg-slate-50 p-4 rounded-2xl space-y-2">
+                    <div className="flex justify-between text-[9px] font-black uppercase">
+                       <span className="text-slate-400 tracking-widest">Tipo:</span>
+                       <span className="text-orange-600">{req.type === 'atestado' ? 'ATESTADO / ABONO' : 'AJUSTE DE PONTO'}</span>
+                    </div>
+                    <div className="flex justify-between text-[9px] font-black uppercase">
+                       <span className="text-slate-400 tracking-widest">Data:</span>
+                       <span className="text-slate-800">{new Date(req.date).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    {req.reason && (
+                       <div className="pt-2 border-t border-slate-200">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Motivo:</p>
+                          <p className="text-[9px] font-bold text-slate-600 leading-relaxed italic">"{req.reason}"</p>
+                       </div>
+                    )}
+                    {req.times && req.times.length > 0 && (
+                      <div className="pt-2 border-t border-slate-200">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Horários solicitados:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {req.times.filter(t => t).map((t, i) => <span key={i} className="bg-white px-2 py-0.5 rounded-lg border text-[9px] font-black">{t}</span>)}
+                        </div>
+                      </div>
+                    )}
+                    {req.attachmentName && (
+                      <div className="pt-2">
+                        <p className="text-[8px] font-black text-blue-500 uppercase flex items-center gap-1">📎 Anexo: {req.attachmentName}</p>
+                      </div>
+                    )}
+                 </div>
+                 <div className="flex gap-2">
+                    <button onClick={() => handleRejectRequest(req.id)} className="flex-1 py-3 bg-red-50 text-red-600 rounded-2xl text-[9px] font-black uppercase">Recusar</button>
+                    <button onClick={() => handleApproveRequest(req)} className="flex-[2] py-3 bg-emerald-600 text-white rounded-2xl text-[9px] font-black uppercase shadow-lg shadow-emerald-100">Aprovar e Lançar</button>
+                 </div>
+              </div>
+            ))}
+            {pending.length === 0 && (
+              <div className="col-span-full py-20 text-center opacity-20 flex flex-col items-center">
+                 <span className="text-6xl mb-4">✨</span>
+                 <p className="text-xs font-black uppercase tracking-widest">Tudo em dia! Nenhuma pendência RH.</p>
+              </div>
+            )}
+         </div>
       </div>
     );
   }
@@ -295,7 +402,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
            </div>
            {showAddModal && (
              <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
-                <div className="bg-white rounded-[44px] w-full max-w-sm p-10 shadow-2xl space-y-4 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
+                <div className="bg-white rounded-[44px] w-full max-sm p-10 shadow-2xl space-y-4 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
                    <h2 className="text-[12px] font-black text-orange-600 text-center uppercase tracking-widest mb-6">{editingEmpId ? 'Editar Colaborador' : 'Novo Cadastro'}</h2>
                    
                    <div className="space-y-4">
@@ -367,28 +474,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ativos Hoje</p>
              <h3 className="text-3xl font-black text-emerald-500">{stats.activeToday}</h3>
           </div>
-          <div className="bg-white p-8 rounded-[40px] border shadow-sm">
+          <div className="bg-white p-8 rounded-[40px] border shadow-sm relative overflow-hidden">
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pendentes RH</p>
-             <h3 className="text-3xl font-black text-orange-500">{stats.pendingRequests}</h3>
+             <h3 className={`text-3xl font-black ${stats.pendingRequests > 0 ? 'text-orange-500' : 'text-slate-300'}`}>{stats.pendingRequests}</h3>
+             {stats.pendingRequests > 0 && <div className="absolute top-4 right-4 w-2 h-2 bg-orange-500 rounded-full animate-ping"></div>}
           </div>
        </div>
 
        <div className="bg-white p-8 rounded-[44px] border shadow-sm space-y-6">
           <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest px-2">Módulos Administrativos</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-             <button onClick={() => setActiveTab('colaboradores')} className="p-6 bg-slate-50 rounded-[35px] text-left hover:bg-slate-900 hover:text-white transition-all flex flex-col gap-2">
+             <button onClick={() => setActiveTab('colaboradores')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'colaboradores' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
                 <span className="text-2xl">👥</span>
                 <span className="font-black uppercase text-[10px]">Funcionários</span>
              </button>
-             <button onClick={() => setActiveTab('aprovacoes')} className="p-6 bg-slate-50 rounded-[35px] text-left hover:bg-slate-900 hover:text-white transition-all flex flex-col gap-2">
+             <button onClick={() => setActiveTab('aprovacoes')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 relative ${activeTab === 'aprovacoes' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
                 <span className="text-2xl">✅</span>
                 <span className="font-black uppercase text-[10px]">Aprovações</span>
+                {stats.pendingRequests > 0 && <span className="absolute top-4 right-4 bg-orange-500 text-white text-[8px] font-black px-2 py-1 rounded-full">{stats.pendingRequests}</span>}
              </button>
-             <button onClick={() => setActiveTab('saldos')} className="p-6 bg-slate-50 rounded-[35px] text-left hover:bg-slate-900 hover:text-white transition-all flex flex-col gap-2">
+             <button onClick={() => setActiveTab('saldos')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'saldos' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
                 <span className="text-2xl">📘</span>
                 <span className="font-black uppercase text-[10px]">Livro de Ponto</span>
              </button>
-             <button onClick={() => setActiveTab('audit')} className="p-6 bg-slate-50 rounded-[35px] text-left hover:bg-slate-900 hover:text-white transition-all flex flex-col gap-2">
+             <button onClick={() => setActiveTab('audit')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'audit' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
                 <span className="text-2xl">🛡️</span>
                 <span className="font-black uppercase text-[10px]">Auditoria IA</span>
              </button>
