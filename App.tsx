@@ -1,188 +1,178 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, PointRecord, Company, Employee, AttendanceRequest } from './types';
 import { db } from './firebase';
-import { 
-  collection, addDoc, query, where, onSnapshot, doc, updateDoc, Timestamp, orderBy, deleteDoc, getDocs
-} from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { User, Company, Employee, PointRecord } from './types';
+import Sidebar from './components/Sidebar';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
-import Sidebar from './components/Sidebar';
 import PunchCamera from './components/PunchCamera';
 import PunchSuccess from './components/PunchSuccess';
 import MyPoint from './components/MyPoint';
 import AttendanceCard from './components/AttendanceCard';
 import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
-import CompanyProfile from './components/CompanyProfile';
-import CompaniesView from './components/CompaniesView';
-import HolidaysView from './components/HolidaysView';
-import KioskMode from './components/KioskMode';
 import AiAssistant from './components/AiAssistant';
 import ComplianceAudit from './components/ComplianceAudit';
-import CompanyFeatures from './components/CompanyFeatures';
 import BenefitsView from './components/BenefitsView';
 import FeedbackView from './components/FeedbackView';
 import VacationView from './components/VacationView';
 import SettingsView from './components/SettingsView';
 import ScheduleView from './components/ScheduleView';
+import CompanyProfile from './components/CompanyProfile';
+import CompaniesView from './components/CompaniesView';
+import KioskMode from './components/KioskMode';
+import HolidaysView from './components/HolidaysView';
+import Profile from './components/Profile';
 
+/**
+ * Main application component.
+ * Handles authentication state, data synchronization with Firestore,
+ * and routing between different views.
+ */
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('fortime_user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'company_profile' | 'companies' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation' | 'settings' | 'schedule'>('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isPunching, setIsPunching] = useState(false);
-  const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [records, setRecords] = useState<PointRecord[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('theme') === 'dark');
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [activeView, setActiveView] = useState('dashboard');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showPunchCamera, setShowPunchCamera] = useState(false);
+  const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  // Synchronize company, employees and point records from Firestore
   useEffect(() => {
-    const savedUser = localStorage.getItem('fortime_user');
-    if (savedUser) {
-      const parsed = JSON.parse(savedUser);
-      setUser(parsed);
-      if (parsed.role === 'admin') setActiveView('colaboradores');
-    }
-    setIsInitialized(true);
-
-    const handleOnline = () => {
-      setIsOnline(true);
-      syncOfflineRecords();
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  const syncOfflineRecords = async () => {
-    const offlineData = localStorage.getItem('offline_records');
-    if (!offlineData) return;
-    
-    const offlineRecords = JSON.parse(offlineData);
-    if (offlineRecords.length === 0) return;
-
-    for (const rec of offlineRecords) {
-      try {
-        await addDoc(collection(db, "records"), { 
-          ...rec, 
-          timestamp: Timestamp.fromDate(new Date(rec.timestamp)) 
-        });
-      } catch (e) {
-        console.error("Erro ao sincronizar registro:", e);
-      }
-    }
-    localStorage.setItem('offline_records', JSON.stringify([]));
-  };
-
-  useEffect(() => {
-    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [isDarkMode]);
-
-  useEffect(() => {
-    if (!user?.companyCode) return;
-    const unsubComp = onSnapshot(doc(db, "companies", user.companyCode), (d) => {
-      if (d.exists()) {
-        const data = { id: d.id, ...d.data() } as Company;
-        setCompany(data);
-        const themeColor = data.themeColor || '#0057ff';
-        document.documentElement.style.setProperty('--primary-color', themeColor);
-      }
-    });
-    const unsubEmps = onSnapshot(query(collection(db, "employees"), where("companyCode", "==", user.companyCode)), (s) => {
-      const emps: Employee[] = [];
-      s.forEach(d => emps.push({ id: d.id, ...d.data() } as Employee));
-      setEmployees(emps);
-    });
-    const unsubRecs = onSnapshot(query(collection(db, "records"), where("companyCode", "==", user.companyCode), orderBy("timestamp", "desc")), (s) => {
-      const recs: PointRecord[] = [];
-      s.forEach(d => {
-        const data = d.data();
-        recs.push({ ...data, id: d.id, timestamp: data.timestamp.toDate() } as PointRecord);
+    if (user?.companyCode) {
+      const unsubCompany = onSnapshot(doc(db, "companies", user.companyCode), (snapshot) => {
+        if (snapshot.exists()) setCompany({ id: snapshot.id, ...snapshot.data() } as Company);
       });
-      setRecords(recs);
-    });
-    return () => { unsubComp(); unsubEmps(); unsubRecs(); };
+
+      const qEmp = query(collection(db, "employees"), where("companyCode", "==", user.companyCode));
+      const unsubEmployees = onSnapshot(qEmp, (snap) => {
+        const emps: Employee[] = [];
+        snap.forEach(d => emps.push({ id: d.id, ...d.data() } as Employee));
+        setEmployees(emps);
+      });
+
+      const qRec = query(collection(db, "records"), where("companyCode", "==", user.companyCode));
+      const unsubRecords = onSnapshot(qRec, (snap) => {
+        const recs: PointRecord[] = [];
+        snap.forEach(d => {
+          const data = d.data();
+          recs.push({ 
+            ...data, 
+            id: d.id, 
+            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp) 
+          } as PointRecord);
+        });
+        setRecords(recs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+      });
+
+      return () => {
+        unsubCompany();
+        unsubEmployees();
+        unsubRecords();
+      };
+    }
   }, [user?.companyCode]);
 
-  const handleCameraCapture = async (photo: string, loc: any) => {
-    if (!user) return;
-    
-    const todayRecs = records.filter(r => r.matricula === user.matricula && r.timestamp.toLocaleDateString() === new Date().toLocaleDateString());
-    const type = todayRecs.length % 2 === 0 ? 'entrada' : 'saida';
-    const recordData = {
-      userName: user.name, address: loc.address, latitude: loc.lat, longitude: loc.lng,
-      photo, status: isOnline ? 'synchronized' : 'pending', matricula: user.matricula,
-      digitalSignature: Math.random().toString(36).substring(2, 15), type,
-      companyCode: user.companyCode, timestamp: new Date()
-    };
-
-    if (isOnline) {
-      await addDoc(collection(db, "records"), { ...recordData, timestamp: Timestamp.fromDate(recordData.timestamp) });
-    } else {
-      const offline = JSON.parse(localStorage.getItem('offline_records') || '[]');
-      offline.push(recordData);
-      localStorage.setItem('offline_records', JSON.stringify(offline));
-    }
-
-    setLastPunch({ ...recordData, id: 'temp' } as PointRecord);
-    setIsPunching(false);
+  const handleLogin = (u: User, c?: Company) => {
+    setUser(u);
+    if (c) setCompany(c);
+    localStorage.setItem('fortime_user', JSON.stringify(u));
   };
 
-  if (!isInitialized) return null;
-  if (!user) return <Login onLogin={(u, c) => { setUser(u); if(c) setCompany(c); localStorage.setItem('fortime_user', JSON.stringify(u)); setActiveView(u.role === 'admin' ? 'colaboradores' : 'dashboard'); }} />;
+  const handleLogout = () => {
+    setUser(null);
+    setCompany(null);
+    localStorage.removeItem('fortime_user');
+    setActiveView('dashboard');
+  };
 
-  const userRecords = records.filter(r => r.matricula === user.matricula);
-  const isAdmin = user.role === 'admin';
+  const handlePunch = async (photo: string, loc: { lat: number; lng: number; address: string }) => {
+    if (!user) return;
+    const now = new Date();
+    const newRecord: any = {
+      userName: user.name,
+      timestamp: now,
+      address: loc.address,
+      latitude: loc.lat,
+      longitude: loc.lng,
+      photo,
+      status: 'synchronized',
+      matricula: user.matricula,
+      companyCode: user.companyCode,
+      digitalSignature: Math.random().toString(36).substring(2, 15),
+      type: 'entrada' 
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, "records"), newRecord);
+      const recordWithId = { ...newRecord, id: docRef.id };
+      setLastPunch(recordWithId);
+      setShowPunchCamera(false);
+    } catch (e) {
+      console.error("Erro ao registrar ponto:", e);
+      alert("Erro ao salvar ponto.");
+    }
+  };
+
+  if (!user) return <Login onLogin={handleLogin} />;
+
+  if (user.role === 'totem') {
+    return (
+      <KioskMode 
+        employees={employees} 
+        onPunch={(r) => { setLastPunch(r); }} 
+        onExit={handleLogout} 
+      />
+    );
+  }
 
   return (
     <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
-      <style>{`:root { --primary-color: #0057ff; } .bg-primary { background-color: var(--primary-color) !important; } .text-primary { color: var(--primary-color) !important; }`}</style>
-      
-      {!isOnline && (
-        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] bg-red-500 text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-lg animate-bounce">
-          ⚡ Modo Offline Ativo
-        </div>
-      )}
-
-      <div className={`h-full w-full max-w-lg shadow-2xl flex flex-col relative border-x overflow-hidden md:rounded-[40px] transition-all duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <Sidebar user={user} company={company} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} onNavigate={(v) => { if(v==='logout'){localStorage.clear(); setUser(null);} else {setActiveView(v as any); setIsSidebarOpen(false);}}} activeView={activeView} />
+      <div className="flex flex-col h-full w-full max-w-5xl bg-white dark:bg-slate-900 md:rounded-[40px] shadow-2xl overflow-hidden relative border dark:border-slate-800">
         
-        {activeView !== 'settings' && activeView !== 'schedule' && (
-          <header className={`px-6 py-6 flex items-center justify-between border-b sticky top-0 z-10 shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-50'}`}>
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 text-slate-800 dark:text-slate-300"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 8h16M4 16h16" /></svg></button>
-            <div className="text-center">{company?.logoUrl ? <img src={company.logoUrl} className="h-10 object-contain" /> : <p className="text-[11px] font-bold text-primary uppercase tracking-widest">{company?.name || 'ForTime PRO'}</p>}</div>
-            <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-11 h-11 rounded-2xl flex items-center justify-center bg-slate-100 dark:bg-slate-800">{isDarkMode ? '☀️' : '🌙'}</button>
-          </header>
-        )}
+        {/* Mobile Header for quick access and navigation trigger */}
+        <header className="md:hidden p-4 flex justify-between items-center border-b dark:border-slate-800 bg-white dark:bg-slate-900 z-30">
+           <button onClick={() => setIsSidebarOpen(true)} className="p-2">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+           </button>
+           <h1 className="text-sm font-black tracking-tighter">ForTime <span className="text-primary">PRO</span></h1>
+           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 text-xl">{isDarkMode ? '🌞' : '🌙'}</button>
+        </header>
+
+        <Sidebar 
+          user={user} 
+          company={company} 
+          isOpen={isSidebarOpen} 
+          onClose={() => setIsSidebarOpen(false)} 
+          onNavigate={(v) => { if (v === 'logout') handleLogout(); else setActiveView(v); }}
+          activeView={activeView}
+        />
 
         <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
           <div className="max-w-md mx-auto w-full h-full">
-            {activeView === 'dashboard' && <Dashboard onPunchClick={() => setIsPunching(true)} lastPunch={userRecords[0]} onNavigate={(v) => setActiveView(v)} user={user} />}
-            {activeView === 'mypoint' && <MyPoint records={userRecords} />}
-            {activeView === 'card' && <AttendanceCard records={userRecords} company={company} />}
-            {activeView === 'holidays' && <HolidaysView company={company} />}
+            {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
+            {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
+            {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
             {activeView === 'requests' && <Requests />}
-            {activeView === 'company_profile' && <CompanyProfile company={company} />}
-            {activeView === 'companies' && <CompaniesView />}
-            {activeView === 'assistant' && <AiAssistant user={user} records={userRecords} />}
+            {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
+            {activeView === 'profile' && <Profile user={user} company={company} />}
             {activeView === 'audit' && <ComplianceAudit records={records} employees={employees} />}
-            {activeView === 'features' && <CompanyFeatures />}
+            {activeView === 'companies' && <CompaniesView />}
+            {activeView === 'company_profile' && <CompanyProfile company={company} />}
+            {activeView === 'holidays' && <HolidaysView company={company} />}
             {activeView === 'benefits' && <BenefitsView />}
             {activeView === 'feedback' && <FeedbackView user={user} />}
             {activeView === 'vacation' && <VacationView />}
             {activeView === 'settings' && <SettingsView user={user} onBack={() => setActiveView('dashboard')} />}
             {activeView === 'schedule' && <ScheduleView />}
+
             {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
               <AdminDashboard 
                 latestRecords={records} company={company} employees={employees} 
@@ -195,7 +185,7 @@ const App: React.FC = () => {
                       hasFacialRecord: false,
                       photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.name)}&background=0057ff&color=fff`
                     });
-                    alert("COLABORADOR ADICIONADO COM SUCESSO!");
+                    alert("COLABORADOR CADASTRADO COM SUCESSO!");
                   } catch (err) {
                     console.error("Erro ao adicionar:", err);
                     alert("ERRO AO SALVAR COLABORADOR.");
@@ -209,7 +199,7 @@ const App: React.FC = () => {
           </div>
         </main>
 
-        {isPunching && <PunchCamera geofenceConfig={company?.geofence} onCapture={handleCameraCapture} onCancel={() => setIsPunching(false)} isFirstAccess={!user.hasFacialRecord} />}
+        {showPunchCamera && <PunchCamera geofenceConfig={company?.geofence} onCapture={handlePunch} onCancel={() => setShowPunchCamera(false)} />}
         {lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
       </div>
     </div>
