@@ -127,13 +127,24 @@ const App: React.FC = () => {
     );
   }
 
-  // Verifica se a visualização atual é de administração para expandir o layout
   const isAdminView = ['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos', 'audit', 'company_profile'].includes(activeView);
 
   return (
-    <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
-      <div className={`flex flex-col h-full w-full bg-white dark:bg-slate-900 shadow-2xl overflow-hidden relative border dark:border-slate-800 ${isAdminView ? 'max-w-7xl md:rounded-[40px]' : 'max-w-5xl md:rounded-[40px]'}`}>
+    <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
+      
+      {/* Sidebar Fixo no Desktop, Drawer no Mobile */}
+      <Sidebar 
+        user={user} 
+        company={company} 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        onNavigate={(v) => { if (v === 'logout') handleLogout(); else setActiveView(v); }}
+        activeView={activeView}
+      />
+
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
+        {/* Header Mobile */}
         <header className="md:hidden p-4 flex justify-between items-center border-b dark:border-slate-800 bg-white dark:bg-slate-900 z-30">
            <button onClick={() => setIsSidebarOpen(true)} className="p-2">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -142,17 +153,19 @@ const App: React.FC = () => {
            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 text-xl">{isDarkMode ? '🌞' : '🌙'}</button>
         </header>
 
-        <Sidebar 
-          user={user} 
-          company={company} 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)} 
-          onNavigate={(v) => { if (v === 'logout') handleLogout(); else setActiveView(v); }}
-          activeView={activeView}
-        />
+        {/* Header Desktop (Opcional) */}
+        <header className="hidden md:flex p-6 justify-between items-center bg-white dark:bg-slate-900 border-b dark:border-slate-800">
+           <div>
+             <h1 className="text-lg font-black tracking-tighter uppercase">{company?.name || 'ForTime PRO'}</h1>
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{activeView.replace('_', ' ')}</p>
+           </div>
+           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl shadow-sm hover:scale-105 transition-all">
+             {isDarkMode ? '🌞 Light Mode' : '🌙 Dark Mode'}
+           </button>
+        </header>
 
-        <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
-          <div className={`mx-auto w-full h-full ${isAdminView ? 'px-4 md:px-10' : 'max-w-md'}`}>
+        <main className="flex-1 overflow-y-auto no-scrollbar">
+          <div className={`mx-auto w-full h-full ${isAdminView ? 'p-4 md:p-10' : 'max-w-md p-4'}`}>
             {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}

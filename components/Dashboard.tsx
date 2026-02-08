@@ -11,7 +11,6 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNavigate, user }) => {
   const [time, setTime] = useState(new Date());
-  const isAdmin = user.role === 'admin';
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -25,95 +24,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
     { type: 'Saída', time: '18:00', done: false },
   ];
 
-  if (isAdmin) {
-    return (
-      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-24 overflow-y-auto no-scrollbar">
-        <div className="space-y-2">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, Gestor 👋</p>
-          <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Gestão RH</h2>
-        </div>
-
-        {/* MÉTRICAS RÁPIDAS PARA O GESTOR */}
-        <div className="grid grid-cols-2 gap-4">
-           <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Colaboradores</p>
-              <div className="flex items-end gap-2">
-                <span className="text-2xl font-black text-slate-800 dark:text-white">24</span>
-                <span className="text-[10px] text-emerald-500 font-bold mb-1">Ativos</span>
-              </div>
-           </div>
-           <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pontos Hoje</p>
-              <div className="flex items-end gap-2">
-                <span className="text-2xl font-black text-slate-800 dark:text-white">18</span>
-                <span className="text-[10px] text-primary font-bold mb-1">Batidos</span>
-              </div>
-           </div>
-        </div>
-
-        {/* ATALHOS DE GESTÃO - ORGANIZAÇÃO RH */}
-        <div className="bg-white dark:bg-slate-900 rounded-[44px] p-8 border dark:border-slate-800 shadow-sm space-y-6">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Ações Rápidas de Gestão</p>
-           
-           <div className="space-y-3">
-              <button 
-                onClick={() => onNavigate('colaboradores')}
-                className="w-full flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl hover:bg-primary/5 transition-all group"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-2xl">👥</span>
-                  <div className="text-left">
-                    <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase">Gestão de Pessoas</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Cadastrar e listar funcionários</p>
-                  </div>
-                </div>
-                <span className="text-slate-300 group-hover:text-primary">▶</span>
-              </button>
-
-              <button 
-                onClick={() => onNavigate('aprovacoes')}
-                className="w-full flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl hover:bg-primary/5 transition-all group"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-2xl">✅</span>
-                  <div className="text-left">
-                    <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase">Aprovações Pendentes</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Atestados e Ajustes de Ponto</p>
-                  </div>
-                </div>
-                <div className="bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">3</div>
-              </button>
-
-              <button 
-                onClick={() => onNavigate('saldos')}
-                className="w-full flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl hover:bg-primary/5 transition-all group"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-2xl">📊</span>
-                  <div className="text-left">
-                    <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase">Relatórios e Saldos</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Exportar Cartão Ponto / Espelho</p>
-                  </div>
-                </div>
-                <span className="text-slate-300 group-hover:text-primary">▶</span>
-              </button>
-           </div>
-        </div>
-
-        {/* FEED DE AUDITORIA IA */}
-        <div className="bg-[#002d4b] rounded-[40px] p-6 text-white space-y-4">
-           <div className="flex items-center gap-3">
-              <span className="text-xl">🤖</span>
-              <p className="text-[10px] font-black uppercase tracking-widest">Insights do Assistente IA</p>
-           </div>
-           <p className="text-[11px] opacity-70 font-medium">3 colaboradores apresentam inconsistência no intervalo intrajornada esta semana. Deseja realizar uma auditoria?</p>
-           <button onClick={() => onNavigate('audit')} className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all">Ver Auditoria de Risco</button>
-        </div>
-      </div>
-    );
-  }
-
-  // DASHBOARD COLABORADOR (MANTIDO CONFORME SOLICITADO)
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-24 overflow-y-auto no-scrollbar">
       <div className="space-y-2">
@@ -170,21 +80,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        <div onClick={() => onNavigate('mypoint')} className="bg-white dark:bg-slate-900 p-5 rounded-[32px] border dark:border-slate-800 shadow-sm flex flex-col items-center space-y-2 cursor-pointer active:scale-95 transition-all">
-          <span className="text-xl">📅</span>
-          <p className="text-[8px] font-black text-slate-400 uppercase text-center leading-tight">Ver Meu<br/>Histórico</p>
-        </div>
-        <div onClick={() => onNavigate('card')} className="bg-white dark:bg-slate-900 p-5 rounded-[32px] border dark:border-slate-800 shadow-sm flex flex-col items-center space-y-2 cursor-pointer active:scale-95 transition-all">
-          <span className="text-xl">✍️</span>
-          <p className="text-[8px] font-black text-slate-400 uppercase text-center leading-tight">Assinar<br/>Cartão</p>
-        </div>
-        <div onClick={() => onNavigate('requests')} className="bg-white dark:bg-slate-900 p-5 rounded-[32px] border dark:border-slate-800 shadow-sm flex flex-col items-center space-y-2 cursor-pointer active:scale-95 transition-all">
-          <span className="text-xl">✉️</span>
-          <p className="text-[8px] font-black text-slate-400 uppercase text-center leading-tight">Nova<br/>Solicitação</p>
         </div>
       </div>
     </div>
