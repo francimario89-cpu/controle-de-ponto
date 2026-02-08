@@ -42,7 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
         md:static md:translate-x-0 md:shadow-none md:border-r md:dark:border-slate-800 md:w-64 md:shrink-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="flex flex-col items-center pt-12 pb-10 px-6 bg-primary/5 dark:bg-white/5">
+        <div className="flex flex-col items-center pt-12 pb-10 px-6 bg-slate-50 dark:bg-slate-800/30">
            <div className="w-20 h-20 rounded-[30px] border-4 border-white dark:border-slate-800 shadow-xl bg-slate-100 overflow-hidden mb-4">
               <img 
                 src={isAdmin ? (company?.logoUrl || `https://ui-avatars.com/api/?name=${company?.name}&background=0057ff&color=fff`) : (user.photo || `https://ui-avatars.com/api/?name=${user.name}&background=0057ff&color=fff`)} 
@@ -52,7 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
            <h2 className="text-slate-900 dark:text-white font-black text-sm text-center leading-tight uppercase truncate w-full tracking-tighter">
              {isAdmin ? company?.name : user.name}
            </h2>
-           <p className="text-primary text-[9px] font-black uppercase tracking-[0.3em] mt-2">
+           <p className="text-orange-600 text-[9px] font-black uppercase tracking-[0.3em] mt-2">
              {isAdmin ? 'Administrador' : (user.roleFunction || 'Colaborador')}
            </p>
         </div>
@@ -68,9 +68,9 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
               <button 
                 key={item.id} 
                 onClick={() => { onNavigate(item.id); onClose(); }} 
-                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive ? 'bg-primary text-white shadow-lg font-black' : 'text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold'}`}
+                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-black' : 'text-slate-700 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 font-bold'}`}
               >
-                <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-600'}`}>{item.icon}</span>
+                <span className={`shrink-0 ${isActive ? 'text-orange-600' : 'text-slate-400'}`}>{item.icon}</span>
                 <span className="text-[10px] uppercase tracking-wider">{item.label}</span>
               </button>
             );
@@ -88,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
         </div>
         
         <div className="p-6 text-center border-t dark:border-slate-800">
-           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ForTime PRO v4.6</p>
+           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ForTime PRO v4.7</p>
         </div>
       </div>
     </>
