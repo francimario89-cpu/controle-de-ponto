@@ -31,11 +31,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [selectedAuditEmp, setSelectedAuditEmp] = useState('');
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
 
+  // Captura data local de Brasília (Browser)
+  const now = new Date();
   const [reportFilter, setReportFilter] = useState({
     matricula: 'todos',
-    month: new Date().getMonth(),
-    year: new Date().getFullYear()
+    month: now.getMonth(),
+    year: now.getFullYear()
   });
+
+  // Gera lista de anos dinâmica (Ano atual - 1 até Ano atual + 4)
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear - 1; i <= currentYear + 4; i++) {
+      years.push(i);
+    }
+    return years;
+  }, []);
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -100,7 +112,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     const monthName = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
     const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
 
-    // Agrupar registros por dia
     const dailyData: { [key: number]: string[] } = {};
     filteredRecords.forEach(r => {
       const d = new Date(r.timestamp).getDate();
@@ -108,7 +119,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       dailyData[d].push(new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     });
 
-    // Ordenar horários de cada dia
     Object.keys(dailyData).forEach(day => {
       dailyData[parseInt(day)].sort();
     });
@@ -128,27 +138,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         .field-label { font-size: 6px; font-weight: bold; color: #444; display: block; }
         .field-value { font-size: 9px; font-weight: bold; }
         .ponto-table th { font-size: 7px; font-weight: bold; background: #eee; }
-        .summary-table { margin-top: 5px; }
-        .footer { margin-top: 10px; border-top: 1px solid #000; padding-top: 5px; }
-        @media print { 
-          body { padding: 0; } 
-          .container { border: none; }
-          button { display: none; }
-        }
+        @media print { body { padding: 0; } .container { border: none; } button { display: none; } }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="title">FOLHA DE PONTO INDIVIDUAL DE TRABALHO</div>
-        
         <table>
           <tr>
             <td colspan="3"><span class="field-label">EMPREGADOR:</span><span class="field-value">${company?.name || ''}</span></td>
             <td><span class="field-label">CEI / CNPJ Nº:</span><span class="field-value">${company?.cnpj || ''}</span></td>
           </tr>
-          <tr>
-            <td colspan="4"><span class="field-label">ENDEREÇO:</span><span class="field-value">${company?.address || ''}</span></td>
-          </tr>
+          <tr><td colspan="4"><span class="field-label">ENDEREÇO:</span><span class="field-value">${company?.address || ''}</span></td></tr>
           <tr>
             <td colspan="2"><span class="field-label">EMPREGADO(A):</span><span class="field-value">${emp.name}</span></td>
             <td><span class="field-label">CTPS Nº E SÉRIE:</span><span class="field-value">${emp.cpf || '---'}</span></td>
@@ -156,93 +157,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </tr>
           <tr>
             <td colspan="2"><span class="field-label">FUNÇÃO:</span><span class="field-value">${emp.roleFunction || 'COLABORADOR'}</span></td>
-            <td colspan="2"><span class="field-label">HORÁRIO DE TRABALHO DE SEG. A SEXTA FEIRA:</span><span class="field-value">${emp.workShift || '08:00 ÀS 18:00'}</span></td>
+            <td colspan="2"><span class="field-label">HORÁRIO DE TRABALHO:</span><span class="field-value">${emp.workShift || '---'}</span></td>
           </tr>
           <tr>
-            <td><span class="field-label">HORÁRIO AOS SÁBADOS:</span><span class="field-value">---</span></td>
-            <td><span class="field-label">DESCANSO SEMANAL:</span><span class="field-value">DOMINGO</span></td>
+            <td><span class="field-label">SÁBADOS:</span><span class="field-value">---</span></td>
+            <td><span class="field-label">DESCANSO:</span><span class="field-value">DOMINGO</span></td>
             <td><span class="field-label">MÊS:</span><span class="field-value">${monthName}</span></td>
             <td><span class="field-label">ANO:</span><span class="field-value">${reportFilter.year}</span></td>
           </tr>
         </table>
-
         <table class="ponto-table">
           <thead>
-            <tr>
-              <th rowspan="2" width="30">DIAS MÊS</th>
-              <th rowspan="2">ENTRADA MANHÃ</th>
-              <th colspan="2">ALMOÇO</th>
-              <th rowspan="2">SAÍDA TARDE</th>
-              <th colspan="2">EXTRAS</th>
-              <th rowspan="2" width="150">ASSINATURA</th>
-            </tr>
-            <tr>
-              <th>SAÍDA</th>
-              <th>RETORNO</th>
-              <th>ENTRADA</th>
-              <th>SAÍDA</th>
-            </tr>
+            <tr><th rowspan="2">DIA</th><th rowspan="2">ENTRADA</th><th colspan="2">ALMOÇO</th><th rowspan="2">SAÍDA</th><th colspan="2">EXTRAS</th><th rowspan="2">ASSINATURA</th></tr>
+            <tr><th>SAÍDA</th><th>RETORNO</th><th>E</th><th>S</th></tr>
           </thead>
           <tbody>
             ${Array.from({ length: 31 }).map((_, i) => {
               const day = i + 1;
               const times = dailyData[day] || [];
               const isInvalid = day > daysInMonth;
-              
-              return `
-                <tr style="${isInvalid ? 'background:#ddd' : ''}">
-                  <td align="center"><b>${String(day).padStart(2, '0')}</b></td>
-                  <td align="center">${times[0] || ''}</td>
-                  <td align="center">${times[1] || ''}</td>
-                  <td align="center">${times[2] || ''}</td>
-                  <td align="center">${times[3] || ''}</td>
-                  <td align="center"></td>
-                  <td align="center"></td>
-                  <td></td>
-                </tr>
-              `;
+              return `<tr style="${isInvalid ? 'background:#ddd' : ''}"><td align="center"><b>${String(day).padStart(2, '0')}</b></td><td align="center">${times[0] || ''}</td><td align="center">${times[1] || ''}</td><td align="center">${times[2] || ''}</td><td align="center">${times[3] || ''}</td><td></td><td></td><td></td></tr>`;
             }).join('')}
           </tbody>
         </table>
-
-        <table class="summary-table">
-          <tr>
-            <td width="50%" valign="top">
-              <table style="width:100%; border:none">
-                <tr class="header-box"><td colspan="2">RESUMO GERAL</td><td width="50">R$</td></tr>
-                <tr><td width="20">+</td><td>DIAS / HORAS NORMAIS</td><td></td></tr>
-                <tr><td width="20">+</td><td>H. EXTRAS / ADICIONAIS</td><td></td></tr>
-                <tr><td width="20">(-)</td><td>FALTAS NO MÊS</td><td></td></tr>
-                <tr class="header-box"><td colspan="2">SUB-TOTAL / BASE CÁLCULO</td><td></td></tr>
-                <tr><td width="20">(-)</td><td>% INSS</td><td></td></tr>
-                <tr><td width="20">(-)</td><td>OUTROS DESCONTOS</td><td></td></tr>
-                <tr class="header-box"><td colspan="2">TOTAL LÍQUIDO A RECEBER</td><td></td></tr>
-              </table>
-            </td>
-            <td width="50%" valign="top">
-               <div style="height:100px; display:flex; flex-direction:column; justify-content:space-between">
-                  <span class="field-label">VISTO DA FISCALIZAÇÃO:</span>
-                  <div style="border-top:1px solid #000; margin-top:50px; text-align:center; font-size:7px">ASSINATURA DO EMPREGADOR</div>
-               </div>
-            </td>
-          </tr>
-        </table>
-        <div style="padding:10px; text-align:center; font-size:7px; font-weight:bold">
-          Assinatura do empregado: __________________________________________________________________
-        </div>
+        <div style="padding:15px; text-align:center; font-size:7px;">Assinatura do empregado: __________________________________________________________________</div>
       </div>
-      <div style="text-align:center; margin-top:20px">
-        <button onclick="window.print()" style="padding:10px 20px; background:#000; color:#fff; border:none; border-radius:5px; cursor:pointer">IMPRIMIR / SALVAR PDF</button>
-      </div>
+      <div style="text-align:center; margin-top:20px"><button onclick="window.print()" style="padding:10px 20px; background:#000; color:#fff; border:none; border-radius:5px; cursor:pointer">IMPRIMIR / PDF</button></div>
     </body>
-    </html>
-    `;
+    </html>`;
 
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Folha_Ponto_${emp.name.replace(/ /g, '_')}_${monthName}.html`;
+    link.download = `Folha_Ponto_${emp.name.replace(/ /g, '_')}_${monthName}_${reportFilter.year}.html`;
     link.click();
   };
 
@@ -291,7 +239,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 {Array.from({length: 12}).map((_, i) => <option key={i} value={i}>{new Date(0, i).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()}</option>)}
               </select>
               <select value={reportFilter.year} onChange={e => setReportFilter({...reportFilter, year: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border border-slate-200">
-                <option value={2024}>2024</option><option value={2025}>2025</option>
+                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
            </div>
            <button onClick={handleDownloadReport} className="w-full bg-orange-600 text-white py-6 rounded-[28px] font-black uppercase text-xs shadow-xl hover:bg-orange-700 transition-all">
@@ -319,7 +267,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     );
   }
 
-  // Restante das abas (colaboradores, aprovações, audit, dashboard) permanecem as mesmas
   if (activeTab === 'colaboradores') {
      return (
         <div className="space-y-6">

@@ -7,7 +7,8 @@ interface HolidaysViewProps {
 }
 
 const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1)); // Iniciando em Fev 2026 para facilitar seu teste
+  // Inicia na data atual do usuário (Brasília)
+  const [currentDate, setCurrentDate] = useState(new Date()); 
   const holidays = company?.holidays || [];
 
   const year = currentDate.getFullYear();
@@ -28,26 +29,18 @@ const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
     calendarDays.push(d);
   }
 
-  // Função robusta para converter qualquer string de data para YYYY-MM-DD
   const normalizeDate = (dateStr: string) => {
     if (!dateStr) return "";
-    // Se vier YYYY-MM-DD (padrão de input date)
     if (dateStr.includes('-')) {
       const parts = dateStr.split('-');
       if (parts[0].length === 4) return dateStr;
       return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     }
-    // Se vier DD/MM/YYYY
     if (dateStr.includes('/')) {
       const parts = dateStr.split('/');
       return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     }
     return dateStr;
-  };
-
-  const isHoliday = (day: number) => {
-    const target = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return holidays.some(h => normalizeDate(h.date) === target);
   };
 
   const getHolidayData = (day: number) => {
@@ -67,7 +60,6 @@ const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl overflow-hidden border dark:border-slate-800">
-        {/* HEADER CONFORME REFERÊNCIA */}
         <div className="bg-[#10b981] p-6 flex justify-between items-center text-white">
           <button onClick={() => setCurrentDate(new Date(year, month - 1))} className="w-10 h-10 flex items-center justify-center bg-[#3b82f6] rounded-full shadow-lg active:scale-90 transition-all">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>

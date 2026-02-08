@@ -12,7 +12,7 @@ export const getGeminiResponse = async (prompt: string, records: string[]) => {
       ]
     },
     config: {
-      systemInstruction: "Você é o assistente virtual da ForTime PRO. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas. Seja profissional e direto.",
+      systemInstruction: "Você é o assistente virtual do PontoExato. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas. Seja profissional e direto.",
       temperature: 0.5,
     }
   });

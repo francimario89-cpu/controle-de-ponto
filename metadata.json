@@ -1,5 +1,5 @@
 {
-  "name": "Meu Controle de Ponto 3.0",
+  "name": "PontoExato",
   "description": "Aplicativo de gestão de ponto eletrônico com registro facial, geolocalização e banco de horas.",
   "requestFramePermissions": [
     "camera",

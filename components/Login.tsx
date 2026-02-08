@@ -84,7 +84,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="h-screen w-screen bg-orange-50 dark:bg-slate-950 flex flex-col items-center justify-center p-8 max-w-md mx-auto transition-colors">
       <div className="mb-10 text-center animate-in zoom-in duration-500">
         <div className="w-16 h-16 bg-white dark:bg-slate-900 rounded-3xl shadow-xl flex items-center justify-center mx-auto mb-4 border dark:border-slate-800"><span className="text-3xl">⏰</span></div>
-        <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">ForTime <span className="text-orange-500">PRO</span></h1>
+        <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter">Ponto<span className="text-orange-500">Exato</span></h1>
       </div>
 
       <div className="w-full bg-white dark:bg-slate-900 rounded-[40px] p-8 shadow-2xl border dark:border-slate-800">
@@ -175,7 +175,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         )}
       </div>
       
-      <p className="fixed bottom-10 text-[8px] font-black text-slate-300 dark:text-slate-700 uppercase tracking-[0.5em]">ForTime PRO - Compliance Portaria 671</p>
+      <p className="fixed bottom-10 text-[8px] font-black text-slate-300 dark:text-slate-700 uppercase tracking-[0.5em]">PontoExato - Compliance Portaria 671</p>
     </div>
   );
 };

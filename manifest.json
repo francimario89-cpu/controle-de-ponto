@@ -1,7 +1,7 @@
 
 {
-  "short_name": "ForTime PRO",
-  "name": "ForTime PRO - Gestão de Ponto",
+  "short_name": "PontoExato",
+  "name": "PontoExato - Gestão de Ponto",
   "description": "Controle de ponto biométrico com reconhecimento facial e geolocalização.",
   "icons": [
     {

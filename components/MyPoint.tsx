@@ -12,7 +12,7 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
   const handleDownloadPersonalReport = () => {
     if (records.length === 0) return alert("Nenhum registro para exportar.");
     
-    let content = `MEU LIVRO DE PONTO - FOR TIME PRO\n`;
+    let content = `MEU LIVRO DE PONTO - PONTO EXATO\n`;
     content += `COLABORADOR: ${records[0].userName}\n`;
     content += `DATA DE EMISSÃO: ${new Date().toLocaleString()}\n`;
     content += `------------------------------------------------------------\n`;

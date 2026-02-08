@@ -88,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
         </div>
         
         <div className="p-6 text-center border-t">
-           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ForTime PRO v4.8</p>
+           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">PontoExato v4.8</p>
         </div>
       </div>
     </>

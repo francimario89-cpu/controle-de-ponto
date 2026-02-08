@@ -10,7 +10,7 @@ interface AiAssistantProps {
 
 const AiAssistant: React.FC<AiAssistantProps> = ({ user, records }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'ai', text: string}[]>([
-    { role: 'ai', text: `Olá ${user.name.split(' ')[0]}! Sou o assistente da ForTime PRO. Como posso te ajudar hoje com suas dúvidas de RH ou CLT?` }
+    { role: 'ai', text: `Olá ${user.name.split(' ')[0]}! Sou o assistente do PontoExato. Como posso te ajudar hoje com suas dúvidas de RH ou CLT?` }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);

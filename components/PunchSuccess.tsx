@@ -19,7 +19,7 @@ const PunchSuccess: React.FC<PunchSuccessProps> = ({ record, onClose }) => {
     receipt += `\n------------------------------------------------\n`;
     receipt += `ASSINATURA DIGITAL (HASH):\n${record.digitalSignature}\n`;
     receipt += `------------------------------------------------\n`;
-    receipt += `Gerado eletronicamente por ForTime PRO v3.5\nConforme Portaria 671 MTP.`;
+    receipt += `Gerado eletronicamente por PontoExato v3.5\nConforme Portaria 671 MTP.`;
 
     const blob = new Blob([receipt], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);

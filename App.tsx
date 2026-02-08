@@ -80,7 +80,7 @@ const App: React.FC = () => {
 
   const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }) => {
     if (!user) return;
-    const signature = `FT-${user.matricula || 'N/A'}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
     const newRecordData = {
       userName: user.name,
       matricula: user.matricula || 'N/A',
@@ -136,7 +136,7 @@ const App: React.FC = () => {
            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
            </button>
-           <h1 className="text-sm font-black tracking-tighter uppercase">ForTime <span className="text-orange-600">PRO</span></h1>
+           <h1 className="text-sm font-black tracking-tighter uppercase">Ponto<span className="text-orange-600">Exato</span></h1>
            <div className="w-10"></div>
         </header>
 
