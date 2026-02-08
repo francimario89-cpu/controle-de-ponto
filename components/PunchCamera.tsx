@@ -2,7 +2,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 
 interface PunchCameraProps {
-  onCapture: (photo: string, location: { lat: number; lng: number; address: string }) => void;
+  onCapture: (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => void;
   onCancel: () => void;
   isFirstAccess?: boolean;
   geofenceConfig?: { enabled: boolean; lat: number; lng: number; radius: number };
@@ -13,6 +13,13 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [livenessStage, setLivenessStage] = useState(0); 
+  const [selectedMood, setSelectedMood] = useState('feliz');
+
+  const moods = [
+    { id: 'triste', emoji: '😔', label: 'Triste' },
+    { id: 'serio', emoji: '😐', label: 'Sério' },
+    { id: 'feliz', emoji: '😃', label: 'Feliz' },
+  ];
 
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
@@ -40,7 +47,6 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
     navigator.geolocation.getCurrentPosition(async (p) => {
       const { latitude, longitude } = p.coords;
 
-      // TRAVA DE GEOFENCE OBRIGATÓRIA
       if (geofenceConfig?.enabled) {
         const dist = calculateDistance(latitude, longitude, geofenceConfig.lat, geofenceConfig.lng);
         if (dist > geofenceConfig.radius) {
@@ -48,12 +54,8 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
           setLoading(false);
           return;
         }
-      } else if (!isFirstAccess) {
-        // Se a empresa não configurou geofence, mas não é primeiro acesso, avisamos que geofence é recomendado
-        console.warn("Geofence desativado. Registro liberado sem travas geográficas.");
       }
 
-      // Se passou na geofence (ou é primeiro acesso), inicia prova de vida
       setTimeout(() => setLivenessStage(1), 1000);
       setTimeout(() => setLivenessStage(2), 2500);
       setTimeout(() => {
@@ -63,7 +65,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
           canvas.height = videoRef.current.videoHeight;
           canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
           const data = canvas.toDataURL('image/jpeg', 0.8);
-          onCapture(data, { lat: latitude, lng: longitude, address: isFirstAccess ? "Cadastro Facial" : "Ponto Autorizado via GPS" });
+          onCapture(data, { lat: latitude, lng: longitude, address: isFirstAccess ? "Cadastro Facial" : "Ponto Autorizado via GPS" }, selectedMood);
         }
       }, 4000);
 
@@ -91,25 +93,43 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
         
         {loading && (
           <div className="absolute inset-0 pointer-events-none">
-             <div className="absolute top-0 left-0 w-full h-1 bg-primary shadow-[0_0_20px_var(--primary-color)] animate-[scan_2s_linear_infinite]"></div>
-             <div className="absolute inset-0 bg-primary/5"></div>
+             <div className="absolute top-0 left-0 w-full h-1 bg-[#f97316] shadow-[0_0_20px_#f97316] animate-[scan_2s_linear_infinite]"></div>
+             <div className="absolute inset-0 bg-orange-500/5"></div>
           </div>
         )}
 
         <div className="absolute inset-0 flex items-center justify-center p-12">
-           <div className={`w-full h-full border-2 rounded-[100px] transition-all duration-500 ${loading ? 'border-primary scale-105' : 'border-white/20 border-dashed'}`}></div>
+           <div className={`w-full h-full border-2 rounded-[100px] transition-all duration-500 ${loading ? 'border-orange-500 scale-105' : 'border-white/20 border-dashed'}`}></div>
         </div>
 
-        <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-3 px-6 text-center">
-           <div className={`px-6 py-3 rounded-2xl backdrop-blur-md border border-white/10 transition-all ${loading ? 'bg-primary text-white scale-110' : 'bg-black/40 text-white/60'}`}>
-              <p className="text-[11px] font-black uppercase tracking-widest">
-                {!loading ? (isFirstAccess ? 'Centralize seu rosto para gravar' : 'Posicione seu rosto') : 
-                 livenessStage === 0 ? 'Verificando GPS...' :
-                 livenessStage === 1 ? 'Pisque lentamente 😉' : 
-                 'Sorria para confirmar! 😁'}
-              </p>
-           </div>
-        </div>
+        {!loading && (
+          <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-4 px-6">
+            <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Como você está hoje?</p>
+            <div className="flex gap-4">
+              {moods.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedMood(m.id)}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all ${selectedMood === m.id ? 'bg-orange-500 scale-110 shadow-lg shadow-orange-500/40' : 'bg-black/40 grayscale opacity-40 hover:opacity-100 hover:grayscale-0'}`}
+                >
+                  {m.emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {loading && (
+          <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-3 px-6 text-center">
+             <div className="px-6 py-3 rounded-2xl backdrop-blur-md border border-white/10 bg-orange-500 text-white scale-110">
+                <p className="text-[11px] font-black uppercase tracking-widest">
+                  {livenessStage === 0 ? 'Verificando GPS...' :
+                   livenessStage === 1 ? 'Pisque lentamente 😉' : 
+                   'Sorria para confirmar! 😁'}
+                </p>
+             </div>
+          </div>
+        )}
 
         {error && (
           <div className="absolute inset-0 bg-red-600/95 backdrop-blur-md flex flex-col items-center justify-center p-10 text-center animate-in zoom-in duration-300">
@@ -127,11 +147,11 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
             disabled={loading} 
             className={`w-full py-6 rounded-[32px] font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl transition-all ${loading ? 'bg-slate-800 text-slate-500' : 'bg-white text-slate-900 active:scale-95'}`}
           >
-            {loading ? 'Processando...' : (isFirstAccess ? 'Gravar Face Agora' : 'Registrar Presença')}
+            {loading ? 'Processando...' : (isFirstAccess ? 'Gravar Face Agora' : 'Confirmar e Registrar')}
           </button>
         )}
         <p className="text-white/20 text-[8px] text-center uppercase tracking-[0.3em] leading-relaxed">
-          {isFirstAccess ? 'Esta foto será utilizada para validar todos seus pontos futuros.' : 'Registro validado por Geofence e Prova de Vida v4.0'}
+          Registro validado por Geofence e Prova de Vida v4.8
         </p>
       </div>
 

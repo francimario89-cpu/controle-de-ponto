@@ -78,7 +78,7 @@ const App: React.FC = () => {
     setActiveView('dashboard');
   };
 
-  const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }) => {
+  const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => {
     if (!user) return;
     const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
     const newRecordData = {
@@ -92,12 +92,13 @@ const App: React.FC = () => {
       status: 'synchronized' as const,
       digitalSignature: signature,
       type: 'entrada' as const,
-      companyCode: user.companyCode
+      companyCode: user.companyCode,
+      mood: mood // Humor salvo aqui
     };
 
     try {
       const docRef = await addDoc(collection(db, "records"), newRecordData);
-      const recordWithId = { ...newRecordData, id: docRef.id } as PointRecord;
+      const recordWithId = { ...newRecordData, id: docRef.id, timestamp: newRecordData.timestamp } as PointRecord;
       setLastPunch(recordWithId);
       setShowPunchCamera(false);
     } catch (err) {
@@ -158,7 +159,7 @@ const App: React.FC = () => {
           <div className={`mx-auto w-full h-full ${isAdminView ? 'p-6 md:p-10' : 'max-w-md p-4'}`}>
             {!isAdmin ? (
               <>
-                {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
+                {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} records={records.filter(r => r.matricula === user.matricula)} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
                 {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
                 {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
                 {activeView === 'requests' && <Requests />}
