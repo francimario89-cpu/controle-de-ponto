@@ -8,9 +8,9 @@ interface BottomNavProps {
 
 const BottomNav: React.FC<BottomNavProps> = ({ activeView, onNavigate }) => {
   const items = [
-    { id: 'dashboard', label: 'Ponto', icon: '⏰' },
-    { id: 'requests', label: 'Pedidos', icon: '📝' },
-    { id: 'mypoint', label: 'HISTÓRICO', icon: '📊', isCenter: true },
+    { id: 'dashboard', label: 'Início', icon: '🏠' },
+    { id: 'mypoint', label: 'Histórico', icon: '📊' },
+    { id: 'requests', label: 'JUSTIFICAR', icon: '📝', isCenter: true },
     { id: 'card', label: 'Cartão', icon: '📇' },
     { id: 'profile', label: 'Perfil', icon: '👤' },
   ];
@@ -24,14 +24,14 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeView, onNavigate }) => {
             onClick={() => onNavigate(item.id)}
             className={`flex flex-col items-center justify-center transition-all duration-300 ${
               item.isCenter 
-                ? 'absolute -top-10 bg-orange-500 w-20 h-20 rounded-full border-[6px] border-slate-50 shadow-2xl scale-110 active:scale-95' 
+                ? 'absolute -top-10 bg-orange-600 w-20 h-20 rounded-full border-[6px] border-slate-50 shadow-2xl scale-110 active:scale-95' 
                 : 'flex-1 active:scale-90'
             }`}
           >
             {item.isCenter ? (
               <div className="flex flex-col items-center">
-                <span className="text-2xl mb-0.5">📊</span>
-                <span className="text-[8px] font-black text-white uppercase tracking-tighter">Histórico</span>
+                <span className="text-2xl mb-0.5">📝</span>
+                <span className="text-[8px] font-black text-white uppercase tracking-tighter">Justificar</span>
               </div>
             ) : (
               <>

@@ -82,6 +82,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
         </div>
       </div>
 
+      {/* NOVO CARD CENTRAL DE JUSTIFICATIVA */}
+      <div onClick={() => onNavigate('requests')} className="bg-orange-600 p-6 rounded-[35px] shadow-lg shadow-orange-200 dark:shadow-none flex items-center justify-between group active:scale-95 transition-all cursor-pointer">
+         <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-xl text-white">📝</div>
+            <div>
+               <p className="text-[11px] font-black text-white uppercase tracking-widest">Justificativa para o RH</p>
+               <p className="text-[9px] font-bold text-white/70 uppercase">Faltas, Atestados ou Ajustes</p>
+            </div>
+         </div>
+         <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+         </div>
+      </div>
+
       <div className="bg-white dark:bg-slate-900 rounded-[40px] p-6 border dark:border-slate-800 shadow-sm">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Linha do Tempo - Hoje</p>
         <div className="flex justify-between items-center relative">
