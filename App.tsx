@@ -153,11 +153,17 @@ const App: React.FC = () => {
                 employees={employees} 
                 onAddEmployee={async (e) => {
                   try {
-                    await addDoc(collection(db, "employees"), { ...e, companyCode: user.companyCode, status: 'active', photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.name)}&background=f97316&color=fff` });
-                    alert("CADASTRADO!");
-                  } catch (err) { alert("ERRO AO SALVAR."); }
+                    await addDoc(collection(db, "employees"), { 
+                      ...e, 
+                      companyCode: user.companyCode, 
+                      status: 'active', 
+                      photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.name)}&background=f97316&color=fff`,
+                      hasFacialRecord: false 
+                    });
+                    alert("COLABORADOR CADASTRADO!");
+                  } catch (err) { alert("ERRO AO SALVAR NO FIREBASE."); }
                 }} 
-                onDeleteEmployee={async (id) => { if(confirm("EXCLUIR?")) await deleteDoc(doc(db, "employees", id)); }} 
+                onDeleteEmployee={async (id) => { if(confirm("DESEJA REALMENTE EXCLUIR ESTE COLABORADOR?")) await deleteDoc(doc(db, "employees", id)); }} 
                 onUpdateEmployee={async (id, data) => { await updateDoc(doc(db, "employees", id), data); }}
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}

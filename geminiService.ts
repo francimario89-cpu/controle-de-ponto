@@ -3,89 +3,98 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 
 export const getGeminiResponse = async (prompt: string, records: string[]) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: {
-      parts: [
-        { text: `Contexto de Registros de Ponto:\n${records.join('\n\n')}\n\nPergunta: ${prompt}` }
-      ]
-    },
-    config: {
-      systemInstruction: "Você é o assistente virtual do PontoExato. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas. Seja profissional e direto.",
-      temperature: 0.5,
-    }
-  });
-  return response.text || "Desculpe, tive um problema ao processar sua consulta.";
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          { text: `Contexto de Registros de Ponto (últimos 20):\n${records.join('\n\n')}\n\nPergunta do Colaborador: ${prompt}` }
+        ]
+      },
+      config: {
+        systemInstruction: "Você é o assistente virtual do PontoExato. Especialista em RH e CLT. Responda dúvidas sobre marcações de ponto, banco de horas e direitos trabalhistas. Seja extremamente profissional, acolhedor e direto.",
+        temperature: 0.4,
+      }
+    });
+    return response.text || "Desculpe, não consegui processar sua dúvida agora.";
+  } catch (error) {
+    console.error("Erro Gemini Assistant:", error);
+    return "Ocorreu um erro ao falar com o assistente. Tente novamente mais tarde.";
+  }
 };
 
 export const auditCompliance = async (employeeName: string, records: string[], workShift: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  const auditPrompt = `
-    Analise o ponto de ${employeeName}.
-    Carga Horária Contratual: ${workShift}.
-    Registros de Ponto (Data/Hora):
-    ${records.join('\n')}
-
-    Instruções:
-    1. Calcule o total de horas trabalhadas em cada dia.
-    2. Identifique explicitamente HORAS FALTANTES (débito) ou HORAS EXTRAS (crédito) em relação à carga de ${workShift}.
-    3. Verifique se houve esquecimento de batida (registros ímpares no dia).
-    4. Analise o intervalo de almoço (mínimo 1h).
-    5. Avalie o risco trabalhista (Baixo, Médio, Alto).
-  `;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: {
-      parts: [{ text: auditPrompt }]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          riskLevel: { type: Type.STRING, description: "Nível de risco: Baixo, Médio ou Alto" },
-          summary: { type: Type.STRING, description: "Resumo analítico focado em conformidade." },
-          balanceInfo: { type: Type.STRING, description: "Cálculo detalhado de Horas Faltando ou Horas Extras encontradas." },
-          alerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de irregularidades específicas." }
-        },
-        required: ["riskLevel", "summary", "balanceInfo", "alerts"]
-      },
-      systemInstruction: "Você é um auditor de RH especialista em CLT. Seu objetivo é detectar erros de jornada, saldo de horas (extras/faltas) e riscos jurídicos. Seja extremamente preciso nos cálculos.",
-    }
-  });
-  
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const auditPrompt = `
+      NOME DO COLABORADOR: ${employeeName}
+      CARGA HORÁRIA CONTRATUAL: ${workShift} (Exemplo: 08:00h por dia)
+      REGISTROS DE PONTO:
+      ${records.join('\n')}
+
+      TAREFA DE AUDITORIA:
+      1. Calcule a jornada diária realizada.
+      2. Calcule o SALDO TOTAL: Se o colaborador trabalhou menos que ${workShift}, informe as HORAS FALTANTES. Se trabalhou mais, informe as HORAS EXTRAS.
+      3. Verifique se o intervalo de repouso (mínimo 1h) foi respeitado.
+      4. Verifique inconsistências (batidas ímpares, batidas em horários proibidos).
+      5. Defina o NÍVEL DE RISCO (Baixo, Médio, Alto).
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: {
+        parts: [{ text: auditPrompt }]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            riskLevel: { type: Type.STRING, description: "Baixo, Médio ou Alto" },
+            summary: { type: Type.STRING, description: "Resumo executivo da jornada e conformidade." },
+            balanceInfo: { type: Type.STRING, description: "Relatório detalhado de Horas Extras (+) ou Horas Faltando (-)." },
+            alerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de pontos de atenção." }
+          },
+          required: ["riskLevel", "summary", "balanceInfo", "alerts"]
+        },
+        systemInstruction: "Você é um Auditor Sênior de RH. Sua especialidade é calcular saldos de banco de horas com precisão matemática. Identifique claramente débitos e créditos de horas.",
+      }
+    });
+    
     return JSON.parse(response.text?.trim() || "{}");
-  } catch {
+  } catch (error) {
+    console.error("Erro Auditoria IA:", error);
     return { 
       riskLevel: "Erro", 
-      summary: "Falha na análise da IA.", 
-      balanceInfo: "Não foi possível calcular o saldo.",
-      alerts: ["A resposta da IA não pôde ser processada."] 
+      summary: "Falha na análise técnica da IA.", 
+      balanceInfo: "Não foi possível calcular o saldo no momento.",
+      alerts: ["Aguarde alguns minutos e tente novamente."] 
     };
   }
 };
 
 export const generateDailyBriefingAudio = async (summaryText: string) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: `Leia este resumo de RH: ${summaryText}` }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Kore' },
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `Resumo RH: ${summaryText}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
         },
       },
-    },
-  });
-
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  return base64Audio;
+    });
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  } catch (error) {
+    console.error("Erro TTS:", error);
+    return null;
+  }
 };
 
 export async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
