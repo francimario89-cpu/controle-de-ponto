@@ -7,8 +7,6 @@ import ComplianceAudit from './ComplianceAudit';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-// Estendendo o tipo jsPDF para reconhecer o plugin autotable e propriedades internas dinâmicas
-// O uso de [key: string]: any permite acessar propriedades como .internal e .lastAutoTable que podem não estar expostas nos tipos base
 interface jsPDFWithPlugin extends jsPDF {
   autoTable: (options: any) => jsPDF;
   lastAutoTable?: { finalY: number };
@@ -33,7 +31,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [adminPassAttempt, setAdminPassAttempt] = useState('');
   const [authError, setAuthError] = useState(false);
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
-  const [requestFilter, setRequestFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingPasswordId, setEditingPasswordId] = useState<string | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState('');
@@ -41,10 +38,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [newEmp, setNewEmp] = useState({ 
     name: '', 
     matricula: '', 
-    email: '', 
+    cpf: '',
     roleFunction: '', 
-    workShift: '08:00h',
-    password: '' 
+    workShift: '08:00 - 12:00 / 13:00 - 17:00',
+    weeklyHours: 44,
+    password: '',
+    ctpsNumber: '',
+    ctpsSeries: ''
   });
 
   const now = new Date();
@@ -91,16 +91,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     else { setAuthError(true); setAdminPassAttempt(''); }
   };
 
-  const handleUpdatePassword = async () => {
-    if (!editingPasswordId || !newPasswordValue) return;
-    try {
-      await updateDoc(doc(db, "employees", editingPasswordId), { password: newPasswordValue });
-      alert("SENHA ATUALIZADA COM SUCESSO!");
-      setEditingPasswordId(null);
-      setNewPasswordValue('');
-    } catch (e) { alert("ERRO AO ATUALIZAR SENHA."); }
-  };
-
   const filteredRecords = useMemo(() => {
     return latestRecords.filter(r => {
       const date = new Date(r.timestamp);
@@ -110,85 +100,167 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     });
   }, [latestRecords, reportFilter]);
 
-  const handleExportPDF = () => {
-    const records = filteredRecords;
-    if (records.length === 0) {
-      alert("Nenhum registro encontrado para exportar.");
-      return;
-    }
-
-    // Usando o tipo estendido jsPDFWithPlugin para satisfazer o compilador TS sobre propriedades como .internal e .autoTable
-    const doc = new jsPDF() as jsPDFWithPlugin;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Agrupar registros por funcionário
-    const grouped = records.reduce((acc: any, r) => {
-      if (!acc[r.userName]) acc[r.userName] = { matricula: r.matricula, data: [] };
-      acc[r.userName].data.push(r);
-      return acc;
-    }, {});
-
-    Object.keys(grouped).forEach((name, index) => {
-      if (index > 0) doc.addPage();
-
-      // Cabeçalho da Empresa
-      doc.setFontSize(18);
-      doc.setTextColor(249, 115, 22); // Cor Laranja
-      doc.text("PontoExato", 14, 20);
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      doc.text(`Empresa: ${company?.name || 'Não informada'}`, 14, 28);
-      doc.text(`CNPJ: ${company?.cnpj || 'N/A'}`, 14, 33);
-      doc.text(`Período: ${reportFilter.month + 1}/${reportFilter.year}`, pageWidth - 14, 20, { align: 'right' });
-
-      // Dados do Colaborador
-      doc.setFontSize(12);
-      doc.setTextColor(0);
-      doc.text(`ESPELHO DE PONTO: ${name.toUpperCase()}`, 14, 45);
-      doc.setFontSize(9);
-      doc.text(`Matrícula: ${grouped[name].matricula || 'N/A'}`, 14, 50);
-
-      const tableData = grouped[name].data
-        .sort((a: any, b: any) => a.timestamp.getTime() - b.timestamp.getTime())
-        .map((r: any) => [
-          new Date(r.timestamp).toLocaleDateString('pt-BR'),
-          new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          r.type.toUpperCase(),
-          r.isAdjustment ? "SIM (AJUSTE)" : "NÃO",
-          r.address.substring(0, 40) + (r.address.length > 40 ? "..." : "")
-        ]);
-
-      doc.autoTable({
-        startY: 55,
-        head: [['Data', 'Hora', 'Tipo', 'Ajustado', 'Localização']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: { fillColor: [249, 115, 22], textColor: 255, fontSize: 8 },
-        bodyStyles: { fontSize: 7 },
-        alternateRowStyles: { fillColor: [250, 250, 250] },
-      });
-
-      // Rodapé de Assinatura
-      // Usamos a propriedade lastAutoTable agora reconhecida pelo tipo estendido
-      const finalY = (doc.lastAutoTable?.finalY || 0) + 30;
-      doc.line(14, finalY, 90, finalY);
-      doc.text("Assinatura do Colaborador", 14, finalY + 5);
-      doc.line(pageWidth - 90, finalY, pageWidth - 14, finalY);
-      doc.text("Assinatura do Gestor (RH)", pageWidth - 90, finalY + 5);
-      
-      doc.setFontSize(7);
-      doc.text(`Relatório gerado em ${new Date().toLocaleString('pt-BR')} via PontoExato v4.8`, 14, doc.internal.pageSize.getHeight() - 10);
-    });
-
-    const fileName = `Fechamento_${company?.name}_${reportFilter.month + 1}_${reportFilter.year}.pdf`;
-    doc.save(fileName);
+  const calculateHoursDiff = (start: string, end: string) => {
+    if (!start || !end) return 0;
+    const [h1, m1] = start.split(':').map(Number);
+    const [h2, m2] = end.split(':').map(Number);
+    return (h2 * 60 + m2) - (h1 * 60 + m1);
   };
 
-  const handleApproveRequest = async (req: AttendanceRequest) => {
+  const formatMinutesToHours = (minutes: number) => {
+    if (minutes <= 0) return "";
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const handleExportPDF = () => {
+    const records = filteredRecords;
+    const doc = new jsPDF() as jsPDFWithPlugin;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 10;
+    const contentWidth = pageWidth - (margin * 2);
+
+    const employeesToExport = reportFilter.matricula === 'todos' 
+      ? employees 
+      : employees.filter(e => e.matricula === reportFilter.matricula);
+
+    employeesToExport.forEach((emp, index) => {
+      if (index > 0) doc.addPage();
+
+      // TITULO
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      const monthLabel = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+      doc.text(`FOLHA DE PONTO | MÊS/ANO: ${monthLabel} / ${reportFilter.year}`, pageWidth / 2, 12, { align: 'center' });
+
+      // BOX 1: DADOS DO EMPREGADOR
+      doc.setFontSize(8);
+      doc.rect(margin, 15, contentWidth, 24);
+      doc.text("DADOS DO EMPREGADOR", pageWidth / 2, 19, { align: 'center' });
+      doc.line(margin, 21, pageWidth - margin, 21);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nome: ${company?.name || ''}`, margin + 2, 25);
+      doc.text(`CPF: ${company?.cnpj || ''}`, pageWidth / 2 + 20, 25);
+      doc.text(`Endereço: ${company?.address || ''}`, margin + 2, 29);
+      doc.text(`Cidade: ${company?.city || ''}`, margin + 2, 33);
+      doc.text(`Estado: ${company?.state || ''}`, pageWidth / 2 - 10, 33);
+      doc.text(`CEP: ${company?.zip || ''}`, pageWidth / 2 + 20, 33);
+      doc.text(`Bairro: ${company?.neighborhood || ''}`, margin + 2, 37);
+
+      // BOX 2: DADOS DO EMPREGADO
+      doc.rect(margin, 41, contentWidth, 30);
+      doc.setFont("helvetica", "bold");
+      doc.text("DADOS DO EMPREGADO", pageWidth / 2, 45, { align: 'center' });
+      doc.line(margin, 47, pageWidth - margin, 47);
+      
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nome: ${emp.name}`, margin + 2, 51);
+      doc.text(`Carteira de trabalho nº: ${emp.ctpsNumber || ''}`, margin + 2, 56);
+      doc.text(`Série: ${emp.ctpsSeries || ''}`, pageWidth / 2 - 20, 56);
+      doc.text(`Cargo: ${emp.roleFunction || ''}`, pageWidth / 2 + 20, 56);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text("Horário de trabalho", margin + 2, 63);
+      doc.text("contratado", margin + 2, 66);
+      
+      // Linhas do horário no box
+      doc.rect(margin + 40, 60, contentWidth - 40, 9);
+      doc.setFontSize(7);
+      doc.text("Entrada: ______   Saída/almoço: ______   Retorno/almoço: ______   Saída: ______", margin + 42, 66);
+      doc.setFontSize(8);
+
+      // TABELA DE PONTO
+      const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
+      const body = [];
+
+      // Jornada contratada média (8h48m p/ 44h sem) = 528 min
+      const dailyContractedMinutes = 528; 
+
+      for (let day = 1; day <= 31; day++) {
+        const dayStr = String(day).padStart(2, '0');
+        const dayRecs = records.filter(r => 
+          r.matricula === emp.matricula && 
+          new Date(r.timestamp).toLocaleDateString('pt-BR').startsWith(dayStr + '/')
+        ).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+        const e1 = dayRecs[0] ? new Date(dayRecs[0].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+        const s1 = dayRecs[1] ? new Date(dayRecs[1].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+        const e2 = dayRecs[2] ? new Date(dayRecs[2].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+        const s2 = dayRecs[3] ? new Date(dayRecs[3].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+
+        let extraStr = "";
+        if (day <= daysInMonth && e1 && s1 && e2 && s2) {
+            const worked = calculateHoursDiff(e1, s1) + calculateHoursDiff(e2, s2);
+            if (worked > dailyContractedMinutes) {
+                extraStr = formatMinutesToHours(worked - dailyContractedMinutes);
+            }
+        }
+
+        body.push([
+          dayStr,
+          day <= daysInMonth ? e1 : '',
+          day <= daysInMonth ? s1 : '',
+          day <= daysInMonth ? e2 : '',
+          day <= daysInMonth ? s2 : '',
+          '', // RUBRICA
+          day <= daysInMonth ? extraStr : '',
+          ''  // VISTO
+        ]);
+      }
+
+      doc.autoTable({
+        startY: 75,
+        head: [['DIA\nMÊS', 'ENTRADA', 'INÍCIO DO\nINTERVALO', 'FIM DO\nINTERVALO', 'SAÍDA', 'RUBRICA', 'HORA EXTRA', 'VISTO']],
+        body: body,
+        theme: 'grid',
+        headStyles: { 
+            fillColor: [255, 255, 255], 
+            textColor: [0, 0, 0], 
+            lineWidth: 0.1, 
+            fontSize: 6, 
+            halign: 'center', 
+            valign: 'middle', 
+            fontStyle: 'bold' 
+        },
+        styles: { 
+            fontSize: 7, 
+            cellPadding: 0.5, 
+            halign: 'center', 
+            textColor: [0, 0, 0], 
+            lineWidth: 0.1,
+            minCellHeight: 6
+        },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 25 },
+          7: { cellWidth: 15 }
+        },
+        margin: { left: margin, right: margin }
+      });
+
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFontSize(8);
+      doc.text(`Assinatura do empregado doméstico: __________________________________________________________________`, margin, finalY);
+    });
+
+    doc.save(`FOLHA_PONTO_${company?.name || 'EMPRESA'}_${reportFilter.month + 1}_${reportFilter.year}.pdf`);
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!editingPasswordId || !newPasswordValue) return;
     try {
-      await updateDoc(doc(db, "requests", req.id), { status: 'approved' });
-      alert("APROVADO!");
-    } catch (e) { alert("ERRO."); }
+      await updateDoc(doc(db, "employees", editingPasswordId), { password: newPasswordValue });
+      alert("SENHA ATUALIZADA!");
+      setEditingPasswordId(null);
+      setNewPasswordValue('');
+    } catch (e) { alert("ERRO AO ATUALIZAR."); }
   };
 
   if (!isAuthorized) {
@@ -206,13 +278,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   return (
     <div className="flex flex-col h-full space-y-8 animate-in fade-in">
-      {/* Menu Superior */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
         {[
           { id: 'dashboard', label: 'Início', icon: '🏠' },
           { id: 'colaboradores', label: 'Equipe', icon: '👥' },
-          { id: 'aprovacoes', label: 'Solicitações', icon: '✅' },
-          { id: 'saldos', label: 'Fechamento', icon: '📘' },
+          { id: 'aprovacoes', label: 'Pedidos', icon: '✅' },
+          { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
           { id: 'audit', label: 'IA Audit', icon: '⚖️' }
         ].map(tab => (
           <button 
@@ -229,7 +300,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
           <div className="bg-slate-900 p-8 rounded-[44px] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-800">
-            <div className="space-y-1"><p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Gestão Administrativa</p><h3 className="text-white text-lg font-black uppercase">{company?.name}</h3></div>
+            <div className="space-y-1"><p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Painel Administrativo</p><h3 className="text-white text-lg font-black uppercase">{company?.name}</h3></div>
             <div className="bg-slate-800 px-8 py-5 rounded-3xl border border-slate-700 text-center">
               <p className="text-[8px] text-slate-400 font-black uppercase mb-1">CÓDIGO EMPRESA</p>
               <span className="text-white font-mono text-xl font-black">{company?.accessCode || '------'}</span>
@@ -241,7 +312,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <p className="text-4xl font-black text-slate-800">{stats.total}</p>
             </div>
             <div className="bg-white p-8 rounded-[40px] border shadow-sm text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Presentes Hoje</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Ativos Hoje</p>
               <p className="text-4xl font-black text-orange-600">{stats.activeToday}</p>
             </div>
             <div className="bg-white p-8 rounded-[40px] border shadow-sm text-center">
@@ -255,20 +326,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       {activeTab === 'colaboradores' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center px-2">
-            <h3 className="text-sm font-black uppercase text-slate-900">Listagem de Equipe</h3>
+            <h3 className="text-sm font-black uppercase text-slate-900">Gestão de Equipe</h3>
             <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase shadow-lg">+ Novo Cadastro</button>
           </div>
           <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
               <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
-                <tr><th className="p-5">Nome</th><th className="p-5">Matrícula</th><th className="p-5">Senha</th><th className="p-5 text-center">Ações</th></tr>
+                <tr><th className="p-5">Nome</th><th className="p-5">Matrícula</th><th className="p-5">Função</th><th className="p-5 text-center">Ações</th></tr>
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
                 {employees.map(emp => (
                   <tr key={emp.id} className="border-b">
                     <td className="p-5">{emp.name}</td>
                     <td className="p-5 text-slate-400">{emp.matricula}</td>
-                    <td className="p-5 font-mono text-blue-500 text-[10px]">****</td>
+                    <td className="p-5 text-slate-500">{emp.roleFunction || '-'}</td>
                     <td className="p-5 text-center flex justify-center gap-2">
                       <button onClick={() => { setEditingPasswordId(emp.id); setNewPasswordValue(''); }} className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Senha</button>
                       <button onClick={() => onDeleteEmployee(emp.id)} className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Excluir</button>
@@ -285,9 +356,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-black uppercase">Livro de Ponto / Fechamento A4</h3>
-              <button onClick={handleExportPDF} className="bg-orange-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 active:scale-95 transition-all">
-                📥 Baixar PDF Organizado
+              <h3 className="text-sm font-black uppercase">Exportar Folha Ponto (PDF A4)</h3>
+              <button onClick={handleExportPDF} className="bg-orange-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2">
+                📥 Baixar Folha Oficial
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -303,40 +374,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               </select>
             </div>
           </div>
-          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-left min-w-[600px]">
-              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
-                <tr><th className="p-5">Colaborador</th><th className="p-5">Data</th><th className="p-5">Hora</th><th className="p-5">Tipo</th></tr>
-              </thead>
-              <tbody className="text-[10px] font-bold uppercase">
-                {filteredRecords.map(r => (
-                  <tr key={r.id} className="border-b">
-                    <td className="p-5">{r.userName}</td>
-                    <td className="p-5">{new Date(r.timestamp).toLocaleDateString('pt-BR')}</td>
-                    <td className="p-5 font-black">{new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
-                    <td className="p-5">{r.isAdjustment ? <span className="text-orange-600">RH (MANUAL)</span> : 'DIGITAL'}</td>
-                  </tr>
-                ))}
-                {filteredRecords.length === 0 && <tr><td colSpan={4} className="p-16 text-center text-slate-300 font-black uppercase">Nenhum registro para o filtro selecionado</td></tr>}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 
       {activeTab === 'audit' && <ComplianceAudit records={latestRecords} employees={employees} />}
 
-      {/* Modal Cadastro Colaborador */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="bg-white rounded-[44px] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in space-y-4">
+          <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in overflow-y-auto max-h-[90vh] no-scrollbar">
             <h2 className="text-[14px] font-black uppercase text-center mb-6 text-orange-600 tracking-widest">Novo Colaborador</h2>
-            <input type="text" placeholder="NOME COMPLETO" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-            <input type="text" placeholder="MATRÍCULA" value={newEmp.matricula} onChange={e => setNewEmp({...newEmp, matricula: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-            <input type="text" placeholder="CARGO / FUNÇÃO" value={newEmp.roleFunction} onChange={e => setNewEmp({...newEmp, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-            <input type="text" placeholder="CARGA (EX: 08:00H)" value={newEmp.workShift} onChange={e => setNewEmp({...newEmp, workShift: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-            <input type="password" placeholder="SENHA INICIAL" value={newEmp.password} onChange={e => setNewEmp({...newEmp, password: e.target.value})} className="w-full p-4 bg-orange-50 rounded-2xl text-[10px] font-black border border-orange-100 outline-none" />
-            <div className="flex gap-3 pt-4">
+            <div className="space-y-3">
+              <input type="text" placeholder="NOME COMPLETO" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              <div className="flex gap-2">
+                <input type="text" placeholder="MATRÍCULA" value={newEmp.matricula} onChange={e => setNewEmp({...newEmp, matricula: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="text" placeholder="CPF" value={newEmp.cpf} onChange={e => setNewEmp({...newEmp, cpf: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <input type="text" placeholder="CARGO / FUNÇÃO" value={newEmp.roleFunction} onChange={e => setNewEmp({...newEmp, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              <div className="flex gap-2">
+                <input type="text" placeholder="CTPS Nº" value={newEmp.ctpsNumber} onChange={e => setNewEmp({...newEmp, ctpsNumber: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="text" placeholder="SÉRIE" value={newEmp.ctpsSeries} onChange={e => setNewEmp({...newEmp, ctpsSeries: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div className="flex gap-2">
+                <input type="text" placeholder="HORÁRIO (EX: 08:00H)" value={newEmp.workShift} onChange={e => setNewEmp({...newEmp, workShift: e.target.value})} className="flex-[2] p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="number" placeholder="HORAS/SEM" value={newEmp.weeklyHours} onChange={e => setNewEmp({...newEmp, weeklyHours: parseInt(e.target.value)})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <input type="password" placeholder="SENHA DE ACESSO" value={newEmp.password} onChange={e => setNewEmp({...newEmp, password: e.target.value})} className="w-full p-4 bg-orange-50 rounded-2xl text-[10px] font-black border border-orange-100 outline-none" />
+            </div>
+            
+            <div className="flex gap-3 pt-6">
               <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Voltar</button>
               <button onClick={() => { onAddEmployee(newEmp); setShowAddModal(false); }} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Cadastrar</button>
             </div>
@@ -344,7 +409,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         </div>
       )}
 
-      {/* Modal Redefinir Senha */}
       {editingPasswordId && (
         <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
           <div className="bg-white rounded-[44px] w-full max-w-sm p-10 shadow-2xl space-y-4">

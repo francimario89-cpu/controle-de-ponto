@@ -1,4 +1,5 @@
 
+// Definindo interfaces globais para o sistema PontoExato
 export interface Company {
   id: string;
   name: string;
@@ -6,6 +7,10 @@ export interface Company {
   cnpj: string;
   phone?: string;
   address: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   accessCode: string;
   authorizedIP?: string;
   adminEmail: string;
@@ -18,31 +23,8 @@ export interface Company {
     lng: number;
     radius: number;
   };
+  // Adicionando feriados ao perfil da empresa
   holidays?: Holiday[];
-  schedules?: WorkSchedule[];
-  config?: { 
-    overtimePercentage: number;
-    nightShiftPercentage: number;
-    weeklyHours: number;
-    toleranceMinutes: number;
-  };
-}
-
-export interface WorkSchedule {
-  id: string;
-  name: string;
-  weeklyHours: number;
-  toleranceMinutes: number;
-  overtimePercentage: number;
-  nightShiftPercentage: number;
-  description?: string;
-}
-
-export interface Holiday {
-  id: string;
-  date: string;
-  description: string;
-  type: 'feriado' | 'parada';
 }
 
 export interface Employee {
@@ -62,7 +44,14 @@ export interface Employee {
   companyCode: string;
   roleFunction?: string; 
   workShift?: string;
-  scheduleId?: string;
+  weeklyHours?: number;
+  ctpsNumber?: string;
+  ctpsSeries?: string;
+  address?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 }
 
 export interface User {
@@ -80,7 +69,6 @@ export interface User {
   hasFacialRecord?: boolean;
   roleFunction?: string;
   workShift?: string;
-  scheduleId?: string;
 }
 
 export interface PointRecord {
@@ -94,9 +82,9 @@ export interface PointRecord {
   status: 'synchronized' | 'pending';
   matricula?: string;
   digitalSignature: string;
-  type: 'entrada' | 'saida';
+  type: 'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo';
   mood?: string;
-  isAdjustment?: boolean; // Novo campo para destaque visual
+  isAdjustment?: boolean;
 }
 
 export interface AttendanceRequest {
@@ -108,35 +96,17 @@ export interface AttendanceRequest {
   status: 'pending' | 'approved' | 'rejected';
   date: string;
   reason: string;
-  managerFeedback?: string;
-  attachment?: string;
-  attachmentName?: string; // Nome do arquivo anexo
   createdAt: Date;
-  times?: string[];
 }
 
+// Interface para mensagens do Chat do Assistente
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'model';
+  role: 'user' | 'ai';
   text: string;
 }
 
-export interface Feedback {
-  id: string;
-  from: string;
-  to: string;
-  rating: number;
-  comment: string;
-  date: Date;
-}
-
-export interface BenefitCategory {
-  id: string;
-  name: string;
-  balance: number;
-  icon: string;
-}
-
+// Interface para Notas de Insights de RH
 export interface Note {
   id: string;
   title: string;
@@ -144,11 +114,17 @@ export interface Note {
   updatedAt: Date;
 }
 
+// Interface para Resumo Gerado por IA
 export interface NotebookSummary {
   overview: string;
   topics: string[];
-  faqs: {
-    q: string;
-    a: string;
-  }[];
+  faqs: { q: string; a: string }[];
+}
+
+// Interface para Feriados e Eventos
+export interface Holiday {
+  id: string;
+  date: string;
+  description: string;
+  type: 'feriado' | 'evento';
 }

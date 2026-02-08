@@ -18,11 +18,10 @@ const KioskMode: React.FC<KioskModeProps> = ({ employees, onPunch, onExit }) => 
       .then(stream => { if (videoRef.current) videoRef.current.srcObject = stream; });
   }, []);
 
-  const handleManualSimulate = () => {
+  const handlePunchType = (type: 'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo') => {
     if (recognizing || employees.length === 0) return;
     setRecognizing(true);
     
-    // Simula o tempo de processamento da face
     setTimeout(() => {
       const randomEmp = employees[Math.floor(Math.random() * employees.length)];
       setLastMatch(randomEmp);
@@ -39,7 +38,7 @@ const KioskMode: React.FC<KioskModeProps> = ({ employees, onPunch, onExit }) => 
         status: 'synchronized',
         matricula: randomEmp.matricula,
         digitalSignature: Math.random().toString(36).substring(2, 15),
-        type: 'entrada'
+        type: type
       };
       
       onPunch(record);
@@ -48,14 +47,14 @@ const KioskMode: React.FC<KioskModeProps> = ({ employees, onPunch, onExit }) => 
         setRecognizing(false);
         setLastMatch(null);
       }, 3000);
-    }, 1500);
+    }, 1200);
   };
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-between p-8 overflow-hidden">
       <div className="w-full flex justify-between items-center text-white/40">
         <button onClick={onExit} className="text-[10px] font-black uppercase tracking-widest border border-white/10 px-4 py-2 rounded-xl">SAIR</button>
-        <p className="text-[10px] font-black uppercase text-orange-400">MODO TOTEM ATIVO</p>
+        <p className="text-[10px] font-black uppercase text-orange-400">TOTEM CORPORATIVO ATIVO</p>
       </div>
 
       <div className="relative w-full max-w-sm aspect-[3/4] rounded-[60px] overflow-hidden border-8 border-white/5 shadow-2xl bg-black">
@@ -77,21 +76,16 @@ const KioskMode: React.FC<KioskModeProps> = ({ employees, onPunch, onExit }) => 
                  <img src={lastMatch.photo} className="w-full h-full object-cover" />
               </div>
               <h3 className="text-xl font-black text-center mb-1">{lastMatch.name}</h3>
-              <p className="text-emerald-400 font-black uppercase text-[10px] tracking-widest">PONTO REGISTRADO!</p>
+              <p className="text-emerald-400 font-black uppercase text-[10px] tracking-widest">REGISTRADO COM SUCESSO!</p>
            </div>
          )}
       </div>
 
-      <div className="w-full max-w-sm flex flex-col gap-4">
-         <button 
-           onClick={handleManualSimulate}
-           className="w-full py-6 bg-white rounded-[32px] font-black text-slate-900 uppercase text-xs shadow-2xl active:scale-95 transition-all"
-         >
-           {recognizing ? 'RECONHECENDO...' : 'REGISTRAR AGORA'}
-         </button>
-         <p className="text-[8px] text-white/20 text-center uppercase font-black tracking-[0.3em]">
-           RECONHECIMENTO FACIAL v4.2
-         </p>
+      <div className="w-full max-w-sm grid grid-cols-2 gap-3">
+         <button onClick={() => handlePunchType('entrada')} className="py-5 bg-white rounded-3xl font-black text-slate-900 uppercase text-[10px] shadow-xl">Entrada</button>
+         <button onClick={() => handlePunchType('inicio_intervalo')} className="py-5 bg-orange-500 text-white rounded-3xl font-black uppercase text-[10px] shadow-xl">Início Intervalo</button>
+         <button onClick={() => handlePunchType('fim_intervalo')} className="py-5 bg-orange-500 text-white rounded-3xl font-black uppercase text-[10px] shadow-xl">Fim Intervalo</button>
+         <button onClick={() => handlePunchType('saida')} className="py-5 bg-slate-900 text-white rounded-3xl font-black uppercase text-[10px] shadow-xl">Saída</button>
       </div>
     </div>
   );
