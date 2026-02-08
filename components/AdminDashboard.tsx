@@ -295,18 +295,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
            </div>
            {showAddModal && (
              <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
-                <div className="bg-white rounded-[44px] w-full max-w-sm p-10 shadow-2xl space-y-4 animate-in zoom-in duration-300">
-                   <h2 className="text-sm font-black text-orange-600 text-center uppercase tracking-widest">{editingEmpId ? 'Editar Colaborador' : 'Novo Cadastro'}</h2>
-                   <div className="space-y-3">
-                      <input type="text" placeholder="NOME COMPLETO" value={newEmpData.name} onChange={e => setNewEmpData({...newEmpData, name: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black text-center border border-slate-100" />
-                      <input type="text" placeholder="MATRÍCULA" value={newEmpData.matricula} onChange={e => setNewEmpData({...newEmpData, matricula: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black text-center border border-slate-100" />
-                      <input type="text" placeholder="FUNÇÃO / CARGO" value={newEmpData.roleFunction} onChange={e => setNewEmpData({...newEmpData, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black text-center border border-slate-100" />
-                      <input type="text" placeholder="JORNADA (EX: 08:00 - 18:00)" value={newEmpData.workShift} onChange={e => setNewEmpData({...newEmpData, workShift: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black text-center border border-slate-100" />
-                      <input type="password" placeholder="SENHA DE ACESSO" value={newEmpData.password} onChange={e => setNewEmpData({...newEmpData, password: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black text-center border border-slate-100" />
+                <div className="bg-white rounded-[44px] w-full max-w-sm p-10 shadow-2xl space-y-4 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
+                   <h2 className="text-[12px] font-black text-orange-600 text-center uppercase tracking-widest mb-6">{editingEmpId ? 'Editar Colaborador' : 'Novo Cadastro'}</h2>
+                   
+                   <div className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Nome completo</label>
+                        <input type="text" placeholder="Ex: João da Silva" value={newEmpData.name} onChange={e => setNewEmpData({...newEmpData, name: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Número da matrícula</label>
+                        <input type="text" placeholder="Ex: 100200" value={newEmpData.matricula} onChange={e => setNewEmpData({...newEmpData, matricula: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Função / Cargo</label>
+                        <input type="text" placeholder="Ex: Analista Financeiro" value={newEmpData.roleFunction} onChange={e => setNewEmpData({...newEmpData, roleFunction: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Jornada de trabalho</label>
+                        <input type="text" placeholder="Ex: 08:00 às 18:00" value={newEmpData.workShift} onChange={e => setNewEmpData({...newEmpData, workShift: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Senha de acesso</label>
+                        <input type="password" placeholder="Mínimo 4 dígitos" value={newEmpData.password} onChange={e => setNewEmpData({...newEmpData, password: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
+                      </div>
                    </div>
-                   <div className="flex gap-3 pt-4">
+
+                   <div className="flex gap-3 pt-6">
                       <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-400">Voltar</button>
-                      <button onClick={() => { editingEmpId ? onUpdateEmployee(editingEmpId, newEmpData) : onAddEmployee(newEmpData); setShowAddModal(false); }} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Salvar</button>
+                      <button onClick={() => { editingEmpId ? onUpdateEmployee(editingEmpId, newEmpData) : onAddEmployee(newEmpData); setShowAddModal(false); }} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl shadow-orange-100">Salvar Dados</button>
                    </div>
                 </div>
              </div>
