@@ -19,13 +19,20 @@ export const getGeminiResponse = async (prompt: string, records: string[]) => {
   return response.text || "Desculpe, tive um problema ao processar sua consulta.";
 };
 
-export const auditCompliance = async (employeeName: string, records: string[]) => {
+export const auditCompliance = async (employeeName: string, records: string[], workShift: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     contents: {
       parts: [
-        { text: `Analise as marcações de ${employeeName} e verifique se há desvios da CLT (horas extras excessivas, falta de intervalo, falta de descanso interjornada):\n${records.join('\n')}` }
+        { text: `O colaborador ${employeeName} tem uma carga horária contratual de ${workShift}. 
+Analise rigorosamente as seguintes marcações de ponto e determine:
+1. SALDO DE HORAS: O colaborador está com horas faltando ou fazendo horas extras? Calcule aproximadamente.
+2. INTERVALOS: Os intervalos de descanso (mínimo 1h) foram respeitados?
+3. RISCOS CLT: Há irregularidades como falta de descanso interjornada (11h) ou jornadas excessivas?
+
+Marcações:
+${records.join('\n')}` }
       ]
     },
     config: {
@@ -34,19 +41,25 @@ export const auditCompliance = async (employeeName: string, records: string[]) =
         type: Type.OBJECT,
         properties: {
           riskLevel: { type: Type.STRING, description: "Baixo, Médio ou Alto" },
-          summary: { type: Type.STRING, description: "Resumo da auditoria" },
-          alerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de irregularidades encontradas" }
+          summary: { type: Type.STRING, description: "Resumo detalhado focando em saldo de horas e conformidade." },
+          balanceInfo: { type: Type.STRING, description: "Texto específico sobre horas faltantes ou extras detectadas." },
+          alerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de irregularidades ou avisos específicos." }
         },
-        required: ["riskLevel", "summary", "alerts"]
+        required: ["riskLevel", "summary", "balanceInfo", "alerts"]
       },
-      systemInstruction: "Você é um auditor trabalhista rigoroso. Identifique riscos para a empresa com base na CLT.",
+      systemInstruction: "Você é um auditor trabalhista sênior. Sua prioridade é identificar se o colaborador está cumprindo a jornada, se deve horas à empresa ou se a empresa deve horas extras. Seja preciso nos cálculos baseados nas marcações fornecidas.",
     }
   });
   
   try {
     return JSON.parse(response.text?.trim() || "{}");
   } catch {
-    return { riskLevel: "Erro", summary: "Não foi possível auditar.", alerts: [] };
+    return { 
+      riskLevel: "Erro", 
+      summary: "Não foi possível processar a auditoria no momento.", 
+      balanceInfo: "Cálculo indisponível.",
+      alerts: ["Erro na resposta da IA"] 
+    };
   }
 };
 

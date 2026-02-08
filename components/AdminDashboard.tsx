@@ -69,6 +69,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     else { setAuthError(true); setAdminPassAttempt(''); }
   };
 
+  const handleFullBackup = () => {
+    const dataToExport = {
+      backupDate: new Date().toISOString(),
+      company: company,
+      employees: employees,
+      attendanceRecords: latestRecords,
+      rhRequests: requests
+    };
+    
+    const jsonString = JSON.stringify(dataToExport, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `BACKUP_PONTOEXATO_${company?.name?.replace(/\s+/g, '_') || 'EMPRESA'}_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    alert("Backup completo gerado e pronto para download!");
+  };
+
   const handleApproveRequest = async (req: AttendanceRequest) => {
     try {
       await updateDoc(doc(db, "requests", req.id), { status: 'approved' });
@@ -107,7 +126,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6">
-        <div className="w-full max-w-sm bg-white p-10 rounded-[44px] shadow-2xl border text-center space-y-6">
+        <div className="w-full max-sm bg-white p-10 rounded-[44px] shadow-2xl border text-center space-y-6">
            <div className="w-20 h-20 bg-orange-100 rounded-[35px] flex items-center justify-center mx-auto text-orange-600 text-3xl">🔒</div>
            <h2 className="text-sm font-black text-slate-900 uppercase">Gestor RH</h2>
            <input type="password" placeholder="SENHA DE ACESSO" value={adminPassAttempt} onChange={e => setAdminPassAttempt(e.target.value)} className={`w-full p-5 bg-slate-50 rounded-3xl text-[11px] font-black text-center border-2 ${authError ? 'border-red-500' : 'border-transparent'}`} />
@@ -121,14 +140,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     return (
       <div className="space-y-6 animate-in fade-in">
         <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-           <h3 className="text-sm font-black uppercase">Livro de Ponto / Saldos</h3>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+           <div className="flex justify-between items-center">
+             <h3 className="text-sm font-black uppercase">Livro de Ponto / Saldos</h3>
+             <button onClick={handleFullBackup} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest flex items-center gap-2">
+               📥 Backup Geral
+             </button>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
                 <option value="todos">Todos Funcionários</option>
                 {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
               </select>
               <select value={reportFilter.month} onChange={e => setReportFilter({...reportFilter, month: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
                 {Array.from({length: 12}).map((_, i) => <option key={i} value={i}>{new Date(0, i).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()}</option>)}
+              </select>
+              <select value={reportFilter.year} onChange={e => setReportFilter({...reportFilter, year: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
+                {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
            </div>
         </div>
@@ -221,7 +248,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           <button onClick={() => setActiveTab('colaboradores')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'colaboradores' ? 'bg-slate-900 text-white' : 'bg-white border'}`}><span className="text-2xl">👥</span><span className="font-black uppercase text-[10px]">Funcionários</span></button>
           <button onClick={() => setActiveTab('aprovacoes')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 relative ${activeTab === 'aprovacoes' ? 'bg-slate-900 text-white' : 'bg-white border'}`}><span className="text-2xl">✅</span><span className="font-black uppercase text-[10px]">Aprovações</span>{stats.pendingRequests > 0 && <span className="absolute top-4 right-4 bg-orange-500 text-white text-[8px] font-black px-2 py-1 rounded-full animate-pulse">{stats.pendingRequests}</span>}</button>
           <button onClick={() => setActiveTab('saldos')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'saldos' ? 'bg-slate-900 text-white' : 'bg-white border'}`}><span className="text-2xl">📘</span><span className="font-black uppercase text-[10px]">Livro de Ponto</span></button>
-          <button onClick={() => onNavigate('company_profile')} className="p-6 rounded-[35px] text-left bg-white border flex flex-col gap-2"><span className="text-2xl">⚙️</span><span className="font-black uppercase text-[10px]">Configuração</span></button>
+          <button onClick={() => setActiveTab('audit')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'audit' ? 'bg-slate-900 text-white' : 'bg-white border'}`}><span className="text-2xl">⚖️</span><span className="font-black uppercase text-[10px]">Auditoria IA</span></button>
        </div>
     </div>
   );
