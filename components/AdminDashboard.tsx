@@ -142,7 +142,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       
       doc.setFont("helvetica", "normal");
       doc.text(`Nome: ${company?.name || ''}`, margin + 2, 25);
-      doc.text(`CPF: ${company?.cnpj || ''}`, pageWidth / 2 + 20, 25);
+      // Alterado de CPF para CNPJ conforme solicitação
+      doc.text(`CNPJ: ${company?.cnpj || ''}`, pageWidth / 2 + 20, 25);
       doc.text(`Endereço: ${company?.address || ''}`, margin + 2, 29);
       doc.text(`Cidade: ${company?.city || ''}`, margin + 2, 33);
       doc.text(`Estado: ${company?.state || ''}`, pageWidth / 2 - 10, 33);
