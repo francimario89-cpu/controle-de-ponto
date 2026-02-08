@@ -1,4 +1,5 @@
-import { initializeApp, getApp, getApps } from "firebase/app";
+
+import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -11,10 +12,10 @@ const firebaseConfig = {
   measurementId: "G-PLBL6WXZ5N"
 };
 
-// Singleton initialization pattern to prevent multiple app initializations
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Inicialização única do Firebase
+const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-console.log("✅ Firebase Inicializado com Sucesso: " + app.name);
+console.log("✅ Firebase Inicializado com Sucesso");
 
 export { db };

@@ -15,6 +15,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
     socialReason: company?.socialReason || '',
     cnpj: company?.cnpj || '',
     address: company?.address || '',
+    neighborhood: company?.neighborhood || '',
+    city: company?.city || '',
+    state: company?.state || '',
+    zip: company?.zip || '',
     phone: company?.phone || '',
     adminEmail: company?.adminEmail || ''
   });
@@ -36,7 +40,11 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
     { label: "Nome Fantasia", value: formData.name, field: "name" },
     { label: "Razão Social", value: formData.socialReason, field: "socialReason" },
     { label: "CNPJ", value: formData.cnpj, field: "cnpj" },
-    { label: "Endereço", value: formData.address, field: "address" },
+    { label: "Endereço (Rua/Nº)", value: formData.address, field: "address" },
+    { label: "Bairro", value: formData.neighborhood, field: "neighborhood" },
+    { label: "Cidade", value: formData.city, field: "city" },
+    { label: "Estado (UF)", value: formData.state, field: "state" },
+    { label: "CEP", value: formData.zip, field: "zip" },
     { label: "Telefone", value: formData.phone, field: "phone" },
     { label: "E-mail Administrativo", value: formData.adminEmail, field: "adminEmail" }
   ];
@@ -69,7 +77,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
               </label>
               <input 
                 type="text" 
-                value={f.value} 
+                value={(formData as any)[f.field]} 
                 onChange={e => setFormData(prev => ({ ...prev, [f.field]: e.target.value }))}
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-[#0057ff] transition-all shadow-sm"
               />

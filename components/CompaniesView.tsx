@@ -7,7 +7,17 @@ import { collection, query, onSnapshot, addDoc, doc, deleteDoc } from 'firebase/
 const CompaniesView: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newCompany, setNewCompany] = useState({ name: '', cnpj: '', address: '', adminEmail: '', adminPassword: '' });
+  const [newCompany, setNewCompany] = useState({ 
+    name: '', 
+    cnpj: '', 
+    address: '', 
+    neighborhood: '',
+    city: '',
+    state: '',
+    zip: '',
+    adminEmail: '', 
+    adminPassword: '' 
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -35,7 +45,17 @@ const CompaniesView: React.FC = () => {
         config: { overtimePercentage: 50, nightShiftPercentage: 20, weeklyHours: 44, toleranceMinutes: 10 }
       });
       setShowAddModal(false);
-      setNewCompany({ name: '', cnpj: '', address: '', adminEmail: '', adminPassword: '' });
+      setNewCompany({ 
+        name: '', 
+        cnpj: '', 
+        address: '', 
+        neighborhood: '',
+        city: '',
+        state: '',
+        zip: '',
+        adminEmail: '', 
+        adminPassword: '' 
+      });
       alert("EMPRESA ADICIONADA COM SUCESSO!");
     } catch (e) {
       console.error(e);
@@ -89,7 +109,20 @@ const CompaniesView: React.FC = () => {
             <div className="space-y-4">
               <input type="text" placeholder="NOME DA EMPRESA" value={newCompany.name} onChange={e => setNewCompany({...newCompany, name: e.target.value.toUpperCase()})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none border-2 border-transparent focus:border-[#0057ff] dark:text-white" />
               <input type="text" placeholder="CNPJ" value={newCompany.cnpj} onChange={e => setNewCompany({...newCompany, cnpj: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
-              <input type="text" placeholder="ENDEREÇO" value={newCompany.address} onChange={e => setNewCompany({...newCompany, address: e.target.value.toUpperCase()})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
+              
+              <div className="space-y-2">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2">Endereço Completo</p>
+                <input type="text" placeholder="RUA / NÚMERO" value={newCompany.address} onChange={e => setNewCompany({...newCompany, address: e.target.value.toUpperCase()})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
+                <div className="flex gap-2">
+                  <input type="text" placeholder="BAIRRO" value={newCompany.neighborhood} onChange={e => setNewCompany({...newCompany, neighborhood: e.target.value.toUpperCase()})} className="flex-1 p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
+                  <input type="text" placeholder="CEP" value={newCompany.zip} onChange={e => setNewCompany({...newCompany, zip: e.target.value})} className="flex-1 p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
+                </div>
+                <div className="flex gap-2">
+                  <input type="text" placeholder="CIDADE" value={newCompany.city} onChange={e => setNewCompany({...newCompany, city: e.target.value.toUpperCase()})} className="flex-[2] p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
+                  <input type="text" placeholder="UF" maxLength={2} value={newCompany.state} onChange={e => setNewCompany({...newCompany, state: e.target.value.toUpperCase()})} className="flex-1 p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black text-center outline-none dark:text-white" />
+                </div>
+              </div>
+
               <input type="email" placeholder="E-MAIL GESTOR" value={newCompany.adminEmail} onChange={e => setNewCompany({...newCompany, adminEmail: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
               <input type="password" placeholder="SENHA ACESSO" value={newCompany.adminPassword} onChange={e => setNewCompany({...newCompany, adminPassword: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
               
