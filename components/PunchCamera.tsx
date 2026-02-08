@@ -6,9 +6,10 @@ interface PunchCameraProps {
   onCancel: () => void;
   isFirstAccess?: boolean;
   geofenceConfig?: { enabled: boolean; lat: number; lng: number; radius: number };
+  authorizedIP?: string;
 }
 
-const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstAccess, geofenceConfig }) => {
+const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstAccess, geofenceConfig, authorizedIP }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,22 +41,44 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
     return R * c;
   };
 
-  const startValidation = () => {
+  const startValidation = async () => {
     setLoading(true);
     setError(null);
 
+    // 1. Validar IP (WiFi da Empresa)
+    if (authorizedIP) {
+      try {
+        setLivenessStage(-1); // Estágio de Verificação de Rede
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        const userIP = data.ip;
+
+        if (userIP !== authorizedIP) {
+          setError(`REDE NÃO AUTORIZADA: Você deve estar conectado ao WiFi da empresa para registrar o ponto. (Seu IP: ${userIP})`);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        setError("ERRO DE REDE: Não foi possível validar sua conexão com o servidor de IP.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    // 2. Validar Geofence (GPS)
     navigator.geolocation.getCurrentPosition(async (p) => {
       const { latitude, longitude } = p.coords;
 
       if (geofenceConfig?.enabled) {
         const dist = calculateDistance(latitude, longitude, geofenceConfig.lat, geofenceConfig.lng);
         if (dist > geofenceConfig.radius) {
-          setError(`REGISTRO BLOQUEADO: Você está fora da área da empresa (${Math.round(dist)}m de distância).`);
+          setError(`LOCALIZAÇÃO BLOQUEADA: Você está fora da área da empresa (${Math.round(dist)}m de distância).`);
           setLoading(false);
           return;
         }
       }
 
+      // 3. Prova de Vida (Liveness)
       setTimeout(() => setLivenessStage(1), 1000);
       setTimeout(() => setLivenessStage(2), 2500);
       setTimeout(() => {
@@ -65,7 +88,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
           canvas.height = videoRef.current.videoHeight;
           canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
           const data = canvas.toDataURL('image/jpeg', 0.8);
-          onCapture(data, { lat: latitude, lng: longitude, address: isFirstAccess ? "Cadastro Facial" : "Ponto Autorizado via GPS" }, selectedMood);
+          onCapture(data, { lat: latitude, lng: longitude, address: isFirstAccess ? "Cadastro Facial" : "Ponto Autorizado via Rede & GPS" }, selectedMood);
         }
       }, 4000);
 
@@ -123,7 +146,8 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
           <div className="absolute inset-x-0 bottom-12 flex flex-col items-center gap-3 px-6 text-center">
              <div className="px-6 py-3 rounded-2xl backdrop-blur-md border border-white/10 bg-orange-500 text-white scale-110">
                 <p className="text-[11px] font-black uppercase tracking-widest">
-                  {livenessStage === 0 ? 'Verificando GPS...' :
+                  {livenessStage === -1 ? 'Validando WiFi...' :
+                   livenessStage === 0 ? 'Verificando GPS...' :
                    livenessStage === 1 ? 'Pisque lentamente 😉' : 
                    'Sorria para confirmar! 😁'}
                 </p>
@@ -133,8 +157,8 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
 
         {error && (
           <div className="absolute inset-0 bg-red-600/95 backdrop-blur-md flex flex-col items-center justify-center p-10 text-center animate-in zoom-in duration-300">
-            <span className="text-4xl mb-4">📍</span>
-            <p className="text-white font-black uppercase text-xs tracking-widest leading-relaxed mb-6">{error}</p>
+            <span className="text-4xl mb-4">🚫</span>
+            <p className="text-white font-black uppercase text-[10px] tracking-widest leading-relaxed mb-6">{error}</p>
             <button onClick={onCancel} className="bg-white text-red-600 px-6 py-3 rounded-2xl font-black uppercase text-[10px]">Tentar Novamente</button>
           </div>
         )}
@@ -147,12 +171,15 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
             disabled={loading} 
             className={`w-full py-6 rounded-[32px] font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl transition-all ${loading ? 'bg-slate-800 text-slate-500' : 'bg-white text-slate-900 active:scale-95'}`}
           >
-            {loading ? 'Processando...' : (isFirstAccess ? 'Gravar Face Agora' : 'Confirmar e Registrar')}
+            {loading ? 'Validando...' : (isFirstAccess ? 'Gravar Face Agora' : 'Confirmar e Registrar')}
           </button>
         )}
-        <p className="text-white/20 text-[8px] text-center uppercase tracking-[0.3em] leading-relaxed">
-          Registro validado por Geofence e Prova de Vida v4.8
-        </p>
+        <div className="flex flex-col items-center gap-1 opacity-20">
+          <p className="text-white text-[8px] text-center uppercase tracking-[0.3em]">
+             Segurança WiFi & GPS v5.2
+          </p>
+          {authorizedIP && <p className="text-white text-[7px] text-center uppercase">Rede Restrita: {authorizedIP}</p>}
+        </div>
       </div>
 
       <style>{`

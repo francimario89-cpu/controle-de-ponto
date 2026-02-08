@@ -55,7 +55,6 @@ const App: React.FC = () => {
             timestamp: timestamp
           } as PointRecord);
         });
-        // Ordenação robusta em memória para evitar erros de índice no Firebase
         setRecords(recs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
       }, (err) => {
         console.error("Erro ao sincronizar Livro de Ponto:", err);
@@ -175,7 +174,14 @@ const App: React.FC = () => {
         </main>
 
         {!isAdmin && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
-        {!isAdmin && showPunchCamera && <PunchCamera geofenceConfig={company?.geofence} onCapture={handlePunch} onCancel={() => setShowPunchCamera(false)} />}
+        {!isAdmin && showPunchCamera && (
+          <PunchCamera 
+            geofenceConfig={company?.geofence} 
+            authorizedIP={company?.authorizedIP} 
+            onCapture={handlePunch} 
+            onCancel={() => setShowPunchCamera(false)} 
+          />
+        )}
         {!isAdmin && lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
       </div>
     </div>

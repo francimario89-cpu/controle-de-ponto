@@ -20,7 +20,8 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
     state: company?.state || '',
     zip: company?.zip || '',
     phone: company?.phone || '',
-    adminEmail: company?.adminEmail || ''
+    adminEmail: company?.adminEmail || '',
+    authorizedIP: company?.authorizedIP || ''
   });
 
   const handleSave = async () => {
@@ -46,6 +47,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
     { label: "Estado (UF)", value: formData.state, field: "state" },
     { label: "CEP", value: formData.zip, field: "zip" },
     { label: "Telefone", value: formData.phone, field: "phone" },
+    { label: "IP Autorizado (WiFi Empresa)", value: formData.authorizedIP, field: "authorizedIP" },
     { label: "E-mail Administrativo", value: formData.adminEmail, field: "adminEmail" }
   ];
 
@@ -79,8 +81,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
                 type="text" 
                 value={(formData as any)[f.field]} 
                 onChange={e => setFormData(prev => ({ ...prev, [f.field]: e.target.value }))}
+                placeholder={f.field === 'authorizedIP' ? "Ex: 177.100.200.50" : ""}
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-[#0057ff] transition-all shadow-sm"
               />
+              {f.field === 'authorizedIP' && <p className="text-[8px] text-slate-400 uppercase font-bold px-1">Se preenchido, o ponto só poderá ser batido quando o colaborador estiver usando este IP (WiFi da Empresa).</p>}
             </div>
           ))}
         </div>

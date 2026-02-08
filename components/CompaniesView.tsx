@@ -16,7 +16,8 @@ const CompaniesView: React.FC = () => {
     state: '',
     zip: '',
     adminEmail: '', 
-    adminPassword: '' 
+    adminPassword: '',
+    authorizedIP: '' 
   });
   const [loading, setLoading] = useState(false);
 
@@ -54,7 +55,8 @@ const CompaniesView: React.FC = () => {
         state: '',
         zip: '',
         adminEmail: '', 
-        adminPassword: '' 
+        adminPassword: '',
+        authorizedIP: '' 
       });
       alert("EMPRESA ADICIONADA COM SUCESSO!");
     } catch (e) {
@@ -95,6 +97,7 @@ const CompaniesView: React.FC = () => {
               <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">CNPJ: {comp.cnpj || 'Não informado'}</p>
               <div className="mt-2 flex gap-2">
                  <span className="text-[8px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-black uppercase">CÓDIGO: {comp.accessCode}</span>
+                 {comp.authorizedIP && <span className="text-[8px] bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full font-black uppercase">WIFI ATIVO</span>}
               </div>
             </div>
             <button onClick={() => handleDelete(comp.id)} className="p-3 text-slate-300 hover:text-red-500 transition-colors">🗑️</button>
@@ -121,6 +124,11 @@ const CompaniesView: React.FC = () => {
                   <input type="text" placeholder="CIDADE" value={newCompany.city} onChange={e => setNewCompany({...newCompany, city: e.target.value.toUpperCase()})} className="flex-[2] p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
                   <input type="text" placeholder="UF" maxLength={2} value={newCompany.state} onChange={e => setNewCompany({...newCompany, state: e.target.value.toUpperCase()})} className="flex-1 p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black text-center outline-none dark:text-white" />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest px-2">Restrição de Rede (Opcional)</p>
+                <input type="text" placeholder="IP PÚBLICO DO WIFI" value={newCompany.authorizedIP} onChange={e => setNewCompany({...newCompany, authorizedIP: e.target.value})} className="w-full p-5 bg-orange-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none border-2 border-orange-100 focus:border-orange-500 dark:text-white" />
               </div>
 
               <input type="email" placeholder="E-MAIL GESTOR" value={newCompany.adminEmail} onChange={e => setNewCompany({...newCompany, adminEmail: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
