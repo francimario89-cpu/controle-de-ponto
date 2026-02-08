@@ -248,7 +248,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       const finalY = (doc as any).lastAutoTable.finalY + 10;
       doc.setFontSize(8);
-      doc.text(`Assinatura do empregado doméstico: __________________________________________________________________`, margin, finalY);
+      // Removido 'doméstico' conforme solicitado
+      doc.text(`Assinatura do empregado: __________________________________________________________________`, margin, finalY);
     });
 
     doc.save(`FOLHA_PONTO_${company?.name || 'EMPRESA'}_${reportFilter.month + 1}_${reportFilter.year}.pdf`);
