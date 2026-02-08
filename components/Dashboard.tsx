@@ -5,7 +5,7 @@ import { PointRecord, User } from '../types';
 interface DashboardProps {
   onPunchClick: () => void;
   lastPunch?: PointRecord;
-  records?: PointRecord[]; // Adicionado records para cálculo da timeline
+  records?: PointRecord[]; 
   onNavigate: (v: any) => void;
   user: User;
 }
@@ -18,7 +18,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
     return () => clearInterval(timer);
   }, []);
 
-  // Lógica para calcular a linha do tempo do dia
   const timeline = useMemo(() => {
     const today = new Date().toDateString();
     const todayRecords = records
@@ -43,7 +42,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
   }, [records]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-24 overflow-y-auto no-scrollbar">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-36 overflow-y-auto no-scrollbar">
       <div className="space-y-2">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, {user.name.split(' ')[0]} 👋</p>
         <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Ponto</h2>

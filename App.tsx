@@ -16,6 +16,7 @@ import AiAssistant from './components/AiAssistant';
 import ComplianceAudit from './components/ComplianceAudit';
 import Profile from './components/Profile';
 import CompanyProfile from './components/CompanyProfile';
+import BottomNav from './components/BottomNav';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -93,7 +94,7 @@ const App: React.FC = () => {
       digitalSignature: signature,
       type: 'entrada' as const,
       companyCode: user.companyCode,
-      mood: mood // Humor salvo aqui
+      mood: mood
     };
 
     try {
@@ -122,7 +123,7 @@ const App: React.FC = () => {
   if (!user) return <Login onLogin={handleLogin} />;
 
   return (
-    <div className="flex h-screen w-screen bg-white text-slate-900 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 text-slate-900 overflow-hidden font-sans">
       <Sidebar 
         user={user} 
         company={company} 
@@ -132,25 +133,29 @@ const App: React.FC = () => {
         activeView={activeView}
       />
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="md:hidden p-4 flex justify-between items-center border-b bg-white z-30">
-           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-           </button>
-           <h1 className="text-sm font-black tracking-tighter uppercase">Ponto<span className="text-orange-600">Exato</span></h1>
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <header className="md:hidden p-4 flex justify-between items-center bg-white dark:bg-slate-900 z-30">
+           {isAdmin ? (
+             <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+             </button>
+           ) : (
+             <div className="w-10"></div>
+           )}
+           <h1 className="text-sm font-black tracking-tighter uppercase dark:text-white">Ponto<span className="text-orange-600">Exato</span></h1>
            <div className="w-10"></div>
         </header>
 
         {isAdmin && (
-          <header className="hidden md:flex p-6 justify-between items-center bg-white border-b px-10">
+          <header className="hidden md:flex p-6 justify-between items-center bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-10">
              <div>
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Módulo Administrativo</p>
-               <h2 className="text-xl font-black tracking-tighter uppercase text-slate-800">
+               <h2 className="text-xl font-black tracking-tighter uppercase text-slate-800 dark:text-white">
                  Gestão de RH - {company?.name}
                </h2>
              </div>
              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 text-xl">🛡️</div>
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-800 flex items-center justify-center text-orange-600 text-xl">🛡️</div>
              </div>
           </header>
         )}
@@ -187,6 +192,8 @@ const App: React.FC = () => {
             {activeView === 'company_profile' && <CompanyProfile company={company} />}
           </div>
         </main>
+
+        {!isAdmin && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
 
         {!isAdmin && showPunchCamera && <PunchCamera geofenceConfig={company?.geofence} onCapture={handlePunch} onCancel={() => setShowPunchCamera(false)} />}
         {!isAdmin && lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
