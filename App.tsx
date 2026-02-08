@@ -25,11 +25,6 @@ import KioskMode from './components/KioskMode';
 import HolidaysView from './components/HolidaysView';
 import Profile from './components/Profile';
 
-/**
- * Main application component.
- * Handles authentication state, data synchronization with Firestore,
- * and routing between different views.
- */
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('fortime_user');
@@ -44,7 +39,6 @@ const App: React.FC = () => {
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Synchronize company, employees and point records from Firestore
   useEffect(() => {
     if (user?.companyCode) {
       const unsubCompany = onSnapshot(doc(db, "companies", user.companyCode), (snapshot) => {
@@ -133,11 +127,13 @@ const App: React.FC = () => {
     );
   }
 
+  // Verifica se a visualização atual é de administração para expandir o layout
+  const isAdminView = ['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos', 'audit', 'company_profile'].includes(activeView);
+
   return (
     <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
-      <div className="flex flex-col h-full w-full max-w-5xl bg-white dark:bg-slate-900 md:rounded-[40px] shadow-2xl overflow-hidden relative border dark:border-slate-800">
+      <div className={`flex flex-col h-full w-full bg-white dark:bg-slate-900 shadow-2xl overflow-hidden relative border dark:border-slate-800 ${isAdminView ? 'max-w-7xl md:rounded-[40px]' : 'max-w-5xl md:rounded-[40px]'}`}>
         
-        {/* Mobile Header for quick access and navigation trigger */}
         <header className="md:hidden p-4 flex justify-between items-center border-b dark:border-slate-800 bg-white dark:bg-slate-900 z-30">
            <button onClick={() => setIsSidebarOpen(true)} className="p-2">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -156,13 +152,13 @@ const App: React.FC = () => {
         />
 
         <main className="flex-1 overflow-y-auto no-scrollbar pb-10">
-          <div className="max-w-md mx-auto w-full h-full">
+          <div className={`mx-auto w-full h-full ${isAdminView ? 'px-4 md:px-10' : 'max-w-md'}`}>
             {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
             {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
             {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
             {activeView === 'requests' && <Requests />}
             {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
-            {activeView === 'profile' && <Profile user={user} company={company} />}
+            {activeView === 'profile' && <Profile user={user} company={company} onLogout={handleLogout} />}
             {activeView === 'audit' && <ComplianceAudit records={records} employees={employees} />}
             {activeView === 'companies' && <CompaniesView />}
             {activeView === 'company_profile' && <CompanyProfile company={company} />}

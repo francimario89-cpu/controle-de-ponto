@@ -5,9 +5,10 @@ import { User, Company } from '../types';
 interface ProfileProps {
   user: User;
   company?: Company | null;
+  onLogout: () => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ user, company }) => {
+const Profile: React.FC<ProfileProps> = ({ user, company, onLogout }) => {
   const FieldLine = ({ icon, label, value }: { icon: string, label: string, value: string }) => (
     <div className="flex items-center justify-between py-4 border-b border-slate-100 dark:border-slate-800">
       <div className="flex items-center gap-2">
@@ -43,13 +44,23 @@ const Profile: React.FC<ProfileProps> = ({ user, company }) => {
           <FieldLine icon="🏢" label="Empresa" value={user.companyName || company?.name || '-'} />
           <FieldLine icon="✉️" label="E-mail" value={user.email || '-'} />
         </div>
-      </div>
 
-      <div className="p-6 bg-white dark:bg-slate-950 border-t dark:border-slate-900 fixed bottom-0 left-0 right-0 max-w-lg mx-auto">
-        <button className="w-full py-5 bg-primary text-white rounded-[28px] font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all">
-          Solicitar Alteração
-        </button>
+        <div className="p-6 space-y-3">
+           <button className="w-full py-5 bg-primary text-white rounded-[28px] font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all">
+             Solicitar Alteração
+           </button>
+           <button 
+             onClick={() => { if(confirm("Deseja realmente sair do aplicativo?")) onLogout(); }}
+             className="w-full py-5 bg-slate-100 dark:bg-slate-800 text-red-500 rounded-[28px] font-black text-xs uppercase tracking-[0.2em] active:scale-95 transition-all"
+           >
+             Sair do Aplicativo
+           </button>
+        </div>
       </div>
+      
+      <p className="p-6 text-center text-[8px] font-black text-slate-300 uppercase tracking-widest">
+        ForTime PRO - Versão 4.0
+      </p>
     </div>
   );
 };
