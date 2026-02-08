@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
 import { AttendanceRequest } from '../types';
 
 const Requests: React.FC = () => {
@@ -23,13 +23,15 @@ const Requests: React.FC = () => {
   const user = userStr ? JSON.parse(userStr) : null;
 
   useEffect(() => {
-    if (!user?.companyCode) return;
+    if (!user?.companyCode || !user?.matricula) return;
+    
     const q = query(
       collection(db, "requests"), 
       where("companyCode", "==", user.companyCode),
       where("matricula", "==", user.matricula),
       orderBy("createdAt", "desc")
     );
+
     const unsub = onSnapshot(q, (snap) => {
       const reqs: any[] = [];
       snap.forEach(d => reqs.push({ id: d.id, ...d.data() }));
@@ -49,6 +51,10 @@ const Requests: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 1024 * 1024) { // Limite de 1MB para Firestore
+        alert("O arquivo é muito grande. Por favor, envie uma foto menor ou compactada.");
+        return;
+      }
       setAttachmentName(file.name);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -59,7 +65,10 @@ const Requests: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!user) return;
+    if (!user || !user.companyCode) {
+      alert("Erro de autenticação. Por favor, saia e entre novamente.");
+      return;
+    }
     setLoading(true);
     try {
       await addDoc(collection(db, "requests"), {
@@ -73,14 +82,15 @@ const Requests: React.FC = () => {
         status: 'pending',
         attachment: attachmentData,
         attachmentName: attachmentName,
-        createdAt: new Date()
+        createdAt: serverTimestamp()
       });
       setShowCreateMode(false);
       setAttachmentName(null);
       setAttachmentData(null);
-      alert("Solicitação enviada para o RH com sucesso!");
+      alert("Enviado! Sua solicitação agora está 'Em análise' pelo RH.");
     } catch (e) {
-      alert("Erro ao enviar solicitação.");
+      console.error(e);
+      alert("Erro ao enviar. Verifique sua conexão e tente novamente.");
     }
     setLoading(false);
   };
@@ -94,14 +104,14 @@ const Requests: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="flex-1 text-center font-black text-slate-800 dark:text-white mr-10 text-sm uppercase">Enviar Justificativa</h1>
+          <h1 className="flex-1 text-center font-black text-slate-800 dark:text-white mr-10 text-sm uppercase">Justificativa RH</h1>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar pb-32">
           <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-[28px] flex items-center gap-4 border border-slate-100 dark:border-slate-700">
             <div className="text-xl">📅</div>
             <div className="flex-1">
-               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Data da Ocorrência</p>
+               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Data Referente</p>
                <input 
                  type="date" 
                  value={date} 
@@ -117,7 +127,7 @@ const Requests: React.FC = () => {
               className={`flex-1 p-5 rounded-[30px] border-2 flex flex-col items-center gap-2 transition-all ${type === 'inclusão' ? 'border-orange-500 bg-orange-500 text-white shadow-lg' : 'border-slate-100 bg-slate-50 text-slate-400 dark:border-slate-800 dark:bg-slate-800'}`}
             >
               <span className="text-xl">📝</span>
-              <span className="text-[10px] font-black uppercase">Ajuste de Ponto</span>
+              <span className="text-[10px] font-black uppercase">Ajuste Ponto</span>
             </button>
             <button 
               onClick={() => setType('abono')}
@@ -130,7 +140,7 @@ const Requests: React.FC = () => {
 
           {type === 'inclusão' && (
             <div className="space-y-4">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Horários desejados</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Horários a serem incluídos</p>
               <div className="grid grid-cols-2 gap-3">
                 {times.map((t, idx) => (
                   <div key={idx} className="flex bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
@@ -151,7 +161,7 @@ const Requests: React.FC = () => {
           )}
 
           <div className="space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Motivo</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Motivo / Justificativa</p>
             <select 
               value={reason}
               onChange={e => setReason(e.target.value)}
@@ -161,6 +171,7 @@ const Requests: React.FC = () => {
               <option value="Problemas Técnicos">Problemas Técnicos</option>
               <option value="Trabalho Externo">Trabalho Externo</option>
               <option value="Atestado Médico">Atestado Médico</option>
+              <option value="Consulta">Consulta / Exame</option>
               <option value="Outros">Outros</option>
             </select>
           </div>
@@ -179,10 +190,10 @@ const Requests: React.FC = () => {
             >
               <span className="text-lg">{attachmentName ? '✅' : '📎'}</span>
               <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[200px]">
-                {attachmentName || 'Anexar Documento / Atestado'}
+                {attachmentName || 'Anexar Comprovante / Atestado'}
               </span>
             </button>
-            {attachmentData && <p className="text-[7px] text-center font-black text-emerald-600 uppercase">Arquivo carregado com sucesso</p>}
+            {attachmentData && <p className="text-[7px] text-center font-black text-emerald-600 uppercase">Documento carregado</p>}
           </div>
 
           <div className="flex gap-4 mt-6">
@@ -203,8 +214,8 @@ const Requests: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
       <header className="px-4 py-4 border-b dark:border-slate-800 flex flex-col items-center">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Meus Pedidos</p>
-        <h1 className="font-black text-slate-800 dark:text-white text-sm uppercase">Justificativas</h1>
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Status RH</p>
+        <h1 className="font-black text-slate-800 dark:text-white text-sm uppercase">Meus Pedidos</h1>
         
         <div className="flex bg-white dark:bg-slate-800 p-1 rounded-2xl w-full mt-4 border dark:border-slate-700 shadow-sm">
           {(['pending', 'approved', 'rejected'] as const).map(t => (
@@ -229,30 +240,25 @@ const Requests: React.FC = () => {
                  </div>
                  <div>
                     <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">{req.type === 'atestado' ? 'Atestado' : 'Ajuste de Ponto'}</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Data: {new Date(req.date).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Ref: {new Date(req.date).toLocaleDateString('pt-BR')}</p>
                  </div>
                </div>
                <div className={`px-3 py-1 rounded-full text-[7px] font-black uppercase ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : req.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
-                 {req.status === 'approved' ? 'Aprovado' : req.status === 'rejected' ? 'Recusado' : 'Aguardando'}
+                 {req.status === 'approved' ? 'Aprovado' : req.status === 'rejected' ? 'Recusado' : 'Em análise'}
                </div>
             </div>
             
             <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl">
                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Justificativa:</p>
                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 italic">"{req.reason}"</p>
-               {req.attachmentName && (
-                 <div className="mt-2 flex items-center gap-2 text-[8px] font-black text-blue-500 uppercase">
-                    <span>📎 Arquivo:</span> {req.attachmentName}
-                 </div>
-               )}
             </div>
           </div>
         ))}
 
-        {filteredRequests.length === 0 && (
+        {filteredRequests.length === 0 && (activeTab === 'pending') && (
           <div className="py-20 text-center opacity-30 flex flex-col items-center">
-             <span className="text-4xl mb-4">📂</span>
-             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nenhum registro encontrado</p>
+             <span className="text-4xl mb-4">✨</span>
+             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tudo em dia!</p>
           </div>
         )}
       </div>
