@@ -150,10 +150,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       doc.text(`CEP: ${company?.zip || ''}`, pageWidth / 2 + 20, 33);
       doc.text(`Bairro: ${company?.neighborhood || ''}`, margin + 2, 37);
 
-      // BOX 2: DADOS DO EMPREGADO
+      // BOX 2: DADOS DO COLABORADOR
       doc.rect(margin, 41, contentWidth, 30);
       doc.setFont("helvetica", "bold");
-      doc.text("DADOS DO EMPREGADO", pageWidth / 2, 45, { align: 'center' });
+      doc.text("DADOS DO COLABORADOR", pageWidth / 2, 45, { align: 'center' });
       doc.line(margin, 47, pageWidth - margin, 47);
       
       doc.setFont("helvetica", "normal");
@@ -248,8 +248,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       const finalY = (doc as any).lastAutoTable.finalY + 10;
       doc.setFontSize(8);
-      // Removido 'doméstico' conforme solicitado
-      doc.text(`Assinatura do empregado: __________________________________________________________________`, margin, finalY);
+      // Removido 'doméstico' e alterado para 'colaborador' conforme solicitado
+      doc.text(`Assinatura do colaborador: __________________________________________________________________`, margin, finalY);
     });
 
     doc.save(`FOLHA_PONTO_${company?.name || 'EMPRESA'}_${reportFilter.month + 1}_${reportFilter.year}.pdf`);
@@ -318,7 +318,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <p className="text-4xl font-black text-orange-600">{stats.activeToday}</p>
             </div>
             <div className="bg-white p-8 rounded-[40px] border shadow-sm text-center">
-              <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Solicitações</p>
+              <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Solicitações</p>
               <p className="text-4xl font-black text-blue-600">{stats.pendingRequests}</p>
             </div>
           </div>
@@ -365,7 +365,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
-                <option value="todos">Todos Funcionários</option>
+                <option value="todos">Todos Colaboradores</option>
                 {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
               </select>
               <select value={reportFilter.month} onChange={e => setReportFilter({...reportFilter, month: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
