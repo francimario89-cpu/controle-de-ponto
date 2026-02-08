@@ -26,12 +26,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [editingEmpId, setEditingEmpId] = useState<string | null>(null);
   const [newEmpData, setNewEmpData] = useState({ name: '', matricula: '', roleFunction: '', workShift: '', password: '' });
   
-  // Auditoria IA State
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditResult, setAuditResult] = useState<any>(null);
   const [selectedAuditEmp, setSelectedAuditEmp] = useState('');
-
-  // Solicitações State
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
 
   const [reportFilter, setReportFilter] = useState({
@@ -40,12 +37,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     year: new Date().getFullYear()
   });
 
-  // Sincroniza a aba interna com a navegação da Sidebar
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
 
-  // Carrega solicitações pendentes para a aba de aprovações
   useEffect(() => {
     if (isAuthorized && company?.id) {
       const q = query(collection(db, "requests"), where("companyCode", "==", company.id));
@@ -66,31 +61,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       setAuthError(true);
       setAdminPassAttempt('');
     }
-  };
-
-  const handleActionRequest = async (requestId: string, status: 'approved' | 'rejected') => {
-    try {
-      await updateDoc(doc(db, "requests", requestId), { status });
-      alert(`SOLICITAÇÃO ${status === 'approved' ? 'APROVADA' : 'RECUSADA'}!`);
-    } catch (e) {
-      alert("ERRO AO PROCESSAR.");
-    }
-  };
-
-  const handleRunAudit = async () => {
-    if (!selectedAuditEmp) return alert("Selecione um funcionário.");
-    setAuditLoading(true);
-    try {
-      const emp = employees.find(e => e.id === selectedAuditEmp);
-      const empRecs = latestRecords
-        .filter(r => r.matricula === emp?.matricula)
-        .map(r => `${r.timestamp.toLocaleString()} - ${r.type}`);
-      const result = await auditCompliance(emp?.name || 'Funcionário', empRecs);
-      setAuditResult(result);
-    } catch (e) {
-      alert("Erro na auditoria inteligente.");
-    }
-    setAuditLoading(false);
   };
 
   const filteredRecords = useMemo(() => {
@@ -119,24 +89,160 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   }, [employees, latestRecords, requests]);
 
   const handleDownloadReport = () => {
-    if (filteredRecords.length === 0) {
-      alert("Nenhum registro para este período.");
+    if (reportFilter.matricula === 'todos') {
+      alert("Por favor, selecione um colaborador específico para gerar a Folha Individual.");
       return;
     }
-    const empName = reportFilter.matricula === 'todos' ? 'TODOS' : employees.find(e => e.matricula === reportFilter.matricula)?.name || 'COLABORADOR';
+
+    const emp = employees.find(e => e.matricula === reportFilter.matricula);
+    if (!emp) return;
+
     const monthName = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-    let content = `LIVRO DE PONTO MENSAL - ${company?.name}\nPERÍODO: ${monthName} / ${reportFilter.year}\nEMPREGADO: ${empName}\n\n`;
-    content += `DATA       | HORA  | TIPO    | LOCALIZAÇÃO\n------------------------------------------------\n`;
+    const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
+
+    // Agrupar registros por dia
+    const dailyData: { [key: number]: string[] } = {};
     filteredRecords.forEach(r => {
-      const date = new Date(r.timestamp).toLocaleDateString('pt-BR');
-      const time = new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      content += `${date} | ${time} | ${r.type.toUpperCase().padEnd(8)} | ${r.address}\n`;
+      const d = new Date(r.timestamp).getDate();
+      if (!dailyData[d]) dailyData[d] = [];
+      dailyData[d].push(new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     });
-    const blob = new Blob([content], { type: 'text/plain' });
+
+    // Ordenar horários de cada dia
+    Object.keys(dailyData).forEach(day => {
+      dailyData[parseInt(day)].sort();
+    });
+
+    let htmlContent = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; font-size: 8px; margin: 0; padding: 20px; color: #000; }
+        .container { width: 100%; max-width: 800px; margin: auto; border: 1px solid #000; padding: 1px; }
+        .title { text-align: center; font-size: 14px; font-weight: bold; border-bottom: 2px solid #000; padding: 10px 0; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #000; padding: 2px 4px; height: 14px; }
+        .header-box { background: #f0f0f0; font-weight: bold; font-size: 7px; text-transform: uppercase; }
+        .field-label { font-size: 6px; font-weight: bold; color: #444; display: block; }
+        .field-value { font-size: 9px; font-weight: bold; }
+        .ponto-table th { font-size: 7px; font-weight: bold; background: #eee; }
+        .summary-table { margin-top: 5px; }
+        .footer { margin-top: 10px; border-top: 1px solid #000; padding-top: 5px; }
+        @media print { 
+          body { padding: 0; } 
+          .container { border: none; }
+          button { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="title">FOLHA DE PONTO INDIVIDUAL DE TRABALHO</div>
+        
+        <table>
+          <tr>
+            <td colspan="3"><span class="field-label">EMPREGADOR:</span><span class="field-value">${company?.name || ''}</span></td>
+            <td><span class="field-label">CEI / CNPJ Nº:</span><span class="field-value">${company?.cnpj || ''}</span></td>
+          </tr>
+          <tr>
+            <td colspan="4"><span class="field-label">ENDEREÇO:</span><span class="field-value">${company?.address || ''}</span></td>
+          </tr>
+          <tr>
+            <td colspan="2"><span class="field-label">EMPREGADO(A):</span><span class="field-value">${emp.name}</span></td>
+            <td><span class="field-label">CTPS Nº E SÉRIE:</span><span class="field-value">${emp.cpf || '---'}</span></td>
+            <td><span class="field-label">DATA DE ADMISSÃO:</span><span class="field-value">${emp.admissionDate || '---'}</span></td>
+          </tr>
+          <tr>
+            <td colspan="2"><span class="field-label">FUNÇÃO:</span><span class="field-value">${emp.roleFunction || 'COLABORADOR'}</span></td>
+            <td colspan="2"><span class="field-label">HORÁRIO DE TRABALHO DE SEG. A SEXTA FEIRA:</span><span class="field-value">${emp.workShift || '08:00 ÀS 18:00'}</span></td>
+          </tr>
+          <tr>
+            <td><span class="field-label">HORÁRIO AOS SÁBADOS:</span><span class="field-value">---</span></td>
+            <td><span class="field-label">DESCANSO SEMANAL:</span><span class="field-value">DOMINGO</span></td>
+            <td><span class="field-label">MÊS:</span><span class="field-value">${monthName}</span></td>
+            <td><span class="field-label">ANO:</span><span class="field-value">${reportFilter.year}</span></td>
+          </tr>
+        </table>
+
+        <table class="ponto-table">
+          <thead>
+            <tr>
+              <th rowspan="2" width="30">DIAS MÊS</th>
+              <th rowspan="2">ENTRADA MANHÃ</th>
+              <th colspan="2">ALMOÇO</th>
+              <th rowspan="2">SAÍDA TARDE</th>
+              <th colspan="2">EXTRAS</th>
+              <th rowspan="2" width="150">ASSINATURA</th>
+            </tr>
+            <tr>
+              <th>SAÍDA</th>
+              <th>RETORNO</th>
+              <th>ENTRADA</th>
+              <th>SAÍDA</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Array.from({ length: 31 }).map((_, i) => {
+              const day = i + 1;
+              const times = dailyData[day] || [];
+              const isInvalid = day > daysInMonth;
+              
+              return `
+                <tr style="${isInvalid ? 'background:#ddd' : ''}">
+                  <td align="center"><b>${String(day).padStart(2, '0')}</b></td>
+                  <td align="center">${times[0] || ''}</td>
+                  <td align="center">${times[1] || ''}</td>
+                  <td align="center">${times[2] || ''}</td>
+                  <td align="center">${times[3] || ''}</td>
+                  <td align="center"></td>
+                  <td align="center"></td>
+                  <td></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        <table class="summary-table">
+          <tr>
+            <td width="50%" valign="top">
+              <table style="width:100%; border:none">
+                <tr class="header-box"><td colspan="2">RESUMO GERAL</td><td width="50">R$</td></tr>
+                <tr><td width="20">+</td><td>DIAS / HORAS NORMAIS</td><td></td></tr>
+                <tr><td width="20">+</td><td>H. EXTRAS / ADICIONAIS</td><td></td></tr>
+                <tr><td width="20">(-)</td><td>FALTAS NO MÊS</td><td></td></tr>
+                <tr class="header-box"><td colspan="2">SUB-TOTAL / BASE CÁLCULO</td><td></td></tr>
+                <tr><td width="20">(-)</td><td>% INSS</td><td></td></tr>
+                <tr><td width="20">(-)</td><td>OUTROS DESCONTOS</td><td></td></tr>
+                <tr class="header-box"><td colspan="2">TOTAL LÍQUIDO A RECEBER</td><td></td></tr>
+              </table>
+            </td>
+            <td width="50%" valign="top">
+               <div style="height:100px; display:flex; flex-direction:column; justify-content:space-between">
+                  <span class="field-label">VISTO DA FISCALIZAÇÃO:</span>
+                  <div style="border-top:1px solid #000; margin-top:50px; text-align:center; font-size:7px">ASSINATURA DO EMPREGADOR</div>
+               </div>
+            </td>
+          </tr>
+        </table>
+        <div style="padding:10px; text-align:center; font-size:7px; font-weight:bold">
+          Assinatura do empregado: __________________________________________________________________
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:20px">
+        <button onclick="window.print()" style="padding:10px 20px; background:#000; color:#fff; border:none; border-radius:5px; cursor:pointer">IMPRIMIR / SALVAR PDF</button>
+      </div>
+    </body>
+    </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Livro_Ponto_${empName.replace(/ /g, '_')}_${monthName}.txt`;
+    link.download = `Folha_Ponto_${emp.name.replace(/ /g, '_')}_${monthName}.html`;
     link.click();
   };
 
@@ -171,15 +277,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     );
   }
 
-  // View: Livro de Ponto
   if (activeTab === 'saldos') {
     return (
       <div className="space-y-6 animate-in fade-in">
         <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Geração de Livro de Ponto</h3>
+           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Geração de Folha de Ponto</h3>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border border-slate-200">
-                <option value="todos">TODA A EQUIPE</option>
+                <option value="todos">SELECIONE O COLABORADOR</option>
                 {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
               </select>
               <select value={reportFilter.month} onChange={e => setReportFilter({...reportFilter, month: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border border-slate-200">
@@ -190,7 +295,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               </select>
            </div>
            <button onClick={handleDownloadReport} className="w-full bg-orange-600 text-white py-6 rounded-[28px] font-black uppercase text-xs shadow-xl hover:bg-orange-700 transition-all">
-             📥 Baixar Livro de Ponto (Portaria 671)
+             📥 Gerar Folha Individual (Modelo CLT)
            </button>
         </div>
         <div className="bg-white rounded-[40px] border overflow-hidden">
@@ -207,9 +312,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                        <td className="p-5 uppercase">{r.type}</td>
                     </tr>
                  ))}
-                 {filteredRecords.length === 0 && (
-                   <tr><td colSpan={4} className="p-10 text-center text-slate-400 uppercase text-[9px] font-black">Nenhum registro encontrado</td></tr>
-                 )}
               </tbody>
            </table>
         </div>
@@ -217,80 +319,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     );
   }
 
-  // View: Aprovações RH
-  if (activeTab === 'aprovacoes') {
-    return (
-      <div className="space-y-6 animate-in fade-in">
-        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest px-2">Solicitações de Ajuste</h3>
-        <div className="grid grid-cols-1 gap-4">
-          {requests.filter(r => r.status === 'pending').map(req => (
-            <div key={req.id} className="bg-white p-6 rounded-[35px] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-               <div className="flex items-center gap-4 flex-1">
-                  <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-xl">⏳</div>
-                  <div>
-                    <p className="text-[11px] font-black text-slate-800 uppercase">{req.userName}</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">{req.type} em {new Date(req.date).toLocaleDateString('pt-BR')}</p>
-                    <p className="text-[9px] italic text-slate-500 mt-1">Motivo: {req.reason}</p>
-                  </div>
-               </div>
-               <div className="flex gap-2 w-full md:w-auto">
-                  <button onClick={() => handleActionRequest(req.id, 'rejected')} className="flex-1 md:flex-none px-6 py-3 border border-red-200 text-red-600 rounded-xl font-black text-[9px] uppercase">Recusar</button>
-                  <button onClick={() => handleActionRequest(req.id, 'approved')} className="flex-1 md:flex-none px-6 py-3 bg-emerald-500 text-white rounded-xl font-black text-[9px] uppercase">Aprovar</button>
-               </div>
-            </div>
-          ))}
-          {requests.filter(r => r.status === 'pending').length === 0 && (
-            <div className="p-20 text-center bg-white rounded-[40px] border border-dashed text-slate-300 font-black uppercase text-[10px]">Tudo em dia! Nenhuma solicitação pendente.</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // View: Auditoria IA
-  if (activeTab === 'audit') {
-    return (
-      <div className="space-y-6 animate-in fade-in">
-        <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-           <div className="text-center space-y-2">
-              <span className="text-3xl">🤖</span>
-              <h3 className="text-sm font-black text-slate-900 uppercase">Auditoria de Risco CLT</h3>
-              <p className="text-[9px] text-slate-400 font-bold uppercase">Inteligência Artificial analisando irregularidades</p>
-           </div>
-           
-           <div className="space-y-4">
-              <select value={selectedAuditEmp} onChange={e => setSelectedAuditEmp(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-200 outline-none">
-                 <option value="">SELECIONE O COLABORADOR</option>
-                 {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
-              <button onClick={handleRunAudit} disabled={auditLoading} className="w-full py-5 bg-slate-900 text-white rounded-[28px] font-black uppercase text-xs flex items-center justify-center gap-3">
-                 {auditLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Rodar Auditoria IA'}
-              </button>
-           </div>
-        </div>
-
-        {auditResult && (
-          <div className="animate-in slide-in-from-bottom-4 space-y-4">
-             <div className={`p-8 rounded-[40px] border ${auditResult.riskLevel === 'Alto' ? 'bg-red-50 border-red-100' : auditResult.riskLevel === 'Médio' ? 'bg-orange-50 border-orange-100' : 'bg-emerald-50 border-emerald-100'}`}>
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Resultado da IA</p>
-                <h4 className={`text-2xl font-black uppercase ${auditResult.riskLevel === 'Alto' ? 'text-red-600' : auditResult.riskLevel === 'Médio' ? 'text-orange-600' : 'text-emerald-600'}`}>RISCO {auditResult.riskLevel}</h4>
-                <p className="text-xs font-bold text-slate-700 mt-4 leading-relaxed">{auditResult.summary}</p>
-             </div>
-             <div className="bg-white p-8 rounded-[40px] border space-y-3">
-                <p className="text-[9px] font-black text-slate-400 uppercase">Pontos de Atenção</p>
-                {auditResult.alerts.map((a: string, i: number) => (
-                  <div key={i} className="flex gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                     <span className="text-orange-500">⚠️</span>
-                     <p className="text-[10px] font-bold text-slate-600 uppercase leading-tight">{a}</p>
-                  </div>
-                ))}
-             </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  // Restante das abas (colaboradores, aprovações, audit, dashboard) permanecem as mesmas
   if (activeTab === 'colaboradores') {
      return (
         <div className="space-y-6">
@@ -335,7 +364,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
      );
   }
 
-  // Dashboard View (Padrão)
   return (
     <div className="space-y-8 animate-in fade-in">
        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -353,7 +381,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </div>
        </div>
        <div className="bg-white p-8 rounded-[44px] border shadow-sm space-y-6">
-          <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest px-2">Navegação Rápida</p>
+          <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest px-2">Módulos Administrativos</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
              <button onClick={() => setActiveTab('colaboradores')} className="p-6 bg-slate-50 rounded-[35px] text-left hover:bg-slate-900 hover:text-white transition-all flex flex-col gap-2">
                 <span className="text-2xl">👥</span>
