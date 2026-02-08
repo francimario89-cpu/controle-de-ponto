@@ -13,7 +13,6 @@ import AttendanceCard from './components/AttendanceCard';
 import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
 import AiAssistant from './components/AiAssistant';
-import ComplianceAudit from './components/ComplianceAudit';
 import Profile from './components/Profile';
 import CompanyProfile from './components/CompanyProfile';
 import BottomNav from './components/BottomNav';
@@ -49,13 +48,17 @@ const App: React.FC = () => {
         const recs: PointRecord[] = [];
         snap.forEach(d => {
           const data = d.data();
+          const timestamp = data.timestamp?.toDate ? data.timestamp.toDate() : (data.timestamp ? new Date(data.timestamp) : new Date());
           recs.push({ 
             ...data, 
             id: d.id, 
-            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(data.timestamp) 
+            timestamp: timestamp
           } as PointRecord);
         });
+        // Ordenação robusta em memória para evitar erros de índice no Firebase
         setRecords(recs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+      }, (err) => {
+        console.error("Erro ao sincronizar Livro de Ponto:", err);
       });
 
       return () => {
@@ -81,7 +84,7 @@ const App: React.FC = () => {
 
   const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => {
     if (!user) return;
-    const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}`;
     const newRecordData = {
       userName: user.name,
       matricula: user.matricula || 'N/A',
@@ -99,26 +102,16 @@ const App: React.FC = () => {
 
     try {
       const docRef = await addDoc(collection(db, "records"), newRecordData);
-      const recordWithId = { ...newRecordData, id: docRef.id, timestamp: newRecordData.timestamp } as PointRecord;
+      const recordWithId = { ...newRecordData, id: docRef.id } as PointRecord;
       setLastPunch(recordWithId);
       setShowPunchCamera(false);
     } catch (err) {
-      console.error("Erro ao registrar ponto:", err);
-      alert("Falha ao salvar o ponto eletrônico.");
-    }
-  };
-
-  const handleUpdateEmployee = async (id: string, data: any) => {
-    try {
-      await updateDoc(doc(db, "employees", id), data);
-      alert("COLABORADOR ATUALIZADO!");
-    } catch (err) {
-      alert("ERRO AO ATUALIZAR.");
+      alert("Falha ao salvar o ponto. Verifique sua conexão.");
     }
   };
 
   const isAdmin = user?.role === 'admin';
-  const isAdminView = ['colaboradores', 'aprovacoes', 'saldos', 'audit', 'company_profile'].includes(activeView) || (isAdmin && activeView === 'dashboard');
+  const isAdminView = isAdmin && ['dashboard', 'colaboradores', 'aprovacoes', 'saldos', 'audit', 'company_profile'].includes(activeView);
 
   if (!user) return <Login onLogin={handleLogin} />;
 
@@ -135,30 +128,12 @@ const App: React.FC = () => {
 
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         <header className="md:hidden p-4 flex justify-between items-center bg-white dark:bg-slate-900 z-30">
-           {isAdmin ? (
-             <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-             </button>
-           ) : (
-             <div className="w-10"></div>
-           )}
+           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+           </button>
            <h1 className="text-sm font-black tracking-tighter uppercase dark:text-white">Ponto<span className="text-orange-600">Exato</span></h1>
            <div className="w-10"></div>
         </header>
-
-        {isAdmin && (
-          <header className="hidden md:flex p-6 justify-between items-center bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-10">
-             <div>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Módulo Administrativo</p>
-               <h2 className="text-xl font-black tracking-tighter uppercase text-slate-800 dark:text-white">
-                 Gestão de RH - {company?.name}
-               </h2>
-             </div>
-             <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-800 flex items-center justify-center text-orange-600 text-xl">🛡️</div>
-             </div>
-          </header>
-        )}
 
         <main className="flex-1 overflow-y-auto no-scrollbar">
           <div className={`mx-auto w-full h-full ${isAdminView ? 'p-6 md:p-10' : 'max-w-md p-4'}`}>
@@ -183,7 +158,7 @@ const App: React.FC = () => {
                   } catch (err) { alert("ERRO AO SALVAR."); }
                 }} 
                 onDeleteEmployee={async (id) => { if(confirm("EXCLUIR?")) await deleteDoc(doc(db, "employees", id)); }} 
-                onUpdateEmployee={handleUpdateEmployee}
+                onUpdateEmployee={async (id, data) => { await updateDoc(doc(db, "employees", id), data); }}
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}
                 onNavigate={setActiveView}
@@ -194,7 +169,6 @@ const App: React.FC = () => {
         </main>
 
         {!isAdmin && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
-
         {!isAdmin && showPunchCamera && <PunchCamera geofenceConfig={company?.geofence} onCapture={handlePunch} onCancel={() => setShowPunchCamera(false)} />}
         {!isAdmin && lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
       </div>
