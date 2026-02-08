@@ -18,7 +18,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
     return () => clearInterval(timer);
   }, []);
 
-  // Simulação de registros de hoje para a timeline
   const todayRecords = [
     { type: 'Entrada', time: '08:02', done: true },
     { type: 'Intervalo', time: '12:00', done: true },
@@ -26,16 +25,102 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
     { type: 'Saída', time: '18:00', done: false },
   ];
 
+  if (isAdmin) {
+    return (
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-24 overflow-y-auto no-scrollbar">
+        <div className="space-y-2">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, Gestor 👋</p>
+          <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Gestão RH</h2>
+        </div>
+
+        {/* MÉTRICAS RÁPIDAS PARA O GESTOR */}
+        <div className="grid grid-cols-2 gap-4">
+           <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Colaboradores</p>
+              <div className="flex items-end gap-2">
+                <span className="text-2xl font-black text-slate-800 dark:text-white">24</span>
+                <span className="text-[10px] text-emerald-500 font-bold mb-1">Ativos</span>
+              </div>
+           </div>
+           <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pontos Hoje</p>
+              <div className="flex items-end gap-2">
+                <span className="text-2xl font-black text-slate-800 dark:text-white">18</span>
+                <span className="text-[10px] text-primary font-bold mb-1">Batidos</span>
+              </div>
+           </div>
+        </div>
+
+        {/* ATALHOS DE GESTÃO - ORGANIZAÇÃO RH */}
+        <div className="bg-white dark:bg-slate-900 rounded-[44px] p-8 border dark:border-slate-800 shadow-sm space-y-6">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Ações Rápidas de Gestão</p>
+           
+           <div className="space-y-3">
+              <button 
+                onClick={() => onNavigate('colaboradores')}
+                className="w-full flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl hover:bg-primary/5 transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl">👥</span>
+                  <div className="text-left">
+                    <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase">Gestão de Pessoas</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Cadastrar e listar funcionários</p>
+                  </div>
+                </div>
+                <span className="text-slate-300 group-hover:text-primary">▶</span>
+              </button>
+
+              <button 
+                onClick={() => onNavigate('aprovacoes')}
+                className="w-full flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl hover:bg-primary/5 transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl">✅</span>
+                  <div className="text-left">
+                    <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase">Aprovações Pendentes</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Atestados e Ajustes de Ponto</p>
+                  </div>
+                </div>
+                <div className="bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">3</div>
+              </button>
+
+              <button 
+                onClick={() => onNavigate('saldos')}
+                className="w-full flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl hover:bg-primary/5 transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl">📊</span>
+                  <div className="text-left">
+                    <p className="text-[11px] font-black text-slate-800 dark:text-white uppercase">Relatórios e Saldos</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Exportar Cartão Ponto / Espelho</p>
+                  </div>
+                </div>
+                <span className="text-slate-300 group-hover:text-primary">▶</span>
+              </button>
+           </div>
+        </div>
+
+        {/* FEED DE AUDITORIA IA */}
+        <div className="bg-[#002d4b] rounded-[40px] p-6 text-white space-y-4">
+           <div className="flex items-center gap-3">
+              <span className="text-xl">🤖</span>
+              <p className="text-[10px] font-black uppercase tracking-widest">Insights do Assistente IA</p>
+           </div>
+           <p className="text-[11px] opacity-70 font-medium">3 colaboradores apresentam inconsistência no intervalo intrajornada esta semana. Deseja realizar uma auditoria?</p>
+           <button onClick={() => onNavigate('audit')} className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all">Ver Auditoria de Risco</button>
+        </div>
+      </div>
+    );
+  }
+
+  // DASHBOARD COLABORADOR (MANTIDO CONFORME SOLICITADO)
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-24 overflow-y-auto no-scrollbar">
-      
-      {/* SEÇÃO DO COLABORADOR - ESSENCIAL */}
       <div className="space-y-2">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, {user.name.split(' ')[0]} 👋</p>
         <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Ponto</h2>
       </div>
 
-      {/* RELÓGIO E STATUS CENTRAL */}
       <div className="bg-white dark:bg-slate-900 rounded-[44px] p-8 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-6">
         <div className="text-center space-y-1">
           <p className="text-[42px] font-black text-slate-800 dark:text-white tracking-tighter leading-none">
@@ -55,7 +140,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
             <span className="text-[11px] font-black uppercase tracking-widest">Registrar</span>
             <span className="text-[10px] font-bold opacity-60 uppercase">Ponto Agora</span>
           </div>
-          {/* Animação de pulso */}
           <div className="absolute inset-0 rounded-full bg-primary animate-ping opacity-20 -z-10"></div>
         </button>
 
@@ -71,7 +155,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
         </div>
       </div>
 
-      {/* TIMELINE DO DIA */}
       <div className="bg-white dark:bg-slate-900 rounded-[40px] p-6 border dark:border-slate-800 shadow-sm">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Linha do Tempo - Hoje</p>
         <div className="flex justify-between items-center relative">
@@ -90,7 +173,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
         </div>
       </div>
 
-      {/* ACESSO RÁPIDO */}
       <div className="grid grid-cols-3 gap-3">
         <div onClick={() => onNavigate('mypoint')} className="bg-white dark:bg-slate-900 p-5 rounded-[32px] border dark:border-slate-800 shadow-sm flex flex-col items-center space-y-2 cursor-pointer active:scale-95 transition-all">
           <span className="text-xl">📅</span>
@@ -105,7 +187,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, onNaviga
           <p className="text-[8px] font-black text-slate-400 uppercase text-center leading-tight">Nova<br/>Solicitação</p>
         </div>
       </div>
-
     </div>
   );
 };
