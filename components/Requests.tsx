@@ -78,7 +78,7 @@ const Requests: React.FC = () => {
       setShowCreateMode(false);
       setAttachmentName(null);
       setAttachmentData(null);
-      alert("Solicitação enviada para análise do RH!");
+      alert("Solicitação enviada para o RH com sucesso!");
     } catch (e) {
       alert("Erro ao enviar solicitação.");
     }
@@ -124,13 +124,13 @@ const Requests: React.FC = () => {
               className={`flex-1 p-5 rounded-[30px] border-2 flex flex-col items-center gap-2 transition-all ${type === 'abono' ? 'border-orange-500 bg-orange-500 text-white shadow-lg' : 'border-slate-100 bg-slate-50 text-slate-400 dark:border-slate-800 dark:bg-slate-800'}`}
             >
               <span className="text-xl">🏥</span>
-              <span className="text-[10px] font-black uppercase">Atestado / Abono</span>
+              <span className="text-[10px] font-black uppercase">Atestado</span>
             </button>
           </div>
 
           {type === 'inclusão' && (
             <div className="space-y-4">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Informe os horários corretos</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Horários desejados</p>
               <div className="grid grid-cols-2 gap-3">
                 {times.map((t, idx) => (
                   <div key={idx} className="flex bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
@@ -151,7 +151,7 @@ const Requests: React.FC = () => {
           )}
 
           <div className="space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Motivo / Justificativa</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Motivo</p>
             <select 
               value={reason}
               onChange={e => setReason(e.target.value)}
@@ -161,7 +161,6 @@ const Requests: React.FC = () => {
               <option value="Problemas Técnicos">Problemas Técnicos</option>
               <option value="Trabalho Externo">Trabalho Externo</option>
               <option value="Atestado Médico">Atestado Médico</option>
-              <option value="Consulta Médica">Consulta Médica</option>
               <option value="Outros">Outros</option>
             </select>
           </div>
@@ -180,10 +179,10 @@ const Requests: React.FC = () => {
             >
               <span className="text-lg">{attachmentName ? '✅' : '📎'}</span>
               <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[200px]">
-                {attachmentName || 'Anexar Comprovante / Atestado'}
+                {attachmentName || 'Anexar Documento / Atestado'}
               </span>
             </button>
-            {attachmentData && <p className="text-[8px] text-center font-black text-emerald-600 uppercase">Arquivo pronto para envio</p>}
+            {attachmentData && <p className="text-[7px] text-center font-black text-emerald-600 uppercase">Arquivo carregado com sucesso</p>}
           </div>
 
           <div className="flex gap-4 mt-6">
@@ -193,7 +192,7 @@ const Requests: React.FC = () => {
               disabled={loading}
               className="flex-[2] py-5 bg-orange-600 text-white rounded-[28px] font-black uppercase text-[10px] shadow-xl disabled:opacity-50"
             >
-              {loading ? 'Enviando...' : 'Enviar Agora'}
+              {loading ? 'Enviando...' : 'Confirmar Envio'}
             </button>
           </div>
         </div>
@@ -204,7 +203,7 @@ const Requests: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
       <header className="px-4 py-4 border-b dark:border-slate-800 flex flex-col items-center">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Acompanhamento</p>
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Meus Pedidos</p>
         <h1 className="font-black text-slate-800 dark:text-white text-sm uppercase">Justificativas</h1>
         
         <div className="flex bg-white dark:bg-slate-800 p-1 rounded-2xl w-full mt-4 border dark:border-slate-700 shadow-sm">
@@ -214,7 +213,7 @@ const Requests: React.FC = () => {
               onClick={() => setActiveTab(t)} 
               className={`flex-1 py-3 text-[9px] font-black uppercase rounded-xl transition-all ${activeTab === t ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400'}`}
             >
-              {t === 'pending' ? 'Pendentes' : t === 'approved' ? 'Aprovadas' : 'Recusadas'}
+              {t === 'pending' ? 'Em análise' : t === 'approved' ? 'Aprovadas' : 'Recusadas'}
             </button>
           ))}
         </div>
@@ -230,36 +229,29 @@ const Requests: React.FC = () => {
                  </div>
                  <div>
                     <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">{req.type === 'atestado' ? 'Atestado' : 'Ajuste de Ponto'}</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Ref: {new Date(req.date).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Data: {new Date(req.date).toLocaleDateString('pt-BR')}</p>
                  </div>
                </div>
                <div className={`px-3 py-1 rounded-full text-[7px] font-black uppercase ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : req.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
-                 {req.status === 'approved' ? 'Aprovado' : req.status === 'rejected' ? 'Recusado' : 'Em análise'}
+                 {req.status === 'approved' ? 'Aprovado' : req.status === 'rejected' ? 'Recusado' : 'Aguardando'}
                </div>
             </div>
             
-            {req.status === 'approved' && (
-              <div className="mb-3 p-3 bg-emerald-50 rounded-2xl">
-                 <p className="text-[8px] font-black text-emerald-700 uppercase">✓ Ponto atualizado no seu histórico.</p>
-              </div>
-            )}
-            
-            {req.status === 'rejected' && (
-              <div className="mb-3 p-3 bg-red-50 rounded-2xl">
-                 <p className="text-[8px] font-black text-red-700 uppercase">✕ Solicitação recusada pelo gestor.</p>
-              </div>
-            )}
-
             <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl">
-               <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Observação:</p>
+               <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Justificativa:</p>
                <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 italic">"{req.reason}"</p>
+               {req.attachmentName && (
+                 <div className="mt-2 flex items-center gap-2 text-[8px] font-black text-blue-500 uppercase">
+                    <span>📎 Arquivo:</span> {req.attachmentName}
+                 </div>
+               )}
             </div>
           </div>
         ))}
 
         {filteredRequests.length === 0 && (
           <div className="py-20 text-center opacity-30 flex flex-col items-center">
-             <span className="text-4xl mb-4">📥</span>
+             <span className="text-4xl mb-4">📂</span>
              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nenhum registro encontrado</p>
           </div>
         )}
