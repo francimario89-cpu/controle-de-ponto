@@ -14,7 +14,8 @@ import MyPoint from './components/MyPoint';
 import AttendanceCard from './components/AttendanceCard';
 import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
-import Profile from './components/Profile';
+import CompanyProfile from './components/CompanyProfile';
+import CompaniesView from './components/CompaniesView';
 import HolidaysView from './components/HolidaysView';
 import KioskMode from './components/KioskMode';
 import AiAssistant from './components/AiAssistant';
@@ -30,7 +31,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'profile' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation' | 'settings' | 'schedule'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'mypoint' | 'card' | 'requests' | 'holidays' | 'colaboradores' | 'company_profile' | 'companies' | 'assistant' | 'audit' | 'aprovacoes' | 'relatorio' | 'saldos' | 'config' | 'features' | 'benefits' | 'feedback' | 'vacation' | 'settings' | 'schedule'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPunching, setIsPunching] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
@@ -94,7 +95,7 @@ const App: React.FC = () => {
       if (d.exists()) {
         const data = { id: d.id, ...d.data() } as Company;
         setCompany(data);
-        const themeColor = data.themeColor || '#f97316';
+        const themeColor = data.themeColor || '#0057ff';
         document.documentElement.style.setProperty('--primary-color', themeColor);
       }
     });
@@ -142,10 +143,11 @@ const App: React.FC = () => {
   if (!user) return <Login onLogin={(u, c) => { setUser(u); if(c) setCompany(c); localStorage.setItem('fortime_user', JSON.stringify(u)); setActiveView(u.role === 'admin' ? 'colaboradores' : 'dashboard'); }} />;
 
   const userRecords = records.filter(r => r.matricula === user.matricula);
+  const isAdmin = user.role === 'admin';
 
   return (
-    <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-orange-50 text-slate-900'}`}>
-      <style>{`:root { --primary-color: #f97316; } .bg-primary { background-color: var(--primary-color) !important; } .text-primary { color: var(--primary-color) !important; }`}</style>
+    <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans justify-center items-center p-0 md:p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
+      <style>{`:root { --primary-color: #0057ff; } .bg-primary { background-color: var(--primary-color) !important; } .text-primary { color: var(--primary-color) !important; }`}</style>
       
       {!isOnline && (
         <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] bg-red-500 text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-lg animate-bounce">
@@ -171,7 +173,8 @@ const App: React.FC = () => {
             {activeView === 'card' && <AttendanceCard records={userRecords} company={company} />}
             {activeView === 'holidays' && <HolidaysView company={company} />}
             {activeView === 'requests' && <Requests />}
-            {activeView === 'profile' && <Profile user={user} company={company} />}
+            {activeView === 'company_profile' && <CompanyProfile company={company} />}
+            {activeView === 'companies' && <CompaniesView />}
             {activeView === 'assistant' && <AiAssistant user={user} records={userRecords} />}
             {activeView === 'audit' && <ComplianceAudit records={records} employees={employees} />}
             {activeView === 'features' && <CompanyFeatures />}
