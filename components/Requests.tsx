@@ -45,7 +45,7 @@ const Requests: React.FC = () => {
     return r.status === 'rejected';
   });
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setAttachmentName(file.name);
@@ -71,8 +71,9 @@ const Requests: React.FC = () => {
       });
       setShowCreateMode(false);
       setAttachmentName(null);
+      alert("Solicitação enviada com sucesso!");
     } catch (e) {
-      alert("Erro ao enviar solicitação. Verifique sua conexão.");
+      alert("Erro ao enviar solicitação.");
     }
     setLoading(false);
   };
@@ -109,24 +110,23 @@ const Requests: React.FC = () => {
               className={`flex-1 p-5 rounded-[30px] border-2 flex flex-col items-center gap-2 transition-all ${type === 'inclusão' ? 'border-orange-500 bg-orange-500 text-white shadow-lg' : 'border-slate-100 bg-slate-50 text-slate-400 dark:border-slate-800 dark:bg-slate-800'}`}
             >
               <span className="text-xl">📝</span>
-              <span className="text-[10px] font-black uppercase">Ajuste de Ponto</span>
+              <span className="text-[10px] font-black uppercase">Ajuste Ponto</span>
             </button>
             <button 
               onClick={() => setType('abono')}
               className={`flex-1 p-5 rounded-[30px] border-2 flex flex-col items-center gap-2 transition-all ${type === 'abono' ? 'border-orange-500 bg-orange-500 text-white shadow-lg' : 'border-slate-100 bg-slate-50 text-slate-400 dark:border-slate-800 dark:bg-slate-800'}`}
             >
               <span className="text-xl">🏥</span>
-              <span className="text-[10px] font-black uppercase">Atestado / Abono</span>
+              <span className="text-[10px] font-black uppercase">Atestado</span>
             </button>
           </div>
 
           {type === 'inclusão' ? (
             <div className="space-y-4">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Informe os horários corretos</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Horários Corretos</p>
               <div className="grid grid-cols-2 gap-3">
                 {times.map((t, idx) => (
                   <div key={idx} className="flex bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
-                    <div className="bg-orange-100 dark:bg-orange-950/40 w-10 flex items-center justify-center text-[10px] font-black text-orange-600">{idx + 1}</div>
                     <input 
                       type="time" 
                       value={t} 
@@ -142,25 +142,22 @@ const Requests: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="space-y-4 animate-in fade-in">
-              <div className="p-5 bg-orange-50 dark:bg-orange-950/20 rounded-3xl border border-orange-100 dark:border-orange-900/30">
-                 <p className="text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase leading-relaxed text-center">Ao selecionar Abono, o RH irá avaliar o atestado para abonar o período.</p>
-              </div>
+            <div className="p-5 bg-orange-50 dark:bg-orange-950/20 rounded-3xl border border-orange-100 dark:border-orange-900/30">
+               <p className="text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase leading-relaxed text-center italic">Anexe o atestado médico abaixo para abono.</p>
             </div>
           )}
 
           <div className="space-y-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Motivo da Solicitação</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Motivo</p>
             <select 
               value={reason}
               onChange={e => setReason(e.target.value)}
-              className="w-full p-5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl text-[11px] font-black text-slate-800 dark:text-slate-200 outline-none appearance-none"
+              className="w-full p-5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl text-[11px] font-black text-slate-800 dark:text-slate-200 outline-none"
             >
               <option value="Esquecimento">Esquecimento</option>
               <option value="Problemas Técnicos">Problemas Técnicos</option>
               <option value="Trabalho Externo">Trabalho Externo</option>
               <option value="Atestado Médico">Atestado Médico</option>
-              <option value="Folga / Compensação">Folga / Compensação</option>
               <option value="Outros">Outros</option>
             </select>
           </div>
@@ -170,7 +167,7 @@ const Requests: React.FC = () => {
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              onChange={handleFileSelect}
+              onChange={handleFileChange}
               accept="image/*,application/pdf"
             />
             <button 
@@ -178,20 +175,20 @@ const Requests: React.FC = () => {
               className={`w-full p-5 rounded-3xl border-2 border-dashed flex items-center justify-center gap-3 transition-all ${attachmentName ? 'border-emerald-500 bg-emerald-50 text-emerald-600' : 'border-slate-200 text-slate-400'}`}
             >
               <span className="text-lg">{attachmentName ? '✅' : '📎'}</span>
-              <span className="text-[10px] font-black uppercase tracking-widest">
-                {attachmentName ? `Anexado: ${attachmentName}` : 'Anexar Comprovante / Atestado'}
+              <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[200px]">
+                {attachmentName || 'Anexar Documento / Atestado'}
               </span>
             </button>
           </div>
 
           <div className="flex gap-4 mt-6">
-            <button onClick={() => setShowCreateMode(false)} className="flex-1 py-5 border-2 border-slate-100 rounded-[28px] text-[10px] font-black uppercase text-slate-400">Voltar</button>
+            <button onClick={() => setShowCreateMode(false)} className="flex-1 py-5 border-2 border-slate-100 rounded-[28px] text-[10px] font-black uppercase text-slate-400">Cancelar</button>
             <button 
               onClick={handleSubmit}
               disabled={loading}
               className="flex-[2] py-5 bg-orange-600 text-white rounded-[28px] font-black uppercase text-[10px] shadow-xl disabled:opacity-50"
             >
-              {loading ? 'ENVIANDO...' : 'Enviar para o RH'}
+              {loading ? 'Enviando...' : 'Enviar para o RH'}
             </button>
           </div>
         </div>
@@ -202,7 +199,7 @@ const Requests: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
       <header className="px-4 py-4 border-b dark:border-slate-800 flex flex-col items-center">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Justificativas</p>
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Status RH</p>
         <h1 className="font-black text-slate-800 dark:text-white text-sm uppercase">Minhas Solicitações</h1>
         
         <div className="flex bg-white dark:bg-slate-800 p-1 rounded-2xl w-full mt-4 border dark:border-slate-700 shadow-sm">
@@ -220,27 +217,37 @@ const Requests: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar pb-32">
         {filteredRequests.map((req) => (
-          <div key={req.id} className="bg-white dark:bg-slate-800 p-6 rounded-[35px] flex items-center justify-between border border-slate-100 dark:border-slate-700 group active:scale-[0.98] transition-all shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-slate-50 dark:bg-slate-700 rounded-2xl flex items-center justify-center text-xl">
-                {req.type === 'inclusão' ? '📝' : '🏥'}
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">{req.type === 'inclusão' ? 'Ajuste de Ponto' : 'Abono / Atestado'}</p>
-                <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Data: {new Date(req.date).toLocaleDateString('pt-BR')}</p>
-                {req.attachmentName && <span className="inline-block bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[7px] font-black mt-1 uppercase truncate max-w-[120px]">{req.attachmentName}</span>}
-              </div>
+          <div key={req.id} className="bg-white dark:bg-slate-800 p-6 rounded-[35px] border border-slate-100 dark:border-slate-700 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+               <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 bg-slate-50 dark:bg-slate-700 rounded-xl flex items-center justify-center text-lg">
+                    {req.type === 'atestado' ? '🏥' : '📝'}
+                 </div>
+                 <div>
+                    <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase leading-none">{req.type === 'atestado' ? 'Atestado' : 'Ajuste de Ponto'}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Data: {new Date(req.date).toLocaleDateString('pt-BR')}</p>
+                 </div>
+               </div>
+               <div className={`px-3 py-1 rounded-full text-[7px] font-black uppercase ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : req.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                 {req.status === 'approved' ? 'Aprovado' : req.status === 'rejected' ? 'Recusado' : 'Em análise'}
+               </div>
             </div>
-            <div className="text-slate-300">
-               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl">
+               <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Motivo informado:</p>
+               <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 italic">"{req.reason}"</p>
+               {req.attachmentName && (
+                 <div className="mt-3 flex items-center gap-2 text-[8px] font-black text-blue-500 uppercase">
+                    <span>📎</span> {req.attachmentName}
+                 </div>
+               )}
             </div>
           </div>
         ))}
 
         {filteredRequests.length === 0 && (
           <div className="py-20 text-center opacity-30 flex flex-col items-center">
-             <span className="text-4xl mb-4">📝</span>
-             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nenhuma justificativa {activeTab === 'pending' ? 'pendente' : activeTab === 'approved' ? 'aprovada' : 'recusada'}</p>
+             <span className="text-4xl mb-4">📥</span>
+             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nenhuma solicitação encontrada</p>
           </div>
         )}
       </div>

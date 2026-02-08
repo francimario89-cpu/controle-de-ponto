@@ -18,7 +18,7 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
     content += `------------------------------------------------------------\n`;
     
     records.forEach(r => {
-      content += `${new Date(r.timestamp).toLocaleString()} | ${r.type.toUpperCase()} | ${r.address}\n`;
+      content += `${new Date(r.timestamp).toLocaleString()} | ${r.type.toUpperCase()} | ${r.address} ${r.isAdjustment ? '(AJUSTADO)' : ''}\n`;
     });
 
     const blob = new Blob([content], { type: 'text/plain' });
@@ -46,7 +46,7 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
     <div className="p-6 space-y-6 pb-24">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase text-xs">Minhas Marcações</h2>
-        <button onClick={handleDownloadPersonalReport} className="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest border border-primary/20">
+        <button onClick={handleDownloadPersonalReport} className="bg-orange-600/10 text-orange-600 px-4 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest border border-orange-200">
           Baixar Espelho
         </button>
       </div>
@@ -57,7 +57,7 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
           const isSelected = selectedDay === date;
 
           return (
-            <div key={date} className={`bg-white dark:bg-slate-900 rounded-[35px] border transition-all duration-300 ${isSelected ? 'shadow-xl border-primary/20 scale-[1.02]' : 'border-slate-100 dark:border-slate-800'}`}>
+            <div key={date} className={`bg-white dark:bg-slate-900 rounded-[35px] border transition-all duration-300 ${isSelected ? 'shadow-xl border-orange-200 scale-[1.02]' : 'border-slate-100 dark:border-slate-800'}`}>
               <button 
                 onClick={() => setSelectedDay(isSelected ? null : date)}
                 className="w-full p-6 flex items-center justify-between"
@@ -69,6 +69,9 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
                   </div>
                   <div className="text-left">
                     <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tight">{dayRecords.length} Marcações</p>
+                    {dayRecords.some((r: any) => r.isAdjustment) && (
+                      <span className="text-[7px] font-black text-orange-600 uppercase">Contém Ajustes</span>
+                    )}
                   </div>
                 </div>
                 <div className="bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-full">
@@ -80,10 +83,14 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
                 <div className="px-6 pb-8 pt-2 space-y-4 animate-in slide-in-from-top-4">
                    <div className="grid grid-cols-1 gap-2">
                       {dayRecords.map((r: PointRecord, idx: number) => (
-                        <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-[24px] border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                        <div key={idx} className={`p-4 rounded-[24px] border flex justify-between items-center ${r.isAdjustment ? 'bg-orange-50 border-orange-100 dark:bg-orange-950/10' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
                            <div>
-                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{r.type}</p>
-                              <p className="text-sm font-black text-slate-900 dark:text-white">{new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                              <p className={`text-[8px] font-black uppercase tracking-widest ${r.isAdjustment ? 'text-orange-600' : 'text-slate-400'}`}>
+                                {r.type} {r.isAdjustment ? '(AJUSTADO)' : ''}
+                              </p>
+                              <p className={`text-sm font-black ${r.isAdjustment ? 'text-orange-600' : 'text-slate-900 dark:text-white'}`}>
+                                {new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
                            </div>
                            <p className="text-[8px] text-slate-400 text-right truncate max-w-[120px]">{r.address}</p>
                         </div>

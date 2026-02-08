@@ -1,9 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
-import { collection, query, where, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { auditCompliance } from '../geminiService';
 
 interface AdminDashboardProps {
   latestRecords: PointRecord[];
@@ -25,11 +24,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEmpId, setEditingEmpId] = useState<string | null>(null);
   const [newEmpData, setNewEmpData] = useState({ name: '', matricula: '', roleFunction: '', workShift: '', password: '' });
-  
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditResult, setAuditResult] = useState<any>(null);
-  const [selectedAuditEmp, setSelectedAuditEmp] = useState('');
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
+  const [requestFilter, setRequestFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
 
   const now = new Date();
   const [reportFilter, setReportFilter] = useState({
@@ -53,7 +49,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   useEffect(() => {
     if (isAuthorized && company?.id) {
-      const q = query(collection(db, "requests"), where("companyCode", "==", company.id));
+      const q = query(
+        collection(db, "requests"), 
+        where("companyCode", "==", company.id),
+        orderBy("createdAt", "desc")
+      );
       const unsub = onSnapshot(q, (snap) => {
         const reqs: any[] = [];
         snap.forEach(d => reqs.push({ id: d.id, ...d.data() }));
@@ -76,7 +76,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const handleCopyCode = () => {
     if (company?.accessCode) {
       navigator.clipboard.writeText(company.accessCode);
-      alert("CÓDIGO COPIADO! Envie para seus funcionários.");
+      alert("CÓDIGO COPIADO!");
     }
   };
 
@@ -109,7 +109,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     try {
       await updateDoc(doc(db, "requests", req.id), { status: 'approved' });
       
-      // Se for inclusão de pontos, cria os registros no banco
       if (req.type === 'inclusão' && req.times) {
         for (const timeStr of req.times) {
           if (!timeStr) continue;
@@ -121,132 +120,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             userName: req.userName,
             matricula: req.matricula,
             timestamp: timestamp,
-            address: "AJUSTE MANUAL RH",
+            address: `CORREÇÃO RH: ${req.reason.toUpperCase()}`,
             latitude: 0,
             longitude: 0,
             photo: "",
             status: 'synchronized',
-            digitalSignature: `AJUSTE-${req.id}-${Math.random().toString(36).substr(2, 5)}`,
+            digitalSignature: `AJUSTE-${req.id}`,
             type: 'entrada',
             companyCode: req.companyCode,
-            isAdjustment: true // Marca para destaque visual
+            isAdjustment: true
           });
         }
       }
-      alert("SOLICITAÇÃO APROVADA E PONTOS SINCRONIZADOS!");
+      alert("SOLICITAÇÃO APROVADA E LANÇADA NO PONTO!");
     } catch (e) {
-      alert("ERRO AO PROCESSAR APROVAÇÃO.");
+      alert("ERRO AO PROCESSAR.");
     }
   };
 
   const handleRejectRequest = async (id: string) => {
-    if (!confirm("Deseja realmente recusar esta solicitação?")) return;
+    if (!confirm("Recusar esta justificativa?")) return;
     await updateDoc(doc(db, "requests", id), { status: 'rejected' });
   };
 
-  const handleDownloadReport = () => {
-    if (reportFilter.matricula === 'todos') {
-      alert("Por favor, selecione um colaborador específico para gerar a Folha Individual.");
-      return;
-    }
-
-    const emp = employees.find(e => e.matricula === reportFilter.matricula);
-    if (!emp) return;
-
-    const monthName = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-    const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
-
-    const dailyData: { [key: number]: string[] } = {};
-    filteredRecords.forEach(r => {
-      const d = new Date(r.timestamp).getDate();
-      if (!dailyData[d]) dailyData[d] = [];
-      dailyData[d].push(new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-    });
-
-    Object.keys(dailyData).forEach(day => {
-      dailyData[parseInt(day)].sort();
-    });
-
-    let htmlContent = `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; font-size: 8px; margin: 0; padding: 20px; color: #000; }
-        .container { width: 100%; max-width: 800px; margin: auto; border: 1px solid #000; padding: 1px; }
-        .title { text-align: center; font-size: 14px; font-weight: bold; border-bottom: 2px solid #000; padding: 10px 0; text-transform: uppercase; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #000; padding: 2px 4px; height: 14px; }
-        .field-label { font-size: 6px; font-weight: bold; color: #444; display: block; }
-        .field-value { font-size: 9px; font-weight: bold; }
-        .ponto-table th { font-size: 7px; font-weight: bold; background: #eee; }
-        @media print { body { padding: 0; } .container { border: none; } button { display: none; } }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="title">FOLHA DE PONTO INDIVIDUAL DE TRABALHO</div>
-        <table>
-          <tr>
-            <td colspan="3"><span class="field-label">EMPREGADOR:</span><span class="field-value">${company?.name || ''}</span></td>
-            <td><span class="field-label">CEI / CNPJ Nº:</span><span class="field-value">${company?.cnpj || ''}</span></td>
-          </tr>
-          <tr><td colspan="4"><span class="field-label">ENDEREÇO:</span><span class="field-value">${company?.address || ''}</span></td></tr>
-          <tr>
-            <td colspan="2"><span class="field-label">EMPREGADO(A):</span><span class="field-value">${emp.name}</span></td>
-            <td><span class="field-label">CTPS Nº E SÉRIE:</span><span class="field-value">${emp.cpf || '---'}</span></td>
-            <td><span class="field-label">DATA DE ADMISSÃO:</span><span class="field-value">${emp.admissionDate || '---'}</span></td>
-          </tr>
-          <tr>
-            <td colspan="2"><span class="field-label">FUNÇÃO:</span><span class="field-value">${emp.roleFunction || 'COLABORADOR'}</span></td>
-            <td colspan="2"><span class="field-label">HORÁRIO DE TRABALHO:</span><span class="field-value">${emp.workShift || '---'}</span></td>
-          </tr>
-          <tr>
-            <td><span class="field-label">SÁBADOS:</span><span class="field-value">---</span></td>
-            <td><span class="field-label">DESCANSO:</span><span class="field-value">DOMINGO</span></td>
-            <td><span class="field-label">MÊS:</span><span class="field-value">${monthName}</span></td>
-            <td><span class="field-label">ANO:</span><span class="field-value">${reportFilter.year}</span></td>
-          </tr>
-        </table>
-        <table class="ponto-table">
-          <thead>
-            <tr><th rowspan="2">DIA</th><th rowspan="2">ENTRADA</th><th colspan="2">ALMOÇO</th><th rowspan="2">SAÍDA</th><th colspan="2">EXTRAS</th><th rowspan="2">ASSINATURA</th></tr>
-            <tr><th>SAÍDA</th><th>RETORNO</th><th>E</th><th>S</th></tr>
-          </thead>
-          <tbody>
-            ${Array.from({ length: 31 }).map((_, i) => {
-              const day = i + 1;
-              const times = dailyData[day] || [];
-              const isInvalid = day > daysInMonth;
-              return `<tr style="${isInvalid ? 'background:#ddd' : ''}"><td align="center"><b>${String(day).padStart(2, '0')}</b></td><td align="center">${times[0] || ''}</td><td align="center">${times[1] || ''}</td><td align="center">${times[2] || ''}</td><td align="center">${times[3] || ''}</td><td></td><td></td><td></td></tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-        <div style="padding:15px; text-align:center; font-size:7px;">Assinatura do empregado: __________________________________________________________________</div>
-      </div>
-      <div style="text-align:center; margin-top:20px"><button onclick="window.print()" style="padding:10px 20px; background:#000; color:#fff; border:none; border-radius:5px; cursor:pointer">IMPRIMIR / PDF</button></div>
-    </body>
-    </html>`;
-
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Folha_Ponto_${emp.name.replace(/ /g, '_')}_${monthName}_${reportFilter.year}.html`;
-    link.click();
-  };
-
-  const startEdit = (emp: Employee) => {
-    setEditingEmpId(emp.id);
-    setNewEmpData({
-      name: emp.name,
-      matricula: emp.matricula,
-      roleFunction: emp.roleFunction || '',
-      workShift: emp.workShift || '',
-      password: emp.password || ''
-    });
-    setShowAddModal(true);
+  const handleViewFile = (req: AttendanceRequest) => {
+    if (!req.attachmentName) return;
+    alert(`Visualizando anexo enviado por ${req.userName}:\n${req.attachmentName}\n(Em produção o arquivo abriria aqui)`);
   };
 
   if (!isAuthorized) {
@@ -272,36 +171,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     return (
       <div className="space-y-6 animate-in fade-in">
         <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Geração de Folha de Ponto</h3>
+           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Livro de Ponto Mensal</h3>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border border-slate-200">
-                <option value="todos">SELECIONE O COLABORADOR</option>
+                <option value="todos">COLABORADOR: TODOS</option>
                 {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
               </select>
               <select value={reportFilter.month} onChange={e => setReportFilter({...reportFilter, month: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border border-slate-200">
                 {Array.from({length: 12}).map((_, i) => <option key={i} value={i}>{new Date(0, i).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()}</option>)}
               </select>
-              <select value={reportFilter.year} onChange={e => setReportFilter({...reportFilter, year: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border border-slate-200">
-                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
            </div>
-           <button onClick={handleDownloadReport} className="w-full bg-orange-600 text-white py-6 rounded-[28px] font-black uppercase text-xs shadow-xl hover:bg-orange-700 transition-all">
-             📥 Gerar Folha Individual (Modelo CLT)
+           <button className="w-full bg-orange-600 text-white py-6 rounded-[28px] font-black uppercase text-xs shadow-xl">
+             📥 Exportar Espelho de Ponto (PDF)
            </button>
         </div>
-        <div className="bg-white rounded-[40px] border overflow-hidden">
+        <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm">
            <table className="w-full text-left">
               <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
-                 <tr><th className="p-5">Nome</th><th className="p-5">Data</th><th className="p-5">Hora</th><th className="p-5">Tipo</th></tr>
+                 <tr><th className="p-5">Colaborador</th><th className="p-5">Data</th><th className="p-5 text-center">Horário</th><th className="p-5">Tipo</th></tr>
               </thead>
               <tbody className="text-[10px] font-bold text-slate-800">
                  {filteredRecords.map(r => (
                     <tr key={r.id} className="border-b hover:bg-slate-50 transition-colors">
                        <td className="p-5">{r.userName}</td>
                        <td className="p-5">{new Date(r.timestamp).toLocaleDateString('pt-BR')}</td>
-                       <td className={`p-5 font-black ${r.isAdjustment ? 'text-orange-600' : 'text-slate-800'}`}>
-                         {new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                         {r.isAdjustment && <span className="ml-2 text-[7px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">AJUSTADO</span>}
+                       <td className={`p-5 text-center font-black ${r.isAdjustment ? 'text-orange-600' : 'text-slate-800'}`}>
+                         <div className="flex flex-col items-center">
+                            <span>{new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            {r.isAdjustment && <span className="text-[6px] bg-orange-500 text-white px-2 rounded-full mt-1 uppercase">Corrigido</span>}
+                         </div>
                        </td>
                        <td className="p-5 uppercase">{r.type}</td>
                     </tr>
@@ -314,63 +212,71 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   }
 
   if (activeTab === 'aprovacoes') {
-    const pending = requests.filter(r => r.status === 'pending');
+    const filteredRequests = requests.filter(r => r.status === requestFilter);
     return (
       <div className="space-y-6 animate-in fade-in">
-         <div className="flex justify-between items-center px-2">
-            <h3 className="text-sm font-black uppercase text-slate-900">Solicitações Pendentes ({pending.length})</h3>
+         <div className="flex flex-col gap-4">
+            <h3 className="text-sm font-black uppercase text-slate-900 px-2">Gestão de Justificativas</h3>
+            <div className="flex bg-white p-1 rounded-2xl border shadow-sm">
+               {(['pending', 'approved', 'rejected'] as const).map(status => (
+                 <button 
+                  key={status}
+                  onClick={() => setRequestFilter(status)}
+                  className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${requestFilter === status ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400'}`}
+                 >
+                   {status === 'pending' ? 'Pendentes' : status === 'approved' ? 'Histórico OK' : 'Recusadas'}
+                 </button>
+               ))}
+            </div>
          </div>
+
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pending.map(req => (
+            {filteredRequests.map(req => (
               <div key={req.id} className="bg-white p-6 rounded-[40px] border shadow-sm space-y-4">
                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-xl">
-                      {req.type === 'inclusão' ? '📝' : '🏥'}
+                    <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-xl">
+                      {req.type === 'atestado' ? '🏥' : '📝'}
                     </div>
                     <div>
                        <p className="text-xs font-black uppercase text-slate-900 leading-none">{req.userName}</p>
-                       <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">MAT: {req.matricula}</p>
+                       <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">MAT: {req.matricula}</p>
                     </div>
                  </div>
                  <div className="bg-slate-50 p-4 rounded-2xl space-y-2">
                     <div className="flex justify-between text-[9px] font-black uppercase">
-                       <span className="text-slate-400 tracking-widest">Tipo:</span>
-                       <span className="text-orange-600">{req.type === 'atestado' ? 'ATESTADO / ABONO' : 'AJUSTE DE PONTO'}</span>
+                       <span className="text-slate-400">Tipo:</span>
+                       <span className="text-slate-800">{req.type === 'atestado' ? 'Atestado' : 'Esquecimento'}</span>
                     </div>
-                    <div className="flex justify-between text-[9px] font-black uppercase">
-                       <span className="text-slate-400 tracking-widest">Data:</span>
-                       <span className="text-slate-800">{new Date(req.date).toLocaleDateString('pt-BR')}</span>
+                    <div className="flex justify-between text-[9px] font-black uppercase border-t pt-2">
+                       <span className="text-slate-400">Motivo:</span>
+                       <span className="text-slate-600 italic">"{req.reason}"</span>
                     </div>
-                    {req.reason && (
-                       <div className="pt-2 border-t border-slate-200">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Motivo:</p>
-                          <p className="text-[9px] font-bold text-slate-600 leading-relaxed italic">"{req.reason}"</p>
-                       </div>
-                    )}
-                    {req.times && req.times.length > 0 && (
-                      <div className="pt-2 border-t border-slate-200">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Horários solicitados:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {req.times.filter(t => t).map((t, i) => <span key={i} className="bg-white px-2 py-0.5 rounded-lg border text-[9px] font-black">{t}</span>)}
-                        </div>
-                      </div>
-                    )}
                     {req.attachmentName && (
-                      <div className="pt-2">
-                        <p className="text-[8px] font-black text-blue-500 uppercase flex items-center gap-1">📎 Anexo: {req.attachmentName}</p>
-                      </div>
+                      <button 
+                        onClick={() => handleViewFile(req)}
+                        className="w-full mt-2 py-2 bg-blue-50 text-blue-600 rounded-xl text-[8px] font-black uppercase border border-blue-100 flex items-center justify-center gap-2"
+                      >
+                        📎 Baixar Anexo: {req.attachmentName}
+                      </button>
                     )}
                  </div>
-                 <div className="flex gap-2">
-                    <button onClick={() => handleRejectRequest(req.id)} className="flex-1 py-3 bg-red-50 text-red-600 rounded-2xl text-[9px] font-black uppercase">Recusar</button>
-                    <button onClick={() => handleApproveRequest(req)} className="flex-[2] py-3 bg-emerald-600 text-white rounded-2xl text-[9px] font-black uppercase shadow-lg shadow-emerald-100">Aprovar e Lançar</button>
-                 </div>
+
+                 {req.status === 'pending' ? (
+                   <div className="flex gap-2">
+                      <button onClick={() => handleRejectRequest(req.id)} className="flex-1 py-3 bg-red-50 text-red-600 rounded-2xl text-[9px] font-black uppercase">Recusar</button>
+                      <button onClick={() => handleApproveRequest(req)} className="flex-[2] py-3 bg-emerald-600 text-white rounded-2xl text-[9px] font-black uppercase shadow-lg shadow-emerald-100">Aprovar Ajuste</button>
+                   </div>
+                 ) : (
+                   <div className={`py-3 rounded-2xl text-[9px] font-black uppercase text-center ${req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                     Solicitação {req.status === 'approved' ? 'Aprovada' : 'Recusada'} em {new Date().toLocaleDateString()}
+                   </div>
+                 )}
               </div>
             ))}
-            {pending.length === 0 && (
+            {filteredRequests.length === 0 && (
               <div className="col-span-full py-20 text-center opacity-20 flex flex-col items-center">
-                 <span className="text-6xl mb-4">✨</span>
-                 <p className="text-xs font-black uppercase tracking-widest">Tudo em dia! Nenhuma pendência RH.</p>
+                 <span className="text-6xl mb-4">📂</span>
+                 <p className="text-xs font-black uppercase tracking-widest">Nenhum registro nesta pasta.</p>
               </div>
             )}
          </div>
@@ -378,89 +284,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     );
   }
 
-  if (activeTab === 'colaboradores') {
-     return (
-        <div className="space-y-6">
-           <div className="flex justify-between items-center px-2">
-              <h3 className="text-sm font-black uppercase text-slate-900">Quadro de Funcionários</h3>
-              <button onClick={() => { setEditingEmpId(null); setNewEmpData({name:'', matricula:'', roleFunction:'', workShift:'', password:''}); setShowAddModal(true); }} className="bg-orange-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-orange-100">+ Novo</button>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {employees.map(emp => (
-                 <div key={emp.id} className="bg-white p-6 rounded-[35px] border flex items-center gap-4 shadow-sm group hover:border-orange-200 transition-all">
-                    <img src={emp.photo} className="w-14 h-14 rounded-2xl object-cover border border-slate-100" />
-                    <div className="flex-1">
-                       <p className="text-xs font-black uppercase text-slate-900">{emp.name}</p>
-                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">MAT: {emp.matricula}</p>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <button onClick={() => startEdit(emp)} className="p-2 bg-slate-50 rounded-lg text-slate-600 hover:text-orange-600 transition-colors">✏️</button>
-                      <button onClick={() => onDeleteEmployee(emp.id)} className="p-2 bg-slate-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors">🗑️</button>
-                    </div>
-                 </div>
-              ))}
-           </div>
-           {showAddModal && (
-             <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
-                <div className="bg-white rounded-[44px] w-full max-sm p-10 shadow-2xl space-y-4 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
-                   <h2 className="text-[12px] font-black text-orange-600 text-center uppercase tracking-widest mb-6">{editingEmpId ? 'Editar Colaborador' : 'Novo Cadastro'}</h2>
-                   
-                   <div className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Nome completo</label>
-                        <input type="text" placeholder="Ex: João da Silva" value={newEmpData.name} onChange={e => setNewEmpData({...newEmpData, name: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Número da matrícula</label>
-                        <input type="text" placeholder="Ex: 100200" value={newEmpData.matricula} onChange={e => setNewEmpData({...newEmpData, matricula: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Função / Cargo</label>
-                        <input type="text" placeholder="Ex: Analista Financeiro" value={newEmpData.roleFunction} onChange={e => setNewEmpData({...newEmpData, roleFunction: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Jornada de trabalho</label>
-                        <input type="text" placeholder="Ex: 08:00 às 18:00" value={newEmpData.workShift} onChange={e => setNewEmpData({...newEmpData, workShift: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Senha de acesso</label>
-                        <input type="password" placeholder="Mínimo 4 dígitos" value={newEmpData.password} onChange={e => setNewEmpData({...newEmpData, password: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black border border-slate-100 outline-none focus:border-orange-200" />
-                      </div>
-                   </div>
-
-                   <div className="flex gap-3 pt-6">
-                      <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-400">Voltar</button>
-                      <button onClick={() => { editingEmpId ? onUpdateEmployee(editingEmpId, newEmpData) : onAddEmployee(newEmpData); setShowAddModal(false); }} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl shadow-orange-100">Salvar Dados</button>
-                   </div>
-                </div>
-             </div>
-           )}
-        </div>
-     );
-  }
-
   return (
     <div className="space-y-8 animate-in fade-in">
-       {/* Card de Acesso para Funcionários */}
        <div className="bg-slate-900 p-8 rounded-[44px] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-800">
           <div className="space-y-1 text-center md:text-left">
-             <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em]">Dados de Acesso dos Funcionários</p>
-             <h3 className="text-white text-lg font-black uppercase tracking-tight">Compartilhe este código para login</h3>
+             <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em]">Gestão Corporativa</p>
+             <h3 className="text-white text-lg font-black uppercase tracking-tight">{company?.name}</h3>
           </div>
           <div className="flex items-center gap-3">
              <div className="bg-slate-800 px-8 py-5 rounded-3xl border border-slate-700">
                 <span className="text-white font-mono text-2xl font-black tracking-[0.2em]">{company?.accessCode || '------'}</span>
              </div>
-             <button 
-               onClick={handleCopyCode}
-               className="p-5 bg-orange-600 text-white rounded-3xl hover:bg-orange-700 transition-all shadow-lg shadow-orange-900/20 active:scale-90"
-               title="Copiar Código"
-             >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+             <button onClick={handleCopyCode} className="p-5 bg-orange-600 text-white rounded-3xl hover:bg-orange-700 active:scale-90 transition-all">
+                📋
              </button>
           </div>
        </div>
@@ -471,35 +307,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
              <h3 className="text-3xl font-black text-slate-800">{stats.total}</h3>
           </div>
           <div className="bg-white p-8 rounded-[40px] border shadow-sm">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ativos Hoje</p>
+             <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Ativos Hoje</p>
              <h3 className="text-3xl font-black text-emerald-500">{stats.activeToday}</h3>
           </div>
-          <div className="bg-white p-8 rounded-[40px] border shadow-sm relative overflow-hidden">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pendentes RH</p>
+          <div className="bg-white p-8 rounded-[40px] border shadow-sm">
+             <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">Pendentes RH</p>
              <h3 className={`text-3xl font-black ${stats.pendingRequests > 0 ? 'text-orange-500' : 'text-slate-300'}`}>{stats.pendingRequests}</h3>
-             {stats.pendingRequests > 0 && <div className="absolute top-4 right-4 w-2 h-2 bg-orange-500 rounded-full animate-ping"></div>}
           </div>
        </div>
 
        <div className="bg-white p-8 rounded-[44px] border shadow-sm space-y-6">
-          <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest px-2">Módulos Administrativos</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-             <button onClick={() => setActiveTab('colaboradores')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'colaboradores' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <button onClick={() => setActiveTab('colaboradores')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'colaboradores' ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-50'}`}>
                 <span className="text-2xl">👥</span>
                 <span className="font-black uppercase text-[10px]">Funcionários</span>
              </button>
-             <button onClick={() => setActiveTab('aprovacoes')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 relative ${activeTab === 'aprovacoes' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
+             <button onClick={() => setActiveTab('aprovacoes')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 relative ${activeTab === 'aprovacoes' ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-50'}`}>
                 <span className="text-2xl">✅</span>
                 <span className="font-black uppercase text-[10px]">Aprovações</span>
-                {stats.pendingRequests > 0 && <span className="absolute top-4 right-4 bg-orange-500 text-white text-[8px] font-black px-2 py-1 rounded-full">{stats.pendingRequests}</span>}
+                {stats.pendingRequests > 0 && <span className="absolute top-4 right-4 bg-orange-500 text-white text-[8px] font-black px-2 py-1 rounded-full animate-pulse">{stats.pendingRequests}</span>}
              </button>
-             <button onClick={() => setActiveTab('saldos')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'saldos' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
-                <span className="text-2xl">📘</span>
+             <button onClick={() => setActiveTab('saldos')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'saldos' ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-50'}`}>
+                <span className="text-2xl">📗</span>
                 <span className="font-black uppercase text-[10px]">Livro de Ponto</span>
-             </button>
-             <button onClick={() => setActiveTab('audit')} className={`p-6 rounded-[35px] text-left transition-all flex flex-col gap-2 ${activeTab === 'audit' ? 'bg-slate-900 text-white' : 'bg-slate-50 hover:bg-slate-100'}`}>
-                <span className="text-2xl">🛡️</span>
-                <span className="font-black uppercase text-[10px]">Auditoria IA</span>
              </button>
           </div>
        </div>
