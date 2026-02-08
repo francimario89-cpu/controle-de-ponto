@@ -14,16 +14,8 @@ import Requests from './components/Requests';
 import AdminDashboard from './components/AdminDashboard';
 import AiAssistant from './components/AiAssistant';
 import ComplianceAudit from './components/ComplianceAudit';
-import BenefitsView from './components/BenefitsView';
-import FeedbackView from './components/FeedbackView';
-import VacationView from './components/VacationView';
-import SettingsView from './components/SettingsView';
-import ScheduleView from './components/ScheduleView';
-import CompanyProfile from './components/CompanyProfile';
-import CompaniesView from './components/CompaniesView';
-import KioskMode from './components/KioskMode';
-import HolidaysView from './components/HolidaysView';
 import Profile from './components/Profile';
+import CompanyProfile from './components/CompanyProfile';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -87,52 +79,50 @@ const App: React.FC = () => {
     setActiveView('dashboard');
   };
 
-  const handlePunch = async (photo: string, loc: { lat: number; lng: number; address: string }) => {
+  // Implementação da função handlePunch para processar o registro de ponto
+  const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }) => {
     if (!user) return;
-    const now = new Date();
-    const newRecord: any = {
+    
+    // Gerar uma assinatura digital simulada para o registro
+    const signature = `FT-${user.matricula || 'N/A'}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    
+    const newRecordData = {
       userName: user.name,
-      timestamp: now,
-      address: loc.address,
-      latitude: loc.lat,
-      longitude: loc.lng,
-      photo,
-      status: 'synchronized',
-      matricula: user.matricula,
-      companyCode: user.companyCode,
-      digitalSignature: Math.random().toString(36).substring(2, 15),
-      type: 'entrada' 
+      matricula: user.matricula || 'N/A',
+      timestamp: new Date(),
+      address: location.address,
+      latitude: location.lat,
+      longitude: location.lng,
+      photo: photo,
+      status: 'synchronized' as const,
+      digitalSignature: signature,
+      type: 'entrada' as const, // Lógica base poderia alternar entre entrada/saída conforme o histórico
+      companyCode: user.companyCode
     };
 
     try {
-      const docRef = await addDoc(collection(db, "records"), newRecord);
-      const recordWithId = { ...newRecord, id: docRef.id };
+      // Salva o registro no banco de dados Firestore
+      const docRef = await addDoc(collection(db, "records"), newRecordData);
+      
+      // Cria o objeto completo com ID gerado para exibição do comprovante
+      const recordWithId = { ...newRecordData, id: docRef.id } as PointRecord;
       setLastPunch(recordWithId);
       setShowPunchCamera(false);
-    } catch (e) {
-      console.error("Erro ao registrar ponto:", e);
-      alert("Erro ao salvar ponto.");
+    } catch (err) {
+      console.error("Erro ao registrar ponto:", err);
+      alert("Falha ao salvar o ponto eletrônico. Verifique sua conexão.");
     }
   };
 
+  const isAdmin = user?.role === 'admin';
+  const isAdminView = ['colaboradores', 'aprovacoes', 'saldos', 'audit', 'company_profile'].includes(activeView) || (isAdmin && activeView === 'dashboard');
+
   if (!user) return <Login onLogin={handleLogin} />;
-
-  if (user.role === 'totem') {
-    return (
-      <KioskMode 
-        employees={employees} 
-        onPunch={(r) => { setLastPunch(r); }} 
-        onExit={handleLogout} 
-      />
-    );
-  }
-
-  const isAdminView = ['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos', 'audit', 'company_profile'].includes(activeView);
 
   return (
     <div className={`flex h-screen w-screen transition-colors duration-500 overflow-hidden font-sans ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
       
-      {/* Sidebar Fixo no Desktop, Drawer no Mobile */}
+      {/* SIDEBAR FIXA (DESKTOP) E DRAWER (MOBILE) */}
       <Sidebar 
         user={user} 
         company={company} 
@@ -142,74 +132,82 @@ const App: React.FC = () => {
         activeView={activeView}
       />
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
         
-        {/* Header Mobile */}
+        {/* HEADER MOBILE */}
         <header className="md:hidden p-4 flex justify-between items-center border-b dark:border-slate-800 bg-white dark:bg-slate-900 z-30">
            <button onClick={() => setIsSidebarOpen(true)} className="p-2">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
            </button>
-           <h1 className="text-sm font-black tracking-tighter">ForTime <span className="text-primary">PRO</span></h1>
+           <h1 className="text-sm font-black tracking-tighter uppercase">ForTime <span className="text-primary">PRO</span></h1>
            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 text-xl">{isDarkMode ? '🌞' : '🌙'}</button>
         </header>
 
-        {/* Header Desktop (Opcional) */}
-        <header className="hidden md:flex p-6 justify-between items-center bg-white dark:bg-slate-900 border-b dark:border-slate-800">
-           <div>
-             <h1 className="text-lg font-black tracking-tighter uppercase">{company?.name || 'ForTime PRO'}</h1>
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{activeView.replace('_', ' ')}</p>
-           </div>
-           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl shadow-sm hover:scale-105 transition-all">
-             {isDarkMode ? '🌞 Light Mode' : '🌙 Dark Mode'}
-           </button>
-        </header>
+        {/* HEADER DESKTOP (APENAS PARA ADMIN) */}
+        {isAdmin && (
+          <header className="hidden md:flex p-6 justify-between items-center bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-10">
+             <div>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Módulo Administrativo</p>
+               <h2 className="text-xl font-black tracking-tighter uppercase text-slate-800 dark:text-white">
+                 Gestão de RH - {company?.name}
+               </h2>
+             </div>
+             <div className="flex items-center gap-4">
+                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl hover:scale-105 transition-all text-sm font-bold">
+                  {isDarkMode ? '🌞 Modo Claro' : '🌙 Modo Escuro'}
+                </button>
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xl">🛡️</div>
+             </div>
+          </header>
+        )}
 
         <main className="flex-1 overflow-y-auto no-scrollbar">
-          <div className={`mx-auto w-full h-full ${isAdminView ? 'p-4 md:p-10' : 'max-w-md p-4'}`}>
-            {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
-            {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
-            {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
-            {activeView === 'requests' && <Requests />}
-            {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
-            {activeView === 'profile' && <Profile user={user} company={company} onLogout={handleLogout} />}
-            {activeView === 'audit' && <ComplianceAudit records={records} employees={employees} />}
-            {activeView === 'companies' && <CompaniesView />}
-            {activeView === 'company_profile' && <CompanyProfile company={company} />}
-            {activeView === 'holidays' && <HolidaysView company={company} />}
-            {activeView === 'benefits' && <BenefitsView />}
-            {activeView === 'feedback' && <FeedbackView user={user} />}
-            {activeView === 'vacation' && <VacationView />}
-            {activeView === 'settings' && <SettingsView user={user} onBack={() => setActiveView('dashboard')} />}
-            {activeView === 'schedule' && <ScheduleView />}
+          <div className={`mx-auto w-full h-full ${isAdminView ? 'p-6 md:p-10' : 'max-w-md p-4'}`}>
+            
+            {/* CONTEÚDO COLABORADOR */}
+            {!isAdmin && (
+              <>
+                {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
+                {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
+                {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
+                {activeView === 'requests' && <Requests />}
+                {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
+                {activeView === 'profile' && <Profile user={user} company={company} onLogout={handleLogout} />}
+              </>
+            )}
 
-            {(['colaboradores', 'aprovacoes', 'config', 'relatorio', 'saldos'].includes(activeView)) && 
+            {/* CONTEÚDO ADMINISTRADOR */}
+            {isAdmin && (
               <AdminDashboard 
-                latestRecords={records} company={company} employees={employees} 
+                latestRecords={records} 
+                company={company} 
+                employees={employees} 
                 onAddEmployee={async (e) => {
                   try {
                     await addDoc(collection(db, "employees"), { 
                       ...e, 
                       companyCode: user.companyCode, 
                       status: 'active', 
-                      hasFacialRecord: false,
                       photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(e.name)}&background=0057ff&color=fff`
                     });
-                    alert("COLABORADOR CADASTRADO COM SUCESSO!");
-                  } catch (err) {
-                    console.error("Erro ao adicionar:", err);
-                    alert("ERRO AO SALVAR COLABORADOR.");
-                  }
+                    alert("CADASTRADO!");
+                  } catch (err) { alert("ERRO AO SALVAR."); }
                 }} 
-                onDeleteEmployee={async (id) => { if(confirm("EXCLUIR COLABORADOR?")) await deleteDoc(doc(db, "employees", id)); }} 
+                onDeleteEmployee={async (id) => { if(confirm("EXCLUIR?")) await deleteDoc(doc(db, "employees", id)); }} 
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}
+                onNavigate={setActiveView}
               />
-            }
+            )}
+
+            {/* VIEWS COMUNS (SE NECESSÁRIO) */}
+            {activeView === 'company_profile' && <CompanyProfile company={company} />}
           </div>
         </main>
 
-        {showPunchCamera && <PunchCamera geofenceConfig={company?.geofence} onCapture={handlePunch} onCancel={() => setShowPunchCamera(false)} />}
-        {lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
+        {/* MODAIS DE PONTO (APENAS COLABORADOR) */}
+        {!isAdmin && showPunchCamera && <PunchCamera geofenceConfig={company?.geofence} onCapture={handlePunch} onCancel={() => setShowPunchCamera(false)} />}
+        {!isAdmin && lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
       </div>
     </div>
   );
