@@ -21,33 +21,39 @@ export const getGeminiResponse = async (prompt: string, records: string[]) => {
 
 export const auditCompliance = async (employeeName: string, records: string[], workShift: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const auditPrompt = `
+    Analise o ponto de ${employeeName}.
+    Carga Horária Contratual: ${workShift}.
+    Registros de Ponto (Data/Hora):
+    ${records.join('\n')}
+
+    Instruções:
+    1. Calcule o total de horas trabalhadas em cada dia.
+    2. Identifique explicitamente HORAS FALTANTES (débito) ou HORAS EXTRAS (crédito) em relação à carga de ${workShift}.
+    3. Verifique se houve esquecimento de batida (registros ímpares no dia).
+    4. Analise o intervalo de almoço (mínimo 1h).
+    5. Avalie o risco trabalhista (Baixo, Médio, Alto).
+  `;
+
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: {
-      parts: [
-        { text: `O colaborador ${employeeName} tem uma carga horária contratual de ${workShift}. 
-Analise rigorosamente as seguintes marcações de ponto e determine:
-1. SALDO DE HORAS: O colaborador está com horas faltando ou fazendo horas extras? Calcule aproximadamente.
-2. INTERVALOS: Os intervalos de descanso (mínimo 1h) foram respeitados?
-3. RISCOS CLT: Há irregularidades como falta de descanso interjornada (11h) ou jornadas excessivas?
-
-Marcações:
-${records.join('\n')}` }
-      ]
+      parts: [{ text: auditPrompt }]
     },
     config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          riskLevel: { type: Type.STRING, description: "Baixo, Médio ou Alto" },
-          summary: { type: Type.STRING, description: "Resumo detalhado focando em saldo de horas e conformidade." },
-          balanceInfo: { type: Type.STRING, description: "Texto específico sobre horas faltantes ou extras detectadas." },
-          alerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de irregularidades ou avisos específicos." }
+          riskLevel: { type: Type.STRING, description: "Nível de risco: Baixo, Médio ou Alto" },
+          summary: { type: Type.STRING, description: "Resumo analítico focado em conformidade." },
+          balanceInfo: { type: Type.STRING, description: "Cálculo detalhado de Horas Faltando ou Horas Extras encontradas." },
+          alerts: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de irregularidades específicas." }
         },
         required: ["riskLevel", "summary", "balanceInfo", "alerts"]
       },
-      systemInstruction: "Você é um auditor trabalhista sênior. Sua prioridade é identificar se o colaborador está cumprindo a jornada, se deve horas à empresa ou se a empresa deve horas extras. Seja preciso nos cálculos baseados nas marcações fornecidas.",
+      systemInstruction: "Você é um auditor de RH especialista em CLT. Seu objetivo é detectar erros de jornada, saldo de horas (extras/faltas) e riscos jurídicos. Seja extremamente preciso nos cálculos.",
     }
   });
   
@@ -56,9 +62,9 @@ ${records.join('\n')}` }
   } catch {
     return { 
       riskLevel: "Erro", 
-      summary: "Não foi possível processar a auditoria no momento.", 
-      balanceInfo: "Cálculo indisponível.",
-      alerts: ["Erro na resposta da IA"] 
+      summary: "Falha na análise da IA.", 
+      balanceInfo: "Não foi possível calcular o saldo.",
+      alerts: ["A resposta da IA não pôde ser processada."] 
     };
   }
 };
@@ -67,7 +73,7 @@ export const generateDailyBriefingAudio = async (summaryText: string) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: `Leia este resumo de RH de forma profissional e encorajadora: ${summaryText}` }] }],
+    contents: [{ parts: [{ text: `Leia este resumo de RH: ${summaryText}` }] }],
     config: {
       responseModalities: [Modality.AUDIO],
       speechConfig: {
