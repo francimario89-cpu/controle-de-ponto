@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PointRecord, Company, Employee } from '../types';
 
 interface AdminDashboardProps {
@@ -21,6 +21,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmpData, setNewEmpData] = useState({ name: '', matricula: '', roleFunction: '', workShift: '', password: '' });
 
+  // Filtros de Relatório
+  const [reportFilter, setReportFilter] = useState({
+    matricula: 'todos',
+    month: new Date().getMonth(),
+    year: new Date().getFullYear()
+  });
+
   const handleVerifyAdmin = () => {
     if (adminPassAttempt === company?.adminPassword) {
       setIsAuthorized(true);
@@ -31,13 +38,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     }
   };
 
+  const filteredRecords = useMemo(() => {
+    return latestRecords.filter(r => {
+      const date = new Date(r.timestamp);
+      const matchMonth = date.getMonth() === reportFilter.month;
+      const matchYear = date.getFullYear() === reportFilter.year;
+      const matchEmp = reportFilter.matricula === 'todos' || r.matricula === reportFilter.matricula;
+      return matchMonth && matchYear && matchEmp;
+    });
+  }, [latestRecords, reportFilter]);
+
+  const handleDownloadReport = () => {
+    if (filteredRecords.length === 0) {
+      alert("Nenhum registro encontrado para este período.");
+      return;
+    }
+
+    const empName = reportFilter.matricula === 'todos' ? 'Geral' : employees.find(e => e.matricula === reportFilter.matricula)?.name || 'Colaborador';
+    const monthName = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+
+    let content = `RELATÓRIO DE PONTO ELETRÔNICO - ${company?.name}\n`;
+    content += `PERÍODO: ${monthName} / ${reportFilter.year}\n`;
+    content += `COLABORADOR: ${empName}\n`;
+    content += `------------------------------------------------------------\n`;
+    content += `DATA       | HORA  | TIPO    | ASSINATURA DIGITAL\n`;
+    content += `------------------------------------------------------------\n`;
+
+    filteredRecords.forEach(r => {
+      const date = new Date(r.timestamp).toLocaleDateString('pt-BR');
+      const time = new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const type = (r.type || 'PONTO').toUpperCase().padEnd(8);
+      content += `${date} | ${time} | ${type} | ${r.digitalSignature || 'N/A'}\n`;
+    });
+
+    content += `------------------------------------------------------------\n`;
+    content += `Gerado em: ${new Date().toLocaleString()}\n`;
+    content += `ForTime PRO - Software de Gestão em conformidade com Portaria 671\n`;
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Relatorio_Ponto_${empName.replace(/ /g, '_')}_${monthName}_${reportFilter.year}.txt`;
+    link.click();
+  };
+
   const stats = {
     total: employees.length,
     activeToday: latestRecords.filter(r => r.timestamp.toDateString() === new Date().toDateString()).length,
-    pendingRequests: 3 // Simulado
+    pendingRequests: 3
   };
 
-  // TELA DE SEGURANÇA (BLOQUEIO)
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-slate-50 dark:bg-slate-950 p-6">
@@ -70,7 +121,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     );
   }
 
-  // DASHBOARD ADMINISTRATIVO (SEM PONTO)
   if (activeTab === 'dashboard') {
     return (
       <div className="space-y-8 animate-in fade-in duration-500">
@@ -96,28 +146,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
            </div>
            
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button onClick={() => { setActiveTab('colaboradores'); onNavigate('colaboradores'); }} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
+              <button onClick={() => setActiveTab('colaboradores')} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
                  <span className="text-3xl">👥</span>
                  <div className="text-left">
                     <p className="text-xs font-black uppercase">Gestão de Pessoas</p>
                     <p className="text-[9px] font-bold opacity-60 uppercase">Contratação e Listagem</p>
                  </div>
               </button>
-              <button onClick={() => { setActiveTab('aprovacoes'); onNavigate('aprovacoes'); }} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
+              <button onClick={() => setActiveTab('aprovacoes')} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
                  <span className="text-3xl">✅</span>
                  <div className="text-left">
                     <p className="text-xs font-black uppercase">Aprovações de Ajuste</p>
                     <p className="text-[9px] font-bold opacity-60 uppercase">Atestados e Ponto</p>
                  </div>
               </button>
-              <button onClick={() => { setActiveTab('saldos'); onNavigate('saldos'); }} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
+              <button onClick={() => setActiveTab('saldos')} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
                  <span className="text-3xl">📊</span>
                  <div className="text-left">
                     <p className="text-xs font-black uppercase">Saldos e Relatórios</p>
                     <p className="text-[9px] font-bold opacity-60 uppercase">Banco de Horas / Espelho</p>
                  </div>
               </button>
-              <button onClick={() => { setActiveTab('audit'); onNavigate('audit'); }} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
+              <button onClick={() => setActiveTab('audit')} className="flex items-center gap-5 p-6 bg-slate-50 dark:bg-slate-800 rounded-[35px] hover:bg-primary hover:text-white transition-all group">
                  <span className="text-3xl">🤖</span>
                  <div className="text-left">
                     <p className="text-xs font-black uppercase">Compliance IA</p>
@@ -130,7 +180,90 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     );
   }
 
-  // TELA DE COLABORADORES
+  if (activeTab === 'saldos') {
+    return (
+      <div className="space-y-6 animate-in slide-in-from-right duration-500">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm">
+           <div className="space-y-4 w-full flex-1">
+              <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">Gerador de Relatórios</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                 <div className="space-y-1">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Colaborador</p>
+                    <select 
+                      value={reportFilter.matricula}
+                      onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[10px] font-black outline-none border-2 border-transparent focus:border-primary/20 dark:text-white"
+                    >
+                      <option value="todos">TODOS OS COLABORADORES</option>
+                      {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
+                    </select>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Mês de Referência</p>
+                    <select 
+                      value={reportFilter.month}
+                      onChange={e => setReportFilter({...reportFilter, month: parseInt(e.target.value)})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[10px] font-black outline-none dark:text-white"
+                    >
+                      {Array.from({length: 12}).map((_, i) => (
+                        <option key={i} value={i}>{new Date(0, i).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()}</option>
+                      ))}
+                    </select>
+                 </div>
+                 <div className="space-y-1">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Ano</p>
+                    <select 
+                      value={reportFilter.year}
+                      onChange={e => setReportFilter({...reportFilter, year: parseInt(e.target.value)})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[10px] font-black outline-none dark:text-white"
+                    >
+                      <option value={2024}>2024</option>
+                      <option value={2025}>2025</option>
+                    </select>
+                 </div>
+              </div>
+           </div>
+           <button 
+             onClick={handleDownloadReport}
+             className="w-full md:w-auto mt-4 md:mt-0 bg-primary text-white px-10 py-5 rounded-[28px] font-black text-[11px] uppercase shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+           >
+             📥 Baixar Relatório
+           </button>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-[40px] border dark:border-slate-800 overflow-hidden">
+           <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-400 text-[9px] font-black uppercase tracking-widest">
+                 <tr>
+                    <th className="p-5">Colaborador</th>
+                    <th className="p-5">Data</th>
+                    <th className="p-5">Horário</th>
+                    <th className="p-5">Tipo</th>
+                    <th className="p-5">Local</th>
+                 </tr>
+              </thead>
+              <tbody className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                 {filteredRecords.map(r => (
+                    <tr key={r.id} className="border-b dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                       <td className="p-5">{r.userName}</td>
+                       <td className="p-5">{new Date(r.timestamp).toLocaleDateString('pt-BR')}</td>
+                       <td className="p-5 font-black text-primary">{new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+                       <td className="p-5 uppercase">{r.type}</td>
+                       <td className="p-5 truncate max-w-[150px]">{r.address}</td>
+                    </tr>
+                 ))}
+              </tbody>
+           </table>
+           {filteredRecords.length === 0 && (
+             <div className="p-20 text-center text-slate-300 uppercase text-[10px] font-black tracking-widest">
+                Nenhuma batida encontrada para este filtro
+             </div>
+           )}
+        </div>
+      </div>
+    );
+  }
+
   if (activeTab === 'colaboradores') {
      return (
         <div className="space-y-6 animate-in slide-in-from-right duration-500">
@@ -174,7 +307,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
      );
   }
 
-  // PLACEHOLDER PARA OUTRAS ABAS (SÓ PARA ESTRUTURA)
   return (
     <div className="flex flex-col items-center justify-center h-full text-center py-20 animate-in fade-in">
        <span className="text-6xl mb-6">📂</span>

@@ -60,24 +60,27 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
 
         <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1 no-scrollbar">
           <div className="pt-2 pb-4 px-5">
-            <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">{isAdmin ? 'Gestão Corporativa' : 'Menu Colaborador'}</p>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{isAdmin ? 'Gestão Corporativa' : 'Menu Colaborador'}</p>
           </div>
 
-          {menuItems.map(item => (
-            <button 
-              key={item.id} 
-              onClick={() => { onNavigate(item.id); onClose(); }} 
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${activeView === item.id ? 'bg-primary text-white shadow-lg font-black' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 font-bold'}`}
-            >
-              <span className="shrink-0">{item.icon}</span>
-              <span className="text-[10px] uppercase tracking-wider">{item.label}</span>
-            </button>
-          ))}
+          {menuItems.map(item => {
+            const isActive = activeView === item.id;
+            return (
+              <button 
+                key={item.id} 
+                onClick={() => { onNavigate(item.id); onClose(); }} 
+                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive ? 'bg-primary text-white shadow-lg font-black' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-bold'}`}
+              >
+                <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`}>{item.icon}</span>
+                <span className="text-[10px] uppercase tracking-wider">{item.label}</span>
+              </button>
+            );
+          })}
 
           <div className="pt-8 border-t dark:border-slate-800 mt-4">
             <button 
               onClick={() => onNavigate('logout')}
-              className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 font-bold transition-all"
+              className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 font-black transition-all"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
               <span className="text-[10px] uppercase tracking-wider">Sair do App</span>
@@ -86,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
         </div>
         
         <div className="p-6 text-center border-t dark:border-slate-800">
-           <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">ForTime PRO v4.5</p>
+           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ForTime PRO v4.5</p>
         </div>
       </div>
     </>
