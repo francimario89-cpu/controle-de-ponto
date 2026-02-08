@@ -31,7 +31,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [selectedAuditEmp, setSelectedAuditEmp] = useState('');
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
 
-  // Captura data local de Brasília (Browser)
   const now = new Date();
   const [reportFilter, setReportFilter] = useState({
     matricula: 'todos',
@@ -39,7 +38,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     year: now.getFullYear()
   });
 
-  // Gera lista de anos dinâmica (Ano atual - 1 até Ano atual + 4)
   const availableYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -72,6 +70,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     } else {
       setAuthError(true);
       setAdminPassAttempt('');
+    }
+  };
+
+  const handleCopyCode = () => {
+    if (company?.accessCode) {
+      navigator.clipboard.writeText(company.accessCode);
+      alert("CÓDIGO COPIADO! Envie para seus funcionários.");
     }
   };
 
@@ -134,7 +139,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         .title { text-align: center; font-size: 14px; font-weight: bold; border-bottom: 2px solid #000; padding: 10px 0; text-transform: uppercase; }
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #000; padding: 2px 4px; height: 14px; }
-        .header-box { background: #f0f0f0; font-weight: bold; font-size: 7px; text-transform: uppercase; }
         .field-label { font-size: 6px; font-weight: bold; color: #444; display: block; }
         .field-value { font-size: 9px; font-weight: bold; }
         .ponto-table th { font-size: 7px; font-weight: bold; background: #eee; }
@@ -313,6 +317,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   return (
     <div className="space-y-8 animate-in fade-in">
+       {/* Card de Acesso para Funcionários */}
+       <div className="bg-slate-900 p-8 rounded-[44px] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-800">
+          <div className="space-y-1 text-center md:text-left">
+             <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em]">Dados de Acesso dos Funcionários</p>
+             <h3 className="text-white text-lg font-black uppercase tracking-tight">Compartilhe este código para login</h3>
+          </div>
+          <div className="flex items-center gap-3">
+             <div className="bg-slate-800 px-8 py-5 rounded-3xl border border-slate-700">
+                <span className="text-white font-mono text-2xl font-black tracking-[0.2em]">{company?.accessCode || '------'}</span>
+             </div>
+             <button 
+               onClick={handleCopyCode}
+               className="p-5 bg-orange-600 text-white rounded-3xl hover:bg-orange-700 transition-all shadow-lg shadow-orange-900/20 active:scale-90"
+               title="Copiar Código"
+             >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+             </button>
+          </div>
+       </div>
+
        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-8 rounded-[40px] border shadow-sm">
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Equipe Total</p>
@@ -327,6 +351,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
              <h3 className="text-3xl font-black text-orange-500">{stats.pendingRequests}</h3>
           </div>
        </div>
+
        <div className="bg-white p-8 rounded-[44px] border shadow-sm space-y-6">
           <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest px-2">Módulos Administrativos</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

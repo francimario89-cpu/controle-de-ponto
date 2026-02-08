@@ -55,6 +55,11 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
            <p className="text-orange-600 text-[9px] font-black uppercase tracking-[0.3em] mt-2">
              {isAdmin ? 'Administrador' : (user.roleFunction || 'Colaborador')}
            </p>
+           {isAdmin && company?.accessCode && (
+             <div className="mt-3 bg-orange-100 px-4 py-1.5 rounded-full border border-orange-200">
+               <p className="text-[8px] font-black text-orange-600 uppercase tracking-widest">CÓDIGO: {company.accessCode}</p>
+             </div>
+           )}
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1 no-scrollbar">
