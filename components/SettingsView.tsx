@@ -7,9 +7,11 @@ import { doc, updateDoc, query, collection, where, getDocs } from 'firebase/fire
 interface SettingsViewProps {
   user: User;
   onBack: () => void;
+  isDarkMode: boolean;
+  onToggleDarkMode: () => void;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ user, onBack }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ user, onBack, isDarkMode, onToggleDarkMode }) => {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -95,6 +97,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({ user, onBack }) => {
               className={`w-12 h-6 rounded-full relative transition-colors ${pushEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
             >
               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${pushEnabled ? 'right-1' : 'left-1'}`}></div>
+            </button>
+          </div>
+        </section>
+
+        <hr className="dark:border-slate-800" />
+
+        {/* Modo Escuro */}
+        <section className="space-y-2">
+          <div className="flex justify-between items-center">
+            <div className="space-y-1">
+              <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm">Modo Escuro</h3>
+              <p className="text-xs text-slate-500 font-medium">Alterar tema do aplicativo</p>
+            </div>
+            <button 
+              onClick={onToggleDarkMode}
+              className={`w-12 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isDarkMode ? 'right-1' : 'left-1'}`}></div>
             </button>
           </div>
         </section>

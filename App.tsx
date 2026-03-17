@@ -16,6 +16,8 @@ import AiAssistant from './components/AiAssistant';
 import Profile from './components/Profile';
 import CompanyProfile from './components/CompanyProfile';
 import BottomNav from './components/BottomNav';
+import VacationView from './components/VacationView';
+import SettingsView from './components/SettingsView';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -29,6 +31,19 @@ const App: React.FC = () => {
   const [showPunchCamera, setShowPunchCamera] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('fortime_dark_mode');
+    return saved === 'true';
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('fortime_dark_mode', String(isDarkMode));
+  }, [isDarkMode]);
 
   useEffect(() => {
     if (user?.companyCode) {
@@ -144,6 +159,8 @@ const App: React.FC = () => {
                 {activeView === 'requests' && <Requests />}
                 {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
                 {activeView === 'profile' && <Profile user={user} company={company} onLogout={handleLogout} />}
+                {activeView === 'vacation' && <VacationView user={user} />}
+                {activeView === 'settings' && <SettingsView user={user} onBack={() => setActiveView('dashboard')} isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} />}
               </>
             ) : (
               <AdminDashboard 

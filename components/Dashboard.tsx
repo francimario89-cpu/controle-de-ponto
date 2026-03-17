@@ -41,12 +41,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
     return slots;
   }, [records]);
 
+  const alerts = useMemo(() => {
+    const today = new Date().toDateString();
+    const todayRecords = records.filter(r => new Date(r.timestamp).toDateString() === today);
+    const currentHour = new Date().getHours();
+    
+    const messages = [];
+
+    if (todayRecords.length === 1 && currentHour >= 13) {
+      messages.push({ id: 'missed_lunch', text: 'Você esqueceu de registrar o início do intervalo?', type: 'warning' });
+    }
+    if (todayRecords.length === 3 && currentHour >= 19) {
+      messages.push({ id: 'missed_exit', text: 'Não esqueça de registrar sua saída hoje!', type: 'info' });
+    }
+
+    return messages;
+  }, [records]);
+
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-36 overflow-y-auto no-scrollbar">
       <div className="space-y-2">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, {user.name.split(' ')[0]} 👋</p>
         <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Ponto</h2>
       </div>
+
+      {alerts.length > 0 && (
+        <div className="space-y-2">
+          {alerts.map(alert => (
+            <div key={alert.id} className={`p-4 rounded-3xl flex items-center gap-3 animate-in slide-in-from-top-4 ${alert.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 border border-amber-100 dark:border-amber-900/30' : 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-100 dark:border-blue-900/30'}`}>
+              <span className="text-lg">{alert.type === 'warning' ? '⚠️' : '🔔'}</span>
+              <p className="text-[10px] font-black uppercase tracking-wider">{alert.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-900 rounded-[44px] p-8 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-6">
         <div className="text-center space-y-1">

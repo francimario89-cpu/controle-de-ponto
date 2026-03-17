@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import ComplianceAudit from './ComplianceAudit';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
 interface jsPDFWithPlugin extends jsPDF {
   autoTable: (options: any) => jsPDF;
@@ -31,7 +32,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [adminPassAttempt, setAdminPassAttempt] = useState('');
   const [authError, setAuthError] = useState(false);
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
+  const [vacationRequests, setVacationRequests] = useState<any[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showManualPunchModal, setShowManualPunchModal] = useState(false);
+  const [selectedEmployeeManualPunch, setSelectedEmployeeManualPunch] = useState<Employee | null>(null);
+  const [manualPunchDate, setManualPunchDate] = useState(new Date().toISOString().split('T')[0]);
+  const [manualPunchTime, setManualPunchTime] = useState('08:00');
+  const [manualPunchType, setManualPunchType] = useState<'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo'>('entrada');
   const [editingPasswordId, setEditingPasswordId] = useState<string | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState('');
   
@@ -69,6 +76,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           reqs.push({ id: d.id, ...data, createdAt });
         });
         setRequests(reqs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+      });
+      return () => unsub();
+    }
+  }, [isAuthorized, company?.id]);
+
+  useEffect(() => {
+    if (isAuthorized && company?.id) {
+      const q = query(collection(db, "vacations"), where("companyCode", "==", company.id));
+      const unsub = onSnapshot(q, (snap) => {
+        const reqs: any[] = [];
+        snap.forEach(d => {
+          const data = d.data();
+          reqs.push({ id: d.id, ...data, createdAt: data.createdAt?.toDate() || new Date() });
+        });
+        setVacationRequests(reqs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
       });
       return () => unsub();
     }
@@ -255,6 +277,65 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     doc.save(`FOLHA_PONTO_${company?.name || 'EMPRESA'}_${reportFilter.month + 1}_${reportFilter.year}.pdf`);
   };
 
+  const handleExportCSV = () => {
+    const headers = ['Data', 'Matricula', 'Nome', 'Tipo', 'Horário', 'Endereço', 'Status'];
+    const rows = filteredRecords.map(r => [
+      new Date(r.timestamp).toLocaleDateString('pt-BR'),
+      r.matricula,
+      r.userName,
+      r.type,
+      new Date(r.timestamp).toLocaleTimeString('pt-BR'),
+      r.address,
+      r.status
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `relatorio_ponto_${company?.name || 'empresa'}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const chartData = useMemo(() => {
+    // Registros por dia (últimos 7 dias)
+    const last7Days = Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    }).reverse();
+
+    const activityByDay = last7Days.map(day => {
+      const count = latestRecords.filter(r => 
+        new Date(r.timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) === day
+      ).length;
+      return { name: day, registros: count };
+    });
+
+    // Tipos de registros
+    const types = {
+      entrada: latestRecords.filter(r => r.type === 'entrada').length,
+      saida: latestRecords.filter(r => r.type === 'saida').length,
+      intervalo: latestRecords.filter(r => r.type === 'inicio_intervalo' || r.type === 'fim_intervalo').length,
+    };
+
+    const typeData = [
+      { name: 'Entradas', value: types.entrada, color: '#f97316' },
+      { name: 'Saídas', value: types.saida, color: '#475569' },
+      { name: 'Intervalos', value: types.intervalo, color: '#94a3b8' },
+    ];
+
+    return { activityByDay, typeData };
+  }, [latestRecords]);
+
   const handleUpdatePassword = async () => {
     if (!editingPasswordId || !newPasswordValue) return;
     try {
@@ -263,6 +344,46 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       setEditingPasswordId(null);
       setNewPasswordValue('');
     } catch (e) { alert("ERRO AO ATUALIZAR."); }
+  };
+
+  const handleVacationStatus = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      await updateDoc(doc(db, "vacations", id), { status });
+      alert(`SOLICITAÇÃO ${status === 'approved' ? 'APROVADA' : 'RECUSADA'}!`);
+    } catch (e) { alert("ERRO AO ATUALIZAR STATUS."); }
+  };
+
+  const handleManualPunch = async () => {
+    if (!selectedEmployeeManualPunch || !manualPunchDate || !manualPunchTime) return;
+    
+    const [year, month, day] = manualPunchDate.split('-').map(Number);
+    const [hours, minutes] = manualPunchTime.split(':').map(Number);
+    const timestamp = new Date(year, month - 1, day, hours, minutes);
+    
+    const signature = `MANUAL-${selectedEmployeeManualPunch.matricula}-${Date.now()}`;
+    
+    const newRecord = {
+      userName: selectedEmployeeManualPunch.name,
+      matricula: selectedEmployeeManualPunch.matricula,
+      timestamp: timestamp,
+      address: 'LANÇAMENTO MANUAL (RH)',
+      latitude: 0,
+      longitude: 0,
+      photo: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
+      status: 'synchronized',
+      digitalSignature: signature,
+      type: manualPunchType,
+      companyCode: company?.id,
+      isAdjustment: true
+    };
+
+    try {
+      await addDoc(collection(db, "records"), newRecord);
+      alert("PONTO MANUAL REGISTRADO COM SUCESSO!");
+      setShowManualPunchModal(false);
+    } catch (err) {
+      alert("ERRO AO SALVAR PONTO MANUAL.");
+    }
   };
 
   if (!isAuthorized) {
@@ -285,6 +406,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           { id: 'dashboard', label: 'Início', icon: '🏠' },
           { id: 'colaboradores', label: 'Equipe', icon: '👥' },
           { id: 'aprovacoes', label: 'Pedidos', icon: '✅' },
+          { id: 'ferias', label: 'Férias', icon: '🏖️' },
           { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
           { id: 'audit', label: 'IA Audit', icon: '⚖️' }
         ].map(tab => (
@@ -322,6 +444,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <p className="text-4xl font-black text-blue-600">{stats.pendingRequests}</p>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white p-8 rounded-[40px] border shadow-sm">
+              <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Atividade (Últimos 7 dias)</h4>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData.activityByDay}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      cursor={{ fill: '#f8fafc' }}
+                    />
+                    <Bar dataKey="registros" fill="#f97316" radius={[4, 4, 0, 0]} barSize={30} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[40px] border shadow-sm">
+              <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Distribuição de Registros</h4>
+              <div className="h-[250px] w-full flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData.typeData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {chartData.typeData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-col gap-2 ml-4">
+                  {chartData.typeData.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{backgroundColor: item.color}}></div>
+                      <span className="text-[10px] font-black uppercase text-slate-600">{item.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -343,6 +517,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     <td className="p-5 text-slate-400">{emp.matricula}</td>
                     <td className="p-5 text-slate-500">{emp.roleFunction || '-'}</td>
                     <td className="p-5 text-center flex justify-center gap-2">
+                      <button onClick={() => { setSelectedEmployeeManualPunch(emp); setShowManualPunchModal(true); }} className="bg-orange-50 text-orange-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Ponto</button>
                       <button onClick={() => { setEditingPasswordId(emp.id); setNewPasswordValue(''); }} className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Senha</button>
                       <button onClick={() => onDeleteEmployee(emp.id)} className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Excluir</button>
                     </td>
@@ -359,9 +534,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-black uppercase">Exportar Folha Ponto (PDF A4)</h3>
-              <button onClick={handleExportPDF} className="bg-orange-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2">
-                📥 Baixar Folha Oficial
-              </button>
+              <div className="flex gap-2">
+                <button onClick={handleExportCSV} className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">
+                  📊 Exportar CSV
+                </button>
+                <button onClick={handleExportPDF} className="bg-orange-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2">
+                  📥 Baixar Folha Oficial
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
@@ -380,6 +560,55 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       )}
 
       {activeTab === 'audit' && <ComplianceAudit records={latestRecords} employees={employees} />}
+
+      {activeTab === 'ferias' && (
+        <div className="space-y-6">
+          <h3 className="text-sm font-black uppercase px-2">Solicitações de Férias</h3>
+          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+            <table className="w-full text-left min-w-[600px]">
+              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                <tr>
+                  <th className="p-5">Colaborador</th>
+                  <th className="p-5">Período</th>
+                  <th className="p-5">Status</th>
+                  <th className="p-5 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="text-[11px] font-bold uppercase">
+                {vacationRequests.map(req => (
+                  <tr key={req.id} className="border-b">
+                    <td className="p-5">{req.userName}</td>
+                    <td className="p-5">
+                      {new Date(req.startDate).toLocaleDateString('pt-BR')} - {new Date(req.endDate).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="p-5">
+                      <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
+                        req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 
+                        req.status === 'rejected' ? 'bg-red-50 text-red-600' : 
+                        'bg-amber-50 text-amber-600'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="p-5 text-center flex justify-center gap-2">
+                      {req.status === 'pending' && (
+                        <>
+                          <button onClick={() => handleVacationStatus(req.id, 'approved')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Aprovar</button>
+                          <button onClick={() => handleVacationStatus(req.id, 'rejected')} className="bg-red-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Recusar</button>
+                        </>
+                      )}
+                      {req.status !== 'pending' && <span className="text-slate-300 text-[8px]">FINALIZADO</span>}
+                    </td>
+                  </tr>
+                ))}
+                {vacationRequests.length === 0 && (
+                  <tr><td colSpan={4} className="p-10 text-center text-slate-400">Nenhuma solicitação de férias</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {showAddModal && (
         <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
@@ -420,6 +649,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <button onClick={() => setEditingPasswordId(null)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Sair</button>
                 <button onClick={handleUpdatePassword} className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Salvar</button>
              </div>
+          </div>
+        </div>
+      )}
+
+      {showManualPunchModal && selectedEmployeeManualPunch && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl space-y-4 animate-in zoom-in">
+            <h2 className="text-sm font-black text-center uppercase mb-2 text-orange-600">Lançamento Manual</h2>
+            <p className="text-[10px] font-bold text-center text-slate-500 uppercase mb-4">Colaborador: {selectedEmployeeManualPunch.name}</p>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data</label>
+                <input type="date" value={manualPunchDate} onChange={e => setManualPunchDate(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Horário</label>
+                <input type="time" value={manualPunchTime} onChange={e => setManualPunchTime(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Tipo de Registro</label>
+                <select value={manualPunchType} onChange={e => setManualPunchType(e.target.value as any)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border uppercase">
+                  <option value="entrada">Entrada</option>
+                  <option value="inicio_intervalo">Início Intervalo</option>
+                  <option value="fim_intervalo">Fim Intervalo</option>
+                  <option value="saida">Saída</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button onClick={() => setShowManualPunchModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Cancelar</button>
+              <button onClick={handleManualPunch} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Confirmar</button>
+            </div>
           </div>
         </div>
       )}
