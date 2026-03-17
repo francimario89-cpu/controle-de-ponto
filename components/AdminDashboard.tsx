@@ -187,6 +187,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       
       doc.setFont("helvetica", "normal");
       doc.text(`Nome: ${emp.name}`, margin + 2, 51);
+      doc.text(`CPF: ${emp.cpf || ''}`, pageWidth / 2 + 20, 51);
       doc.text(`Carteira de trabalho nº: ${emp.ctpsNumber || ''}`, margin + 2, 56);
       doc.text(`Série: ${emp.ctpsSeries || ''}`, pageWidth / 2 - 20, 56);
       doc.text(`Cargo: ${emp.roleFunction || ''}`, pageWidth / 2 + 20, 56);
@@ -557,13 +558,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
               <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
-                <tr><th className="p-5">Nome</th><th className="p-5">Matrícula</th><th className="p-5">Função</th><th className="p-5 text-center">Ações</th></tr>
+                <tr><th className="p-5">Nome</th><th className="p-5">Matrícula</th><th className="p-5">CPF</th><th className="p-5">Função</th><th className="p-5 text-center">Ações</th></tr>
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
                 {employees.map(emp => (
                   <tr key={emp.id} className="border-b">
                     <td className="p-5">{emp.name}</td>
                     <td className="p-5 text-slate-400">{emp.matricula}</td>
+                    <td className="p-5 text-slate-400">{emp.cpf || '-'}</td>
                     <td className="p-5 text-slate-500">{emp.roleFunction || '-'}</td>
                     <td className="p-5 text-center flex justify-center gap-2">
                       <button onClick={() => { setSelectedEmployeeManualPunch(emp); setShowManualPunchModal(true); }} className="bg-orange-50 text-orange-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Ponto</button>
