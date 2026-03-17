@@ -53,6 +53,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     name: '', 
     matricula: '', 
     cpf: '',
+    birthDate: '',
     roleFunction: '', 
     workShift: '08:00 - 12:00 / 13:00 - 17:00',
     weeklyHours: 44,
@@ -749,6 +750,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <input type="text" placeholder="MATRÍCULA" value={newEmp.matricula} onChange={e => setNewEmp({...newEmp, matricula: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
                 <input type="text" placeholder="CPF" value={newEmp.cpf} onChange={e => setNewEmp({...newEmp, cpf: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
               </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data de Nascimento</label>
+                <input type="date" value={newEmp.birthDate} onChange={e => setNewEmp({...newEmp, birthDate: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
               <input type="text" placeholder="CARGO / FUNÇÃO" value={newEmp.roleFunction} onChange={e => setNewEmp({...newEmp, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
               <div className="flex gap-2">
                 <input type="text" placeholder="CTPS Nº" value={newEmp.ctpsNumber} onChange={e => setNewEmp({...newEmp, ctpsNumber: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
@@ -800,6 +805,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">CPF</label>
                   <input type="text" value={editEmpData.cpf} onChange={e => setEditEmpData({...editEmpData, cpf: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
                 </div>
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data de Nascimento</label>
+                <input type="date" value={editEmpData.birthDate} onChange={e => setEditEmpData({...editEmpData, birthDate: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
               </div>
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Cargo / Função</label>
