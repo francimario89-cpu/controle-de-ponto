@@ -39,6 +39,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [manualPunchDate, setManualPunchDate] = useState(new Date().toISOString().split('T')[0]);
   const [manualPunchTime, setManualPunchTime] = useState('08:00');
   const [manualPunchType, setManualPunchType] = useState<'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo'>('entrada');
+  const [showEditRecordModal, setShowEditRecordModal] = useState(false);
+  const [selectedRecordToEdit, setSelectedRecordToEdit] = useState<PointRecord | null>(null);
+  const [editRecordDate, setEditRecordDate] = useState('');
+  const [editRecordTime, setEditRecordTime] = useState('');
+  const [editRecordType, setEditRecordType] = useState<'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo'>('entrada');
   const [editingPasswordId, setEditingPasswordId] = useState<string | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState('');
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -399,6 +404,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     }
   };
 
+  const handleUpdateRecord = async () => {
+    if (!selectedRecordToEdit || !editRecordDate || !editRecordTime) return;
+    
+    const [year, month, day] = editRecordDate.split('-').map(Number);
+    const [hours, minutes] = editRecordTime.split(':').map(Number);
+    const timestamp = new Date(year, month - 1, day, hours, minutes);
+    
+    try {
+      await updateDoc(doc(db, "records", selectedRecordToEdit.id), {
+        timestamp: timestamp,
+        type: editRecordType,
+        isAdjustment: true
+      });
+      alert("REGISTRO ATUALIZADO COM SUCESSO!");
+      setShowEditRecordModal(false);
+    } catch (err) {
+      alert("ERRO AO ATUALIZAR REGISTRO.");
+    }
+  };
+
+  const handleDeleteRecord = async (id: string) => {
+    if (!confirm("DESEJA REALMENTE EXCLUIR ESTE REGISTRO DE PONTO?")) return;
+    try {
+      await deleteDoc(doc(db, "records", id));
+      alert("REGISTRO EXCLUÍDO!");
+    } catch (err) {
+      alert("ERRO AO EXCLUIR REGISTRO.");
+    }
+  };
+
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6">
@@ -419,6 +454,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           { id: 'dashboard', label: 'Início', icon: '🏠' },
           { id: 'colaboradores', label: 'Equipe', icon: '👥' },
           { id: 'aprovacoes', label: 'Pedidos', icon: '✅' },
+          { id: 'correcao', label: 'Correção', icon: '✏️' },
           { id: 'ferias', label: 'Férias', icon: '🏖️' },
           { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
           { id: 'audit', label: 'IA Audit', icon: '⚖️' }
@@ -574,6 +610,83 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       )}
 
       {activeTab === 'audit' && <ComplianceAudit records={latestRecords} employees={employees} />}
+
+      {activeTab === 'correcao' && (
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
+            <h3 className="text-sm font-black uppercase">Correção de Registros</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
+                <option value="todos">Todos Colaboradores</option>
+                {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
+              </select>
+              <select value={reportFilter.month} onChange={e => setReportFilter({...reportFilter, month: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
+                {Array.from({length: 12}).map((_, i) => <option key={i} value={i}>{new Date(0, i).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()}</option>)}
+              </select>
+              <select value={reportFilter.year} onChange={e => setReportFilter({...reportFilter, year: parseInt(e.target.value)})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
+                {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+            <table className="w-full text-left min-w-[800px]">
+              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                <tr>
+                  <th className="p-5">Data/Hora</th>
+                  <th className="p-5">Colaborador</th>
+                  <th className="p-5">Tipo</th>
+                  <th className="p-5">Endereço</th>
+                  <th className="p-5 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="text-[11px] font-bold uppercase">
+                {filteredRecords.map(rec => (
+                  <tr key={rec.id} className="border-b">
+                    <td className="p-5">
+                      {rec.timestamp.toLocaleDateString('pt-BR')} {rec.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+                    </td>
+                    <td className="p-5">{rec.userName}</td>
+                    <td className="p-5">
+                      <span className={`px-2 py-1 rounded-lg text-[8px] ${
+                        rec.type === 'entrada' ? 'bg-orange-100 text-orange-700' :
+                        rec.type === 'saida' ? 'bg-slate-100 text-slate-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {rec.type.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="p-5 text-[9px] text-slate-400 max-w-[200px] truncate">{rec.address}</td>
+                    <td className="p-5 text-center flex justify-center gap-2">
+                      <button 
+                        onClick={() => {
+                          setSelectedRecordToEdit(rec);
+                          setEditRecordDate(rec.timestamp.toISOString().split('T')[0]);
+                          setEditRecordTime(rec.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}));
+                          setEditRecordType(rec.type);
+                          setShowEditRecordModal(true);
+                        }} 
+                        className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black uppercase"
+                      >
+                        Corrigir
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteRecord(rec.id)} 
+                        className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[8px] font-black uppercase"
+                      >
+                        Excluir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredRecords.length === 0 && (
+                  <tr><td colSpan={5} className="p-10 text-center text-slate-400">Nenhum registro encontrado para este filtro</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'ferias' && (
         <div className="space-y-6">
@@ -749,6 +862,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="flex gap-3 pt-4">
               <button onClick={() => setShowManualPunchModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Cancelar</button>
               <button onClick={handleManualPunch} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditRecordModal && selectedRecordToEdit && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl space-y-4 animate-in zoom-in">
+            <h2 className="text-sm font-black text-center uppercase mb-2 text-blue-600">Corrigir Registro</h2>
+            <p className="text-[10px] font-bold text-center text-slate-500 uppercase mb-4">Colaborador: {selectedRecordToEdit.userName}</p>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data</label>
+                <input type="date" value={editRecordDate} onChange={e => setEditRecordDate(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Horário</label>
+                <input type="time" value={editRecordTime} onChange={e => setEditRecordTime(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Tipo de Registro</label>
+                <select value={editRecordType} onChange={e => setEditRecordType(e.target.value as any)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border uppercase">
+                  <option value="entrada">Entrada</option>
+                  <option value="inicio_intervalo">Início Intervalo</option>
+                  <option value="fim_intervalo">Fim Intervalo</option>
+                  <option value="saida">Saída</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button onClick={() => setShowEditRecordModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Cancelar</button>
+              <button onClick={handleUpdateRecord} className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Salvar Alteração</button>
             </div>
           </div>
         </div>
