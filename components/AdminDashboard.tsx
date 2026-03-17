@@ -483,11 +483,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
-          <div className="bg-slate-900 p-8 rounded-[44px] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-800">
-            <div className="space-y-1"><p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Painel Administrativo</p><h3 className="text-white text-lg font-black uppercase">{company?.name}</h3></div>
-            <div className="bg-slate-800 px-8 py-5 rounded-3xl border border-slate-700 text-center">
+          <div className="bg-orange-50 p-8 rounded-[44px] shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 border border-orange-100">
+            <div className="space-y-1"><p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Painel Administrativo</p><h3 className="text-slate-900 text-lg font-black uppercase">{company?.name}</h3></div>
+            <div className="bg-white px-8 py-5 rounded-3xl border border-orange-100 text-center shadow-sm">
               <p className="text-[8px] text-slate-400 font-black uppercase mb-1">CÓDIGO EMPRESA</p>
-              <span className="text-white font-mono text-xl font-black">{company?.accessCode || '------'}</span>
+              <span className="text-orange-600 font-mono text-xl font-black">{company?.accessCode || '------'}</span>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
