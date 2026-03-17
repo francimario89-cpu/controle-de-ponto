@@ -366,6 +366,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     }
   };
 
+  const handleRequestStatus = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      await updateDoc(doc(db, "requests", id), { status });
+      alert(`SOLICITAÇÃO ${status === 'approved' ? 'APROVADA' : 'RECUSADA'} COM SUCESSO!`);
+    } catch (err) {
+      alert("ERRO AO ATUALIZAR SOLICITAÇÃO.");
+    }
+  };
+
   const handleVacationStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
       await updateDoc(doc(db, "vacations", id), { status });
@@ -613,6 +622,63 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       )}
 
       {activeTab === 'audit' && <ComplianceAudit records={latestRecords} employees={employees} />}
+
+      {activeTab === 'aprovacoes' && (
+        <div className="space-y-6">
+          <h3 className="text-sm font-black uppercase px-2">Solicitações de Ajuste e Abono</h3>
+          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+            <table className="w-full text-left min-w-[800px]">
+              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                <tr>
+                  <th className="p-5">Data Pedido</th>
+                  <th className="p-5">Colaborador</th>
+                  <th className="p-5">Tipo</th>
+                  <th className="p-5">Data Ref.</th>
+                  <th className="p-5">Motivo/Justificativa</th>
+                  <th className="p-5">Status</th>
+                  <th className="p-5 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="text-[11px] font-bold uppercase">
+                {requests.map(req => (
+                  <tr key={req.id} className="border-b">
+                    <td className="p-5 text-slate-400">{req.createdAt.toLocaleDateString('pt-BR')}</td>
+                    <td className="p-5">{req.userName}</td>
+                    <td className="p-5">
+                      <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black">
+                        {req.type}
+                      </span>
+                    </td>
+                    <td className="p-5">{new Date(req.date).toLocaleDateString('pt-BR')}</td>
+                    <td className="p-5 text-[9px] text-slate-500 max-w-[200px] truncate">{req.reason}</td>
+                    <td className="p-5">
+                      <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
+                        req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 
+                        req.status === 'rejected' ? 'bg-red-50 text-red-600' : 
+                        'bg-amber-50 text-amber-600'
+                      }`}>
+                        {req.status === 'pending' ? 'PENDENTE' : req.status === 'approved' ? 'APROVADO' : 'RECUSADO'}
+                      </span>
+                    </td>
+                    <td className="p-5 text-center flex justify-center gap-2">
+                      {req.status === 'pending' && (
+                        <>
+                          <button onClick={() => handleRequestStatus(req.id, 'approved')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Aprovar</button>
+                          <button onClick={() => handleRequestStatus(req.id, 'rejected')} className="bg-red-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Recusar</button>
+                        </>
+                      )}
+                      {req.status !== 'pending' && <span className="text-slate-300 text-[8px]">CONCLUÍDO</span>}
+                    </td>
+                  </tr>
+                ))}
+                {requests.length === 0 && (
+                  <tr><td colSpan={7} className="p-10 text-center text-slate-400">Nenhuma solicitação pendente</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'correcao' && (
         <div className="space-y-6">
