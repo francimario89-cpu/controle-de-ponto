@@ -41,6 +41,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [manualPunchType, setManualPunchType] = useState<'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo'>('entrada');
   const [editingPasswordId, setEditingPasswordId] = useState<string | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState('');
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [editEmpData, setEditEmpData] = useState<Partial<Employee>>({});
   
   const [newEmp, setNewEmp] = useState({ 
     name: '', 
@@ -346,6 +348,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     } catch (e) { alert("ERRO AO ATUALIZAR."); }
   };
 
+  const handleSaveEditEmployee = async () => {
+    if (!editingEmployee) return;
+    try {
+      await onUpdateEmployee(editingEmployee.id, editEmpData);
+      alert("DADOS ATUALIZADOS COM SUCESSO!");
+      setEditingEmployee(null);
+    } catch (e) {
+      alert("ERRO AO ATUALIZAR DADOS.");
+    }
+  };
+
   const handleVacationStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
       await updateDoc(doc(db, "vacations", id), { status });
@@ -518,6 +531,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     <td className="p-5 text-slate-500">{emp.roleFunction || '-'}</td>
                     <td className="p-5 text-center flex justify-center gap-2">
                       <button onClick={() => { setSelectedEmployeeManualPunch(emp); setShowManualPunchModal(true); }} className="bg-orange-50 text-orange-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Ponto</button>
+                      <button onClick={() => { setEditingEmployee(emp); setEditEmpData(emp); }} className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Editar</button>
                       <button onClick={() => { setEditingPasswordId(emp.id); setNewPasswordValue(''); }} className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Senha</button>
                       <button onClick={() => onDeleteEmployee(emp.id)} className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Excluir</button>
                     </td>
@@ -649,6 +663,59 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <button onClick={() => setEditingPasswordId(null)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Sair</button>
                 <button onClick={handleUpdatePassword} className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Salvar</button>
              </div>
+          </div>
+        </div>
+      )}
+
+      {editingEmployee && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in overflow-y-auto max-h-[90vh] no-scrollbar">
+            <h2 className="text-[14px] font-black uppercase text-center mb-6 text-emerald-600 tracking-widest">Editar Colaborador</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Nome Completo</label>
+                <input type="text" value={editEmpData.name} onChange={e => setEditEmpData({...editEmpData, name: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Matrícula</label>
+                  <input type="text" value={editEmpData.matricula} onChange={e => setEditEmpData({...editEmpData, matricula: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">CPF</label>
+                  <input type="text" value={editEmpData.cpf} onChange={e => setEditEmpData({...editEmpData, cpf: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Cargo / Função</label>
+                <input type="text" value={editEmpData.roleFunction} onChange={e => setEditEmpData({...editEmpData, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">CTPS Nº</label>
+                  <input type="text" value={editEmpData.ctpsNumber} onChange={e => setEditEmpData({...editEmpData, ctpsNumber: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">SÉRIE</label>
+                  <input type="text" value={editEmpData.ctpsSeries} onChange={e => setEditEmpData({...editEmpData, ctpsSeries: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-[2]">
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Horário</label>
+                  <input type="text" value={editEmpData.workShift} onChange={e => setEditEmpData({...editEmpData, workShift: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Horas/Sem</label>
+                  <input type="number" value={editEmpData.weeklyHours} onChange={e => setEditEmpData({...editEmpData, weeklyHours: parseInt(e.target.value)})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 pt-6">
+              <button onClick={() => setEditingEmployee(null)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Cancelar</button>
+              <button onClick={handleSaveEditEmployee} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Salvar Alterações</button>
+            </div>
           </div>
         </div>
       )}
