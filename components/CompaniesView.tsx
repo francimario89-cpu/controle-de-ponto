@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Company } from '../types';
 import { db } from '../firebase';
 import { collection, query, onSnapshot, addDoc, doc, deleteDoc } from 'firebase/firestore';
@@ -19,6 +20,7 @@ const CompaniesView: React.FC = () => {
     adminPassword: '',
     authorizedIP: '' 
   });
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -132,7 +134,22 @@ const CompaniesView: React.FC = () => {
               </div>
 
               <input type="email" placeholder="E-MAIL GESTOR" value={newCompany.adminEmail} onChange={e => setNewCompany({...newCompany, adminEmail: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
-              <input type="password" placeholder="SENHA ACESSO" value={newCompany.adminPassword} onChange={e => setNewCompany({...newCompany, adminPassword: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white" />
+              <div className="relative w-full">
+                <input 
+                  type={showPass ? "text" : "password"} 
+                  placeholder="SENHA ACESSO" 
+                  value={newCompany.adminPassword} 
+                  onChange={e => setNewCompany({...newCompany, adminPassword: e.target.value})} 
+                  className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl text-[10px] font-black outline-none dark:text-white pr-14" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               
               <div className="flex gap-3 pt-6">
                 <button onClick={() => setShowAddModal(false)} className="flex-1 py-5 border-2 border-slate-100 rounded-[28px] text-[10px] font-black uppercase text-slate-400">Voltar</button>

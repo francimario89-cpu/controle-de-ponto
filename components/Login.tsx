@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { User, Company } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, limit, setDoc, updateDoc } from "firebase/firestore";
@@ -24,6 +25,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [masterKey, setMasterKey] = useState('');
   const [companyCode, setCompanyCode] = useState('');
   const [matricula, setMatricula] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
 
   const handleAdminAuth = async () => {
     setLoading(true); setError(''); setSuccessMessage('');
@@ -129,7 +132,22 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     <p className="text-[10px] font-black text-slate-500 uppercase text-center mb-2 tracking-widest">Recuperação de Acesso</p>
                     <input type="email" placeholder="E-MAIL DE GESTOR" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
                     <input type="text" placeholder="CHAVE MESTRA (MASTER KEY)" value={masterKey} onChange={e => setMasterKey(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white border-2 border-orange-200 focus:border-orange-500" />
-                    <input type="password" placeholder="NOVA SENHA" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                    <div className="relative w-full">
+                      <input 
+                        type={showNewPass ? "text" : "password"} 
+                        placeholder="NOVA SENHA" 
+                        value={newPassword} 
+                        onChange={e => setNewPassword(e.target.value)} 
+                        className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white pr-12" 
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowNewPass(!showNewPass)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showNewPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                     <button onClick={handleAdminAuth} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{loading ? 'PROCESSANDO...' : 'REDEFINIR SENHA'}</button>
                   </div>
                 ) : (
@@ -141,7 +159,22 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       </>
                     )}
                     <input type="email" placeholder="E-MAIL ADMINISTRATIVO" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
-                    <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                    <div className="relative w-full">
+                      <input 
+                        type={showPass ? "text" : "password"} 
+                        placeholder="SENHA" 
+                        value={password} 
+                        onChange={e => setPassword(e.target.value)} 
+                        className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white pr-12" 
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowPass(!showPass)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                     <button onClick={handleAdminAuth} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{loading ? 'AUTENTICANDO...' : (adminMode === 'signup' ? 'CRIAR CONTA' : 'ACESSAR PAINEL')}</button>
                     
                     {adminMode === 'login' && (
@@ -154,7 +187,22 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <>
                 <input type="text" placeholder="CÓDIGO EMPRESA" value={companyCode} onChange={e => setCompanyCode(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black text-center tracking-[0.3em] outline-none dark:text-white" />
                 <input type="text" placeholder="MATRÍCULA" value={matricula} onChange={e => setMatricula(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
-                <input type="password" placeholder="SENHA" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white" />
+                <div className="relative w-full">
+                  <input 
+                    type={showPass ? "text" : "password"} 
+                    placeholder="SENHA" 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black outline-none dark:text-white pr-12" 
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 <button onClick={handleEmployeeLogin} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{loading ? 'VALIDANDO...' : 'ENTRAR NO SISTEMA'}</button>
               </>
             ) : (

@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { User, Company } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
@@ -13,6 +14,7 @@ interface ProfileProps {
 const Profile: React.FC<ProfileProps> = ({ user, company, onLogout }) => {
   const [showPassModal, setShowPassModal] = useState(false);
   const [newPass, setNewPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleUpdatePassword = async () => {
@@ -75,7 +77,22 @@ const Profile: React.FC<ProfileProps> = ({ user, company, onLogout }) => {
         <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-6">
            <div className="bg-white rounded-[44px] w-full max-w-sm p-10 shadow-2xl space-y-4">
               <h2 className="text-sm font-black text-orange-600 text-center uppercase">Trocar Senha</h2>
-              <input type="password" placeholder="NOVA SENHA" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black text-center" />
+              <div className="relative w-full">
+                <input 
+                  type={showPass ? "text" : "password"} 
+                  placeholder="NOVA SENHA" 
+                  value={newPass} 
+                  onChange={e => setNewPass(e.target.value)} 
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black text-center pr-12" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               <div className="flex gap-3 pt-4">
                  <button onClick={() => setShowPassModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Voltar</button>
                  <button onClick={handleUpdatePassword} disabled={loading} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase">Atualizar</button>

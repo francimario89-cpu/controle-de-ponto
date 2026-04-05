@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -48,6 +49,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [newPasswordValue, setNewPasswordValue] = useState('');
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [editEmpData, setEditEmpData] = useState<Partial<Employee>>({});
+  const [showAdminPass, setShowAdminPass] = useState(false);
+  const [showNewEmpPass, setShowNewEmpPass] = useState(false);
+  const [showResetPass, setShowResetPass] = useState(false);
   
   const [newEmp, setNewEmp] = useState({ 
     name: '', 
@@ -451,7 +455,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="w-full max-w-sm bg-white p-10 rounded-[44px] shadow-2xl border text-center space-y-6">
            <div className="w-20 h-20 bg-orange-100 rounded-[35px] flex items-center justify-center mx-auto text-orange-600 text-3xl">🔒</div>
            <h2 className="text-sm font-black text-slate-900 uppercase">Gestão RH</h2>
-           <input type="password" placeholder="SENHA DE ACESSO" value={adminPassAttempt} onChange={e => setAdminPassAttempt(e.target.value)} className={`w-full p-5 bg-slate-50 rounded-3xl text-[11px] font-black text-center border-2 ${authError ? 'border-red-500' : 'border-transparent'}`} />
+           <div className="relative w-full">
+             <input 
+               type={showAdminPass ? "text" : "password"} 
+               placeholder="SENHA DE ACESSO" 
+               value={adminPassAttempt} 
+               onChange={e => setAdminPassAttempt(e.target.value)} 
+               className={`w-full p-5 bg-slate-50 rounded-3xl text-[11px] font-black text-center border-2 ${authError ? 'border-red-500' : 'border-transparent'}`} 
+             />
+             <button 
+               type="button"
+               onClick={() => setShowAdminPass(!showAdminPass)}
+               className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+             >
+               {showAdminPass ? <EyeOff size={20} /> : <Eye size={20} />}
+             </button>
+           </div>
            <button onClick={handleVerifyAdmin} className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black uppercase text-xs">Entrar</button>
         </div>
       </div>
@@ -829,7 +848,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <input type="text" placeholder="HORÁRIO (EX: 08:00H)" value={newEmp.workShift} onChange={e => setNewEmp({...newEmp, workShift: e.target.value})} className="flex-[2] p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
                 <input type="number" placeholder="HORAS/SEM" value={newEmp.weeklyHours} onChange={e => setNewEmp({...newEmp, weeklyHours: parseInt(e.target.value)})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
               </div>
-              <input type="password" placeholder="SENHA DE ACESSO" value={newEmp.password} onChange={e => setNewEmp({...newEmp, password: e.target.value})} className="w-full p-4 bg-orange-50 rounded-2xl text-[10px] font-black border border-orange-100 outline-none" />
+              <div className="relative w-full">
+                <input 
+                  type={showNewEmpPass ? "text" : "password"} 
+                  placeholder="SENHA DE ACESSO" 
+                  value={newEmp.password} 
+                  onChange={e => setNewEmp({...newEmp, password: e.target.value})} 
+                  className="w-full p-4 bg-orange-50 rounded-2xl text-[10px] font-black border border-orange-100 outline-none pr-12" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowNewEmpPass(!showNewEmpPass)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-400 hover:text-orange-600 transition-colors"
+                >
+                  {showNewEmpPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
             
             <div className="flex gap-3 pt-6">
@@ -844,7 +878,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
           <div className="bg-white rounded-[44px] w-full max-w-sm p-10 shadow-2xl space-y-4">
              <h2 className="text-sm font-black text-center uppercase mb-4 text-blue-600">Redefinir Senha</h2>
-             <input type="password" value={newPasswordValue} onChange={e => setNewPasswordValue(e.target.value)} placeholder="NOVA SENHA" className="w-full p-5 bg-slate-50 rounded-3xl text-[11px] font-black text-center border" />
+             <div className="relative w-full">
+               <input 
+                 type={showResetPass ? "text" : "password"} 
+                 value={newPasswordValue} 
+                 onChange={e => setNewPasswordValue(e.target.value)} 
+                 placeholder="NOVA SENHA" 
+                 className="w-full p-5 bg-slate-50 rounded-3xl text-[11px] font-black text-center border pr-14" 
+               />
+               <button 
+                 type="button"
+                 onClick={() => setShowResetPass(!showResetPass)}
+                 className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+               >
+                 {showResetPass ? <EyeOff size={20} /> : <Eye size={20} />}
+               </button>
+             </div>
              <div className="flex gap-3 pt-4">
                 <button onClick={() => setEditingPasswordId(null)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Sair</button>
                 <button onClick={handleUpdatePassword} className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Salvar</button>
