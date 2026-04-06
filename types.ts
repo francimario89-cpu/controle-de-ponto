@@ -97,6 +97,8 @@ export interface AttendanceRequest {
   date: string;
   reason: string;
   createdAt: Date;
+  attachment?: string;
+  attachmentName?: string;
 }
 
 // Interface para mensagens do Chat do Assistente

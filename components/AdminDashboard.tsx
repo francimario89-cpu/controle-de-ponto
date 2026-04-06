@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, MapPin, Camera, X } from 'lucide-react';
 import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -54,6 +54,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [showResetPass, setShowResetPass] = useState(false);
   const [selectedEmployeeIndividual, setSelectedEmployeeIndividual] = useState<string>('todos');
   const [selectedDateIndividual, setSelectedDateIndividual] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
   
   const [newEmp, setNewEmp] = useState({ 
     name: '', 
@@ -700,6 +702,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     const e2 = dayRecs[2] ? dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
                     const s2 = dayRecs[3] ? dayRecs[3].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
 
+                    const renderRecordIcons = (rec: PointRecord | undefined) => {
+                      if (!rec) return null;
+                      return (
+                        <div className="flex gap-1 mt-1">
+                          {rec.photo && (
+                            <button 
+                              onClick={() => { setSelectedPhotoUrl(rec.photo); setShowPhotoModal(true); }}
+                              className="text-blue-400 hover:text-blue-600"
+                              title="Ver Foto"
+                            >
+                              <Camera size={10} />
+                            </button>
+                          )}
+                          {rec.latitude && rec.longitude && (
+                            <a 
+                              href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-emerald-400 hover:text-emerald-600"
+                              title="Ver Localização"
+                            >
+                              <MapPin size={10} />
+                            </a>
+                          )}
+                        </div>
+                      );
+                    };
+
                     let workedMinutes = 0;
                     if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
                     if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
@@ -710,10 +740,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     return (
                       <tr key={emp.id} className="border-b">
                         <td className="p-5">{emp.name}</td>
-                        <td className="p-5">{e1}</td>
-                        <td className="p-5">{s1}</td>
-                        <td className="p-5">{e2}</td>
-                        <td className="p-5">{s2}</td>
+                        <td className="p-5">
+                          <div>{e1}</div>
+                          {renderRecordIcons(dayRecs[0])}
+                        </td>
+                        <td className="p-5">
+                          <div>{s1}</div>
+                          {renderRecordIcons(dayRecs[1])}
+                        </td>
+                        <td className="p-5">
+                          <div>{e2}</div>
+                          {renderRecordIcons(dayRecs[2])}
+                        </td>
+                        <td className="p-5">
+                          <div>{s2}</div>
+                          {renderRecordIcons(dayRecs[3])}
+                        </td>
                         <td className="p-5 text-slate-600">{workedMinutes > 0 ? formatMinutesToHours(workedMinutes) : '-'}</td>
                         <td className="p-5">
                           {extraMinutes > 0 ? (
@@ -760,7 +802,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                       </span>
                     </td>
                     <td className="p-5">{new Date(req.date).toLocaleDateString('pt-BR')}</td>
-                    <td className="p-5 text-[9px] text-slate-500 max-w-[200px] truncate">{req.reason}</td>
+                    <td className="p-5 text-[9px] text-slate-500 max-w-[200px]">
+                      <div className="flex flex-col gap-1">
+                        <span className="truncate">{req.reason}</span>
+                        {req.attachment && (
+                          <button 
+                            onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
+                            className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase"
+                          >
+                            <Camera size={10} /> Ver Anexo
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-5">
                       <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
                         req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 
@@ -835,7 +889,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                         {rec.type.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="p-5 text-[9px] text-slate-400 max-w-[200px] truncate">{rec.address}</td>
+                    <td className="p-5">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9px] text-slate-400 max-w-[200px] truncate">{rec.address}</span>
+                        <div className="flex gap-2">
+                          {rec.photo && (
+                            <button 
+                              onClick={() => { setSelectedPhotoUrl(rec.photo); setShowPhotoModal(true); }}
+                              className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase"
+                            >
+                              <Camera size={10} /> Foto
+                            </button>
+                          )}
+                          {rec.latitude && rec.longitude && (
+                            <a 
+                              href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-emerald-500 hover:text-emerald-700 text-[8px] font-black uppercase"
+                            >
+                              <MapPin size={10} /> Mapa
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </td>
                     <td className="p-5 text-center flex justify-center gap-2">
                       <button 
                         onClick={() => {
@@ -1113,6 +1191,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="flex gap-3 pt-4">
               <button onClick={() => setShowEditRecordModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Cancelar</button>
               <button onClick={handleUpdateRecord} className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Salvar Alteração</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPhotoModal && selectedPhotoUrl && (
+        <div className="fixed inset-0 z-[110] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="bg-white rounded-[44px] w-full max-w-lg p-4 shadow-2xl animate-in zoom-in relative">
+            <button 
+              onClick={() => setShowPhotoModal(false)}
+              className="absolute -top-4 -right-4 bg-white text-slate-900 p-3 rounded-full shadow-xl hover:bg-slate-100 transition-all z-10"
+            >
+              <X size={24} />
+            </button>
+            <div className="rounded-[32px] overflow-hidden border-4 border-slate-50">
+              <img 
+                src={selectedPhotoUrl} 
+                alt="Foto do Ponto" 
+                className="w-full h-auto object-contain max-h-[70vh]" 
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div className="p-6 text-center">
+              <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-900">Confirmação de Identidade</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Foto capturada no momento da batida</p>
             </div>
           </div>
         </div>

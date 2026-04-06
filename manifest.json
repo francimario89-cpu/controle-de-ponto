@@ -5,19 +5,19 @@
   "description": "Controle de ponto biométrico com reconhecimento facial e geolocalização.",
   "icons": [
     {
-      "src": "https://ortep.com.br/wp-content/uploads/2021/08/logo-fortime-blue.png",
+      "src": "/icon.svg",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "https://ortep.com.br/wp-content/uploads/2021/08/logo-fortime-blue.png",
+      "src": "/icon.svg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./index.html",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#f97316",
