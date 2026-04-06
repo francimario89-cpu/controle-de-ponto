@@ -12,7 +12,7 @@ const Requests: React.FC = () => {
   
   const [type, setType] = useState<'inclusão' | 'abono'>('inclusão');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [times, setTimes] = useState<string[]>(['08:00', '12:00', '13:00', '18:00']);
+  const [times, setTimes] = useState<string[]>(['08:00', '12:00', '14:00', '18:00']);
   const [reason, setReason] = useState('Esquecimento');
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
   const [attachmentData, setAttachmentData] = useState<string | null>(null);

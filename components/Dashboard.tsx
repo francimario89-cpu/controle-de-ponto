@@ -27,7 +27,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
     const slots = [
       { type: 'Entrada', time: '08:00', done: false, actual: '' },
       { type: 'Intervalo', time: '12:00', done: false, actual: '' },
-      { type: 'Retorno', time: '13:00', done: false, actual: '' },
+      { type: 'Retorno', time: '14:00', done: false, actual: '' },
       { type: 'Saída', time: '18:00', done: false, actual: '' },
     ];
 

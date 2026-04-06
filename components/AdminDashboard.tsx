@@ -23,7 +23,7 @@ interface AdminDashboardProps {
   onDeleteEmployee: (id: string) => void;
   onUpdateEmployee: (id: string, data: any) => void;
   onUpdateIP: (ip: string) => void;
-  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'audit';
+  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'audit' | 'pontos_individuais';
   onNavigate: (v: string) => void;
 }
 
@@ -52,6 +52,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [showAdminPass, setShowAdminPass] = useState(false);
   const [showNewEmpPass, setShowNewEmpPass] = useState(false);
   const [showResetPass, setShowResetPass] = useState(false);
+  const [selectedEmployeeIndividual, setSelectedEmployeeIndividual] = useState<string>('todos');
+  const [selectedDateIndividual, setSelectedDateIndividual] = useState<string>(new Date().toISOString().split('T')[0]);
   
   const [newEmp, setNewEmp] = useState({ 
     name: '', 
@@ -59,7 +61,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     cpf: '',
     birthDate: '',
     roleFunction: '', 
-    workShift: '08:00 - 12:00 / 13:00 - 17:00',
+    workShift: '08:00 - 12:00 / 14:00 - 18:00',
     weeklyHours: 44,
     password: '',
     ctpsNumber: '',
@@ -487,6 +489,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           { id: 'correcao', label: 'Correção', icon: '✏️' },
           { id: 'ferias', label: 'Férias', icon: '🏖️' },
           { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
+          { id: 'pontos_individuais', label: 'Individuais', icon: '👤' },
           { id: 'audit', label: 'IA Audit', icon: '⚖️' }
         ].map(tab => (
           <button 
@@ -636,6 +639,94 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'pontos_individuais' && (
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
+            <h3 className="text-sm font-black uppercase">Consulta de Pontos Individuais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-400 uppercase ml-2">Colaborador</label>
+                <select 
+                  value={selectedEmployeeIndividual} 
+                  onChange={e => setSelectedEmployeeIndividual(e.target.value)} 
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border"
+                >
+                  <option value="todos">Todos</option>
+                  {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-400 uppercase ml-2">Data</label>
+                <input 
+                  type="date" 
+                  value={selectedDateIndividual} 
+                  onChange={e => setSelectedDateIndividual(e.target.value)} 
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+            <table className="w-full text-left min-w-[800px]">
+              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                <tr>
+                  <th className="p-5">Colaborador</th>
+                  <th className="p-5">Entrada</th>
+                  <th className="p-5">Intervalo</th>
+                  <th className="p-5">Retorno</th>
+                  <th className="p-5">Saída</th>
+                  <th className="p-5">Total Trabalhado</th>
+                  <th className="p-5">Horas Extras</th>
+                </tr>
+              </thead>
+              <tbody className="text-[11px] font-bold uppercase">
+                {employees
+                  .filter(emp => selectedEmployeeIndividual === 'todos' || emp.matricula === selectedEmployeeIndividual)
+                  .map(emp => {
+                    const dayRecs = latestRecords
+                      .filter(r => 
+                        r.matricula === emp.matricula && 
+                        r.timestamp.toISOString().split('T')[0] === selectedDateIndividual
+                      )
+                      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+                    const e1 = dayRecs[0] ? dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                    const s1 = dayRecs[1] ? dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                    const e2 = dayRecs[2] ? dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                    const s2 = dayRecs[3] ? dayRecs[3].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+
+                    let workedMinutes = 0;
+                    if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
+                    if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
+
+                    const dailyContractedMinutes = 528; // 8h48m
+                    const extraMinutes = workedMinutes > dailyContractedMinutes ? workedMinutes - dailyContractedMinutes : 0;
+
+                    return (
+                      <tr key={emp.id} className="border-b">
+                        <td className="p-5">{emp.name}</td>
+                        <td className="p-5">{e1}</td>
+                        <td className="p-5">{s1}</td>
+                        <td className="p-5">{e2}</td>
+                        <td className="p-5">{s2}</td>
+                        <td className="p-5 text-slate-600">{workedMinutes > 0 ? formatMinutesToHours(workedMinutes) : '-'}</td>
+                        <td className="p-5">
+                          {extraMinutes > 0 ? (
+                            <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black">
+                              +{formatMinutesToHours(extraMinutes)}
+                            </span>
+                          ) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

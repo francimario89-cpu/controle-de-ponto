@@ -147,7 +147,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ records, company }) => 
                       <td className="p-3 border-r border-slate-50">{String(i+1).padStart(2, '0')}/11</td>
                       <td className="p-3 border-r border-slate-50">{i === 1 || i === 2 ? '-' : '08:00'}</td>
                       <td className="p-3 border-r border-slate-50">{i === 1 || i === 2 ? '-' : '12:00'}</td>
-                      <td className="p-3">{i === 1 || i === 2 ? '-' : '13:00'}</td>
+                      <td className="p-3">{i === 1 || i === 2 ? '-' : '14:00'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -243,7 +243,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ records, company }) => 
                        <tr key={d} className="border-b border-slate-50">
                           <td className="p-1">{String(d).padStart(2, '0')}/11/2024</td>
                           <td className="p-1">{d === 2 || d === 3 ? '-' : '08:02 - 12:02'}</td>
-                          <td className="p-1">{d === 2 || d === 3 ? '-' : '13:02 - 18:02'}</td>
+                          <td className="p-1">{d === 2 || d === 3 ? '-' : '14:02 - 18:02'}</td>
                           <td className="p-1">08:00</td>
                        </tr>
                     ))}
