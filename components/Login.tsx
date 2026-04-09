@@ -41,9 +41,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         const q = query(collection(db, "companies"), where("adminEmail", "==", email), limit(1));
         const snap = await getDocs(q);
         if (!snap.empty) {
-          const c = snap.docs[0].data() as Company;
+          const docSnap = snap.docs[0];
+          const c = { id: docSnap.id, ...docSnap.data() } as Company;
           if (c.adminPassword === password) {
-            onLogin({ name: "ADMIN", email: c.adminEmail, companyCode: c.accessCode, role: 'admin' }, c);
+            onLogin({ name: "ADMIN", email: c.adminEmail, companyCode: docSnap.id, role: 'admin' }, c);
           } else {
             setError('SENHA INCORRETA');
           }
@@ -66,15 +67,29 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleEmployeeLogin = async () => {
     setLoading(true); setError('');
     try {
-      const compDoc = await getDoc(doc(db, "companies", companyCode));
-      if (!compDoc.exists()) throw new Error('CÓDIGO DA EMPRESA INVÁLIDO');
-      const q = query(collection(db, "employees"), where("companyCode", "==", companyCode), where("matricula", "==", matricula));
+      const qComp = query(collection(db, "companies"), where("accessCode", "==", companyCode), limit(1));
+      const compSnap = await getDocs(qComp);
+      
+      let realCompanyId = companyCode;
+      let companyName = '';
+
+      if (!compSnap.empty) {
+        const companyDoc = compSnap.docs[0];
+        realCompanyId = companyDoc.id;
+        companyName = companyDoc.data().name;
+      } else {
+        const compDoc = await getDoc(doc(db, "companies", companyCode));
+        if (!compDoc.exists()) throw new Error('CÓDIGO DA EMPRESA INVÁLIDO');
+        companyName = compDoc.data().name;
+      }
+
+      const q = query(collection(db, "employees"), where("companyCode", "==", realCompanyId), where("matricula", "==", matricula));
       const snap = await getDocs(q);
       if (!snap.empty) {
         const emp = snap.docs[0].data();
         if (emp.password === password) {
           onLogin({
-            name: emp.name, companyCode, companyName: compDoc.data().name, role: 'employee', 
+            name: emp.name, companyCode: realCompanyId, companyName, role: 'employee', 
             matricula, photo: emp.photo || '', hasFacialRecord: emp.hasFacialRecord === true
           });
         } else setError('SENHA DE ACESSO ERRADA');
@@ -211,9 +226,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <input type="text" placeholder="CÓDIGO DA EMPRESA" value={companyCode} onChange={e => setCompanyCode(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[11px] font-black text-center tracking-[0.5em] outline-none dark:text-white" />
                 <button onClick={async () => {
                   try {
-                    const docSnap = await getDoc(doc(db, "companies", companyCode));
-                    if (docSnap.exists()) onLogin({ name: "TOTEM", email: '', companyCode, role: 'totem' }, docSnap.data() as Company);
-                    else setError('CÓDIGO DE EMPRESA INVÁLIDO');
+                    const qComp = query(collection(db, "companies"), where("accessCode", "==", companyCode), limit(1));
+                    const compSnap = await getDocs(qComp);
+                    
+                    if (!compSnap.empty) {
+                      const companyDoc = compSnap.docs[0];
+                      onLogin({ name: "TOTEM", email: '', companyCode: companyDoc.id, role: 'totem' }, { id: companyDoc.id, ...companyDoc.data() } as Company);
+                    } else {
+                      const docSnap = await getDoc(doc(db, "companies", companyCode));
+                      if (docSnap.exists()) onLogin({ name: "TOTEM", email: '', companyCode, role: 'totem' }, { id: docSnap.id, ...docSnap.data() } as Company);
+                      else setError('CÓDIGO DE EMPRESA INVÁLIDO');
+                    }
                   } catch { setError('ERRO DE CONEXÃO'); }
                 }} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl">ATIVAR TERMINAL TOTEM</button>
               </>

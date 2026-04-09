@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { Company } from '../types';
 import { db } from '../firebase';
-import { collection, query, onSnapshot, addDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
 
 const CompaniesView: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -41,8 +41,9 @@ const CompaniesView: React.FC = () => {
     setLoading(true);
     try {
       const accessCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      await addDoc(collection(db, "companies"), {
+      await setDoc(doc(db, "companies", accessCode), {
         ...newCompany,
+        id: accessCode,
         accessCode,
         themeColor: '#0057ff',
         config: { overtimePercentage: 50, nightShiftPercentage: 20, weeklyHours: 44, toleranceMinutes: 10 }

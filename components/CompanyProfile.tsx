@@ -48,7 +48,8 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
     { label: "CEP", value: formData.zip, field: "zip" },
     { label: "Telefone", value: formData.phone, field: "phone" },
     { label: "IP Autorizado (WiFi Empresa)", value: formData.authorizedIP, field: "authorizedIP" },
-    { label: "E-mail Administrativo", value: formData.adminEmail, field: "adminEmail" }
+    { label: "E-mail Administrativo", value: formData.adminEmail, field: "adminEmail" },
+    { label: "Código de Acesso (Para Colaboradores)", value: company?.accessCode || 'NÃO GERADO', field: "accessCode", disabled: true }
   ];
 
   return (
@@ -79,10 +80,11 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
               </label>
               <input 
                 type="text" 
-                value={(formData as any)[f.field]} 
-                onChange={e => setFormData(prev => ({ ...prev, [f.field]: e.target.value }))}
+                value={(formData as any)[f.field] || (f as any).value} 
+                onChange={e => !f.disabled && setFormData(prev => ({ ...prev, [f.field]: e.target.value }))}
                 placeholder={f.field === 'authorizedIP' ? "Ex: 177.100.200.50" : ""}
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-[#0057ff] transition-all shadow-sm"
+                readOnly={f.disabled}
+                className={`w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-[#0057ff] transition-all shadow-sm ${f.disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
               />
               {f.field === 'authorizedIP' && <p className="text-[8px] text-slate-400 uppercase font-bold px-1">Se preenchido, o ponto só poderá ser batido quando o colaborador estiver usando este IP (WiFi da Empresa).</p>}
             </div>

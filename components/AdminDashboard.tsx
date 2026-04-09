@@ -511,7 +511,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="space-y-1"><p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Painel Administrativo</p><h3 className="text-slate-900 text-lg font-black uppercase">{company?.name}</h3></div>
             <div className="bg-white px-8 py-5 rounded-3xl border border-orange-100 text-center shadow-sm">
               <p className="text-[8px] text-slate-400 font-black uppercase mb-1">CÓDIGO EMPRESA</p>
-              <span className="text-orange-600 font-mono text-xl font-black">{company?.accessCode || '------'}</span>
+              {company?.accessCode ? (
+                <span className="text-orange-600 font-mono text-xl font-black">{company.accessCode}</span>
+              ) : (
+                <button 
+                  onClick={async () => {
+                    if (!company?.id) return;
+                    const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                    try {
+                      await updateDoc(doc(db, "companies", company.id), { accessCode: newCode });
+                      alert("CÓDIGO GERADO: " + newCode);
+                    } catch (e) { alert("ERRO AO GERAR CÓDIGO"); }
+                  }}
+                  className="text-[10px] font-black text-orange-600 underline uppercase"
+                >
+                  Gerar Código
+                </button>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
