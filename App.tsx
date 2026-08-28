@@ -125,7 +125,7 @@ const App: React.FC = () => {
   };
 
   const isAdmin = user?.role === 'admin';
-  const isAdminView = isAdmin && ['dashboard', 'colaboradores', 'aprovacoes', 'saldos', 'audit', 'company_profile', 'vendas'].includes(activeView);
+  const isAdminView = isAdmin && ['dashboard', 'colaboradores', 'aprovacoes', 'saldos', 'audit', 'company_profile', 'ferias', 'correcao', 'pontos_individuais'].includes(activeView);
 
   if (!user) return <Login onLogin={handleLogin} />;
 
@@ -179,7 +179,14 @@ const App: React.FC = () => {
                     alert("COLABORADOR CADASTRADO!");
                   } catch (err) { alert("ERRO AO SALVAR NO FIREBASE."); }
                 }} 
-                onDeleteEmployee={async (id) => { if(confirm("DESEJA REALMENTE EXCLUIR ESTE COLABORADOR?")) await deleteDoc(doc(db, "employees", id)); }} 
+                onDeleteEmployee={async (id) => {
+                  try {
+                    await deleteDoc(doc(db, "employees", id));
+                    alert("COLABORADOR EXCLUÍDO COM SUCESSO!");
+                  } catch (err) {
+                    alert("ERRO AO EXCLUIR COLABORADOR.");
+                  }
+                }} 
                 onUpdateEmployee={async (id, data) => { await updateDoc(doc(db, "employees", id), data); }}
                 onUpdateIP={() => {}}
                 initialTab={activeView as any}

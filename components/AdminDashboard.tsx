@@ -5,7 +5,6 @@ import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import ComplianceAudit from './ComplianceAudit';
-import SalesView from './SalesView';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -24,7 +23,7 @@ interface AdminDashboardProps {
   onDeleteEmployee: (id: string) => void;
   onUpdateEmployee: (id: string, data: any) => void;
   onUpdateIP: (ip: string) => void;
-  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'audit' | 'pontos_individuais';
+  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'audit' | 'pontos_individuais' | 'correcao' | 'ferias';
   onNavigate: (v: string) => void;
 }
 
@@ -58,6 +57,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
 
+  // Filtro de colaboradores
+  const [employeeFilterStatus, setEmployeeFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+
   // Estados para Gestão de Férias pelo Admin
   const [showAdminVacationModal, setShowAdminVacationModal] = useState(false);
   const [adminVacationMatricula, setAdminVacationMatricula] = useState('');
@@ -75,6 +78,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     roleFunction: '', 
     workShift: '08:00 - 12:00 / 14:00 - 18:00',
     weeklyHours: 44,
+    status: 'active' as 'active' | 'inactive',
     password: '',
     ctpsNumber: '',
     ctpsSeries: ''
@@ -174,8 +178,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       let empWorkedMin = 0;
       let empExtraMin = 0;
       let empDaysCount = 0;
+      let empExpectedMin = 0;
       const weeklyHours = emp.weeklyHours || company?.config?.weeklyHours || 44;
-      const dailyTarget = weeklyHours === 40 ? 480 : 528;
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(reportFilter.year, reportFilter.month, day);
@@ -204,22 +208,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         let extraMin = 0;
         if (workedMin > 0) {
           if (dayOfWeek === 0) {
+            // Domingo (DSR / 100% Extra)
             extraMin = workedMin;
           } else if (dayOfWeek === 6) {
-            extraMin = workedMin > 240 ? (workedMin - 240) : (weeklyHours >= 44 && dailyTarget === 528 ? workedMin : 0);
+            // Sábado: Na jornada CLT de 44h semanais, 4h são normais (240 min).
+            // Apenas o que exceder 4h no sábado é hora extra!
+            extraMin = workedMin > 240 ? (workedMin - 240) : 0;
           } else {
-            if (workedMin > dailyTarget) {
-              extraMin = workedMin - dailyTarget;
-            }
+            // Segunda a Sexta: 8h normais (480 min). O que exceder é hora extra.
+            extraMin = workedMin > 480 ? (workedMin - 480) : 0;
           }
 
+          const dayTarget = dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480);
+          empExpectedMin += dayTarget;
           empWorkedMin += workedMin;
           empExtraMin += extraMin;
           empDaysCount++;
         }
       }
 
-      const balanceMin = empWorkedMin - (empDaysCount * dailyTarget);
+      const balanceMin = empWorkedMin - empExpectedMin;
 
       return {
         employee: emp,
@@ -309,10 +317,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       const body: any[] = [];
 
       const weeklyHours = emp.weeklyHours || company?.config?.weeklyHours || 44;
-      const dailyTargetMinutes = weeklyHours === 40 ? 480 : 528; // 8h ou 8h48min (44h seg a sex)
 
       let totalWorkedMinutes = 0;
       let totalExtraMinutes = 0;
+      let totalExpectedMinutes = 0;
       let daysWorkedCount = 0;
 
       for (let day = 1; day <= 31; day++) {
@@ -367,17 +375,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         let extraMinutes = 0;
         if (workedMinutes > 0) {
           if (dayOfWeek === 0) {
-            // Domingo (DSR)
+            // Domingo (DSR / 100% Extra)
             extraMinutes = workedMinutes;
           } else if (dayOfWeek === 6) {
-            // Sábado
-            extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : (weeklyHours >= 44 && dailyTargetMinutes === 528 ? workedMinutes : 0);
+            // Sábado: Na jornada CLT de 44h semanais, 4h são normais (240 min).
+            // Apenas o que exceder 4h no sábado é hora extra!
+            extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : 0;
           } else {
-            if (workedMinutes > dailyTargetMinutes) {
-              extraMinutes = workedMinutes - dailyTargetMinutes;
-            }
+            // Segunda a Sexta: 8h normais (480 min). O que exceder é hora extra.
+            extraMinutes = workedMinutes > 480 ? (workedMinutes - 480) : 0;
           }
 
+          const dayTargetMinutes = dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480);
+          totalExpectedMinutes += dayTargetMinutes;
           totalWorkedMinutes += workedMinutes;
           totalExtraMinutes += extraMinutes;
           daysWorkedCount++;
@@ -485,8 +495,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       // Linha 2 de métricas
       doc.setFont("helvetica", "normal");
-      const expectedMonthlyMin = daysWorkedCount * dailyTargetMinutes;
-      const balanceMin = totalWorkedMinutes - expectedMonthlyMin;
+      const balanceMin = totalWorkedMinutes - totalExpectedMinutes;
       const balanceSign = balanceMin >= 0 ? '+' : '-';
       const balanceStr = `${balanceSign}${formatMinutesToHours(Math.abs(balanceMin)) || '00:00'} h`;
 
@@ -606,6 +615,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       alert("ERRO AO ATUALIZAR DADOS.");
     }
   };
+
+  const handleToggleEmployeeStatus = async (emp: Employee) => {
+    const nextStatus = emp.status === 'inactive' ? 'active' : 'inactive';
+    const actionName = nextStatus === 'active' ? 'ATIVAR' : 'DESATIVAR / INATIVAR';
+    const confirmMsg = nextStatus === 'active' 
+      ? `Deseja ATIVAR o acesso do colaborador ${emp.name} (Matrícula: ${emp.matricula})?` 
+      : `Deseja DESATIVAR (marcar como inativo) o colaborador ${emp.name} (Matrícula: ${emp.matricula})?\n\nO colaborador não conseguirá mais bater ponto no aplicativo nem no totem até ser reativado.`;
+
+    if (confirm(confirmMsg)) {
+      try {
+        await onUpdateEmployee(emp.id, { status: nextStatus });
+        alert(`Colaborador ${nextStatus === 'active' ? 'ATIVADO' : 'DESATIVADO'} com sucesso!`);
+      } catch (e) {
+        alert("Erro ao alterar status do colaborador.");
+      }
+    }
+  };
+
+  const handleDeleteEmployeeSafe = (emp: Employee) => {
+    if (confirm(`⚠️ ATENÇÃO: Deseja realmente EXCLUIR PERMANENTEMENTE o colaborador ${emp.name} (Matrícula: ${emp.matricula})?\n\nEsta ação removerá todos os dados cadastrais do colaborador do banco de dados.\nSe você deseja apenas suspender o acesso temporariamente, utilize o botão "Desativar".`)) {
+      onDeleteEmployee(emp.id);
+    }
+  };
+
+  const filteredEmployeesList = useMemo(() => {
+    return employees.filter(emp => {
+      const isInactive = emp.status === 'inactive';
+      const matchesStatus = employeeFilterStatus === 'all' 
+        ? true 
+        : employeeFilterStatus === 'active' 
+          ? !isInactive 
+          : isInactive;
+      
+      const search = employeeSearchTerm.toLowerCase().trim();
+      const matchesSearch = !search || 
+        (emp.name && emp.name.toLowerCase().includes(search)) || 
+        (emp.matricula && emp.matricula.toLowerCase().includes(search)) || 
+        (emp.cpf && emp.cpf.toLowerCase().includes(search)) ||
+        (emp.roleFunction && emp.roleFunction.toLowerCase().includes(search));
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [employees, employeeFilterStatus, employeeSearchTerm]);
 
   const handleRequestStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
@@ -774,7 +826,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           { id: 'aprovacoes', label: 'Pedidos', icon: '✅' },
           { id: 'correcao', label: 'Correção', icon: '✏️' },
           { id: 'ferias', label: 'Férias', icon: '🏖️' },
-          { id: 'vendas', label: 'Vendas', icon: '💰' },
           { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
           { id: 'pontos_individuais', label: 'Individuais', icon: '👤' },
           { id: 'audit', label: 'IA Audit', icon: '⚖️' }
@@ -886,30 +937,175 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       {activeTab === 'colaboradores' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center px-2">
-            <h3 className="text-sm font-black uppercase text-slate-900">Gestão de Equipe</h3>
-            <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase shadow-lg">+ Novo Cadastro</button>
+          {/* Métricas Rápidas de Equipe */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-6 rounded-[32px] border shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Cadastrados</p>
+                <h4 className="text-2xl font-black text-slate-900 mt-1">{employees.length}</h4>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-xl">👥</div>
+            </div>
+            <div className="bg-white p-6 rounded-[32px] border shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Colaboradores Ativos</p>
+                <h4 className="text-2xl font-black text-emerald-600 mt-1">{employees.filter(e => e.status !== 'inactive').length}</h4>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">🟢</div>
+            </div>
+            <div className="bg-white p-6 rounded-[32px] border shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Inativos / Desativados</p>
+                <h4 className="text-2xl font-black text-slate-600 mt-1">{employees.filter(e => e.status === 'inactive').length}</h4>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center text-xl">⚪</div>
+            </div>
           </div>
+
+          {/* Barra de Busca e Filtros */}
+          <div className="bg-white p-6 rounded-[36px] border shadow-sm flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+            <div className="flex-1">
+              <input 
+                type="text" 
+                placeholder="BUSCAR POR NOME, MATRÍCULA, CPF OU FUNÇÃO..." 
+                value={employeeSearchTerm}
+                onChange={e => setEmployeeSearchTerm(e.target.value)}
+                className="w-full px-5 py-3.5 bg-slate-50 border rounded-2xl text-[11px] font-bold outline-none focus:border-orange-500 transition-all uppercase placeholder:normal-case placeholder:font-medium"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1">
+                <button 
+                  onClick={() => setEmployeeFilterStatus('all')}
+                  className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all ${employeeFilterStatus === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  Todos ({employees.length})
+                </button>
+                <button 
+                  onClick={() => setEmployeeFilterStatus('active')}
+                  className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all ${employeeFilterStatus === 'active' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  Ativos ({employees.filter(e => e.status !== 'inactive').length})
+                </button>
+                <button 
+                  onClick={() => setEmployeeFilterStatus('inactive')}
+                  className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all ${employeeFilterStatus === 'inactive' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  Inativos ({employees.filter(e => e.status === 'inactive').length})
+                </button>
+              </div>
+
+              <button 
+                onClick={() => setShowAddModal(true)} 
+                className="bg-slate-900 hover:bg-black text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase shadow-lg transition-all"
+              >
+                + Novo Cadastro
+              </button>
+            </div>
+          </div>
+
+          {/* Tabela de Colaboradores */}
           <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-left min-w-[600px]">
-              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
-                <tr><th className="p-5">Nome</th><th className="p-5">Matrícula</th><th className="p-5">CPF</th><th className="p-5">Função</th><th className="p-5 text-center">Ações</th></tr>
+            <table className="w-full text-left min-w-[750px]">
+              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500 border-b">
+                <tr>
+                  <th className="p-5">Colaborador</th>
+                  <th className="p-5">Matrícula / CPF</th>
+                  <th className="p-5">Função & Jornada</th>
+                  <th className="p-5 text-center">Status</th>
+                  <th className="p-5 text-center">Ações</th>
+                </tr>
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
-                {employees.map(emp => (
-                  <tr key={emp.id} className="border-b">
-                    <td className="p-5">{emp.name}</td>
-                    <td className="p-5 text-slate-400">{emp.matricula}</td>
-                    <td className="p-5 text-slate-400">{emp.cpf || '-'}</td>
-                    <td className="p-5 text-slate-500">{emp.roleFunction || '-'}</td>
-                    <td className="p-5 text-center flex justify-center gap-2">
-                      <button onClick={() => { setSelectedEmployeeManualPunch(emp); setShowManualPunchModal(true); }} className="bg-orange-50 text-orange-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Ponto</button>
-                      <button onClick={() => { setEditingEmployee(emp); setEditEmpData(emp); }} className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Editar</button>
-                      <button onClick={() => { setEditingPasswordId(emp.id); setNewPasswordValue(''); }} className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Senha</button>
-                      <button onClick={() => onDeleteEmployee(emp.id)} className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Excluir</button>
+                {filteredEmployeesList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-12 text-center text-slate-400 font-bold normal-case text-xs">
+                      Nenhum colaborador encontrado com os filtros selecionados.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredEmployeesList.map(emp => {
+                    const isInactive = emp.status === 'inactive';
+                    return (
+                      <tr key={emp.id} className={`border-b transition-colors ${isInactive ? 'bg-slate-50/70 opacity-75' : 'hover:bg-slate-50/50'}`}>
+                        <td className="p-5">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-black ${isInactive ? 'bg-slate-200 text-slate-500' : 'bg-orange-100 text-orange-700'}`}>
+                              {emp.name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className={`font-black text-xs ${isInactive ? 'text-slate-600 line-through' : 'text-slate-900'}`}>{emp.name}</p>
+                              {emp.birthDate && <p className="text-[9px] text-slate-400 font-medium lowercase">nasc: {emp.birthDate}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-5">
+                          <p className="font-mono text-slate-700 font-black">{emp.matricula}</p>
+                          <p className="text-[9px] text-slate-400 font-mono font-medium">{emp.cpf || 'Sem CPF'}</p>
+                        </td>
+                        <td className="p-5">
+                          <p className="text-slate-800">{emp.roleFunction || 'Geral'}</p>
+                          <p className="text-[9px] text-slate-400 font-medium lowercase">{emp.workShift || '08:00 - 18:00'} ({emp.weeklyHours || 44}h/sem)</p>
+                        </td>
+                        <td className="p-5 text-center">
+                          {isInactive ? (
+                            <span className="inline-block bg-slate-200 text-slate-700 border border-slate-300 px-3 py-1 rounded-full text-[8px] font-black uppercase">
+                              Inativo
+                            </span>
+                          ) : (
+                            <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-[8px] font-black uppercase">
+                              Ativo
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-5 text-center">
+                          <div className="flex justify-center items-center gap-1.5 flex-wrap">
+                            <button 
+                              onClick={() => { setSelectedEmployeeManualPunch(emp); setShowManualPunchModal(true); }} 
+                              title="Lançar Ponto Manual"
+                              className="bg-orange-50 text-orange-600 hover:bg-orange-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all"
+                            >
+                              Ponto
+                            </button>
+                            <button 
+                              onClick={() => { setEditingEmployee(emp); setEditEmpData(emp); }} 
+                              title="Editar Dados do Colaborador"
+                              className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all"
+                            >
+                              Editar
+                            </button>
+                            <button 
+                              onClick={() => handleToggleEmployeeStatus(emp)} 
+                              title={isInactive ? "Ativar Colaborador" : "Desativar Colaborador"}
+                              className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all ${
+                                isInactive 
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                                  : 'bg-amber-100 hover:bg-amber-200 text-amber-800'
+                              }`}
+                            >
+                              {isInactive ? 'Ativar' : 'Desativar'}
+                            </button>
+                            <button 
+                              onClick={() => { setEditingPasswordId(emp.id); setNewPasswordValue(''); }} 
+                              title="Redefinir Senha"
+                              className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all"
+                            >
+                              Senha
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteEmployeeSafe(emp)} 
+                              title="Excluir Definitivamente"
+                              className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -1125,8 +1321,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
                     if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
 
-                    const dailyContractedMinutes = 528; // 8h48m
-                    const extraMinutes = workedMinutes > dailyContractedMinutes ? workedMinutes - dailyContractedMinutes : 0;
+                    const dateObj = new Date(selectedDateIndividual + 'T12:00:00');
+                    const dayOfWeek = dateObj.getDay();
+                    let extraMinutes = 0;
+                    if (workedMinutes > 0) {
+                      if (dayOfWeek === 0) {
+                        extraMinutes = workedMinutes;
+                      } else if (dayOfWeek === 6) {
+                        extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : 0;
+                      } else {
+                        extraMinutes = workedMinutes > 480 ? (workedMinutes - 480) : 0;
+                      }
+                    }
 
                     return (
                       <tr key={emp.id} className="border-b">
@@ -1515,10 +1721,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         </div>
       )}
 
-      {activeTab === 'vendas' && (
-        <SalesView company={company} employees={employees} />
-      )}
-
       {showAddModal && (
         <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
           <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in overflow-y-auto max-h-[90vh] no-scrollbar">
@@ -1539,8 +1741,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <input type="text" placeholder="SÉRIE" value={newEmp.ctpsSeries} onChange={e => setNewEmp({...newEmp, ctpsSeries: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
               </div>
               <div className="flex gap-2">
-                <input type="text" placeholder="HORÁRIO (EX: 08:00H)" value={newEmp.workShift} onChange={e => setNewEmp({...newEmp, workShift: e.target.value})} className="flex-[2] p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-                <input type="number" placeholder="HORAS/SEM" value={newEmp.weeklyHours} onChange={e => setNewEmp({...newEmp, weeklyHours: parseInt(e.target.value)})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="text" placeholder="HORÁRIO (EX: 08:00 - 18:00)" value={newEmp.workShift} onChange={e => setNewEmp({...newEmp, workShift: e.target.value})} className="flex-[2] p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="number" placeholder="HORAS/SEM" value={newEmp.weeklyHours} onChange={e => setNewEmp({...newEmp, weeklyHours: parseInt(e.target.value) || 44})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Status Inicial</label>
+                <select 
+                  value={newEmp.status} 
+                  onChange={e => setNewEmp({...newEmp, status: e.target.value as any})}
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border"
+                >
+                  <option value="active">🟢 ATIVO (Acesso Liberado)</option>
+                  <option value="inactive">⚪ INATIVO (Acesso Bloqueado)</option>
+                </select>
               </div>
               <div className="relative w-full">
                 <input 
@@ -1640,8 +1853,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 </div>
                 <div className="flex-1">
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Horas/Sem</label>
-                  <input type="number" value={editEmpData.weeklyHours} onChange={e => setEditEmpData({...editEmpData, weeklyHours: parseInt(e.target.value)})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                  <input type="number" value={editEmpData.weeklyHours} onChange={e => setEditEmpData({...editEmpData, weeklyHours: parseInt(e.target.value) || 44})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
                 </div>
+              </div>
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Status do Colaborador</label>
+                <select 
+                  value={editEmpData.status || 'active'} 
+                  onChange={e => setEditEmpData({...editEmpData, status: e.target.value as any})}
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border"
+                >
+                  <option value="active">🟢 ATIVO (Acesso Liberado)</option>
+                  <option value="inactive">⚪ INATIVO (Acesso Bloqueado)</option>
+                </select>
               </div>
             </div>
             

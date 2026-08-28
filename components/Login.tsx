@@ -87,6 +87,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const snap = await getDocs(q);
       if (!snap.empty) {
         const emp = snap.docs[0].data();
+        if (emp.status === 'inactive') {
+          setError('COLABORADOR INATIVO NO SISTEMA. PROCURE O RH.');
+          setLoading(false);
+          return;
+        }
         if (emp.password === password) {
           onLogin({
             name: emp.name, companyCode: realCompanyId, companyName, role: 'employee', 
