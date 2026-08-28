@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Eye, EyeOff, MapPin, Camera, X } from 'lucide-react';
-import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
+import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck } from 'lucide-react';
+import { PointRecord, Company, Employee, AttendanceRequest, Holiday } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getAllHolidaysForYear, getHolidayForDate } from '../utils/holidays';
 import ComplianceAudit from './ComplianceAudit';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -23,7 +24,7 @@ interface AdminDashboardProps {
   onDeleteEmployee: (id: string) => void;
   onUpdateEmployee: (id: string, data: any) => void;
   onUpdateIP: (ip: string) => void;
-  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'audit' | 'pontos_individuais' | 'correcao' | 'ferias';
+  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'audit' | 'pontos_individuais' | 'correcao' | 'ferias' | 'feriados';
   onNavigate: (v: string) => void;
 }
 
@@ -34,6 +35,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [authError, setAuthError] = useState(false);
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
   const [vacationRequests, setVacationRequests] = useState<any[]>([]);
+  const [customHolidays, setCustomHolidays] = useState<Holiday[]>([]);
+  const [selectedHolidayYear, setSelectedHolidayYear] = useState<number>(new Date().getFullYear());
+  const [showAddHolidayModal, setShowAddHolidayModal] = useState(false);
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayName, setNewHolidayName] = useState('');
+  const [newHolidayType, setNewHolidayType] = useState<'feriado' | 'ponto_facultativo' | 'evento'>('feriado');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManualPunchModal, setShowManualPunchModal] = useState(false);
   const [selectedEmployeeManualPunch, setSelectedEmployeeManualPunch] = useState<Employee | null>(null);
@@ -126,6 +133,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     }
   }, [isAuthorized, company?.id]);
 
+  // Listener para Feriados e Folgas da Empresa no Firestore
+  useEffect(() => {
+    if (isAuthorized && company?.id) {
+      const q = query(collection(db, "holidays"), where("companyCode", "==", company.id));
+      const unsub = onSnapshot(q, (snap) => {
+        const hols: Holiday[] = [];
+        snap.forEach(d => {
+          const data = d.data();
+          hols.push({ id: d.id, ...data } as Holiday);
+        });
+        setCustomHolidays(hols);
+      });
+      return () => unsub();
+    }
+  }, [isAuthorized, company?.id]);
+
+  const handleAddHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHolidayDate || !newHolidayName) {
+      alert("Por favor, informe a data e a descrição do feriado.");
+      return;
+    }
+    try {
+      await addDoc(collection(db, "holidays"), {
+        companyCode: company?.id,
+        date: newHolidayDate,
+        description: newHolidayName.trim(),
+        type: newHolidayType,
+        isNational: false,
+        createdAt: new Date()
+      });
+      setShowAddHolidayModal(false);
+      setNewHolidayDate('');
+      setNewHolidayName('');
+      setNewHolidayType('feriado');
+      alert("Feriado / Folga cadastrado com sucesso!");
+    } catch (err) {
+      alert("Erro ao cadastrar feriado no banco de dados.");
+    }
+  };
+
+  const handleDeleteHoliday = async (id: string, name: string) => {
+    if (confirm(`Deseja remover o feriado "${name}"?`)) {
+      try {
+        await deleteDoc(doc(db, "holidays", id));
+        alert("Feriado removido com sucesso!");
+      } catch (err) {
+        alert("Erro ao remover feriado.");
+      }
+    }
+  };
+
   const stats = useMemo(() => {
     const today = new Date().toDateString();
     const activeTodayCount = new Set(
@@ -184,6 +243,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(reportFilter.year, reportFilter.month, day);
         const dayOfWeek = dateObj.getDay();
+        const dateStr = `${reportFilter.year}-${String(reportFilter.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const holiday = getHolidayForDate(dateStr, customHolidays);
 
         const dayRecs = filteredRecords.filter(r => {
           const rd = new Date(r.timestamp);
@@ -207,8 +268,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
         let extraMin = 0;
         if (workedMin > 0) {
-          if (dayOfWeek === 0) {
-            // Domingo (DSR / 100% Extra)
+          if (holiday || dayOfWeek === 0) {
+            // Feriado ou Domingo (DSR): 100% das horas trabalhadas são horas extras
             extraMin = workedMin;
           } else if (dayOfWeek === 6) {
             // Sábado: Na jornada CLT de 44h semanais, 4h são normais (240 min).
@@ -219,7 +280,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             extraMin = workedMin > 480 ? (workedMin - 480) : 0;
           }
 
-          const dayTarget = dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480);
+          // Se for feriado ou domingo, a meta esperada é 0 (pois tudo é extra). Nos demais, aplica a meta.
+          const dayTarget = holiday ? 0 : (dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480));
           empExpectedMin += dayTarget;
           empWorkedMin += workedMin;
           empExtraMin += extraMin;
@@ -248,7 +310,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       totalExtraMin,
       totalDays
     };
-  }, [filteredRecords, reportFilter, employees, company]);
+  }, [filteredRecords, reportFilter, employees, company, customHolidays]);
 
   const handleExportPDF = () => {
     const records = filteredRecords;
@@ -372,11 +434,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           workedMinutes = calculateHoursDiff(e1, s1);
         }
 
+        const dateStr = `${reportFilter.year}-${String(reportFilter.month + 1).padStart(2, '0')}-${dayStr}`;
+        const holiday = getHolidayForDate(dateStr, customHolidays);
+
         let extraMinutes = 0;
-        if (workedMinutes > 0) {
+        let rubrica = '';
+
+        if (holiday) {
+          if (workedMinutes > 0) {
+            // Feriado trabalhado: 100% de horas extras
+            extraMinutes = workedMinutes;
+            totalExpectedMinutes += 0;
+            totalWorkedMinutes += workedMinutes;
+            totalExtraMinutes += extraMinutes;
+            daysWorkedCount++;
+            rubrica = `FERIADO TRABALHADO (${holiday.description})`;
+          } else {
+            // Feriado não trabalhado: dispensa legal de jornada
+            e1 = 'FERIADO';
+            s1 = '-';
+            e2 = '-';
+            s2 = '-';
+            rubrica = `FERIADO (${holiday.description})`;
+          }
+        } else if (workedMinutes > 0) {
           if (dayOfWeek === 0) {
             // Domingo (DSR / 100% Extra)
             extraMinutes = workedMinutes;
+            rubrica = 'DSR';
           } else if (dayOfWeek === 6) {
             // Sábado: Na jornada CLT de 44h semanais, 4h são normais (240 min).
             // Apenas o que exceder 4h no sábado é hora extra!
@@ -391,6 +476,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           totalWorkedMinutes += workedMinutes;
           totalExtraMinutes += extraMinutes;
           daysWorkedCount++;
+        } else if (dayOfWeek === 0) {
+          rubrica = 'DSR';
         }
 
         const workedStr = workedMinutes > 0 ? formatMinutesToHours(workedMinutes) : '';
@@ -404,7 +491,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           s2,
           workedStr,
           extraStr,
-          ''
+          rubrica
         ]);
       }
 
@@ -826,6 +913,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           { id: 'aprovacoes', label: 'Pedidos', icon: '✅' },
           { id: 'correcao', label: 'Correção', icon: '✏️' },
           { id: 'ferias', label: 'Férias', icon: '🏖️' },
+          { id: 'feriados', label: 'Feriados', icon: '📅' },
           { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
           { id: 'pontos_individuais', label: 'Individuais', icon: '👤' },
           { id: 'audit', label: 'IA Audit', icon: '⚖️' }
@@ -1258,6 +1346,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 />
               </div>
             </div>
+
+            {(() => {
+              const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
+              if (!holidayInfo) return null;
+              return (
+                <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex items-center justify-between gap-3 text-orange-800">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🎉</span>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wide">
+                        {holidayInfo.description} ({holidayInfo.type === 'feriado' ? 'Feriado' : 'Ponto Facultativo'})
+                      </p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase">
+                        Dia com dispensa legal de jornada. Horas trabalhadas neste dia são computadas com 100% de adicional de hora extra.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 bg-white border border-orange-200 rounded-xl text-[8px] font-black uppercase text-orange-700">
+                    {holidayInfo.isNational ? '🏛️ Nacional' : '🏢 Local / Empresa'}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
@@ -1321,11 +1432,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
                     if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
 
+                    const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
                     const dateObj = new Date(selectedDateIndividual + 'T12:00:00');
                     const dayOfWeek = dateObj.getDay();
                     let extraMinutes = 0;
                     if (workedMinutes > 0) {
-                      if (dayOfWeek === 0) {
+                      if (holidayInfo || dayOfWeek === 0) {
+                        // Feriado ou Domingo: 100% de Horas Extras
                         extraMinutes = workedMinutes;
                       } else if (dayOfWeek === 6) {
                         extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : 0;
@@ -1353,7 +1466,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                           <div>{s2}</div>
                           {renderRecordIcons(dayRecs[3])}
                         </td>
-                        <td className="p-5 text-slate-600">{workedMinutes > 0 ? formatMinutesToHours(workedMinutes) : '-'}</td>
+                        <td className="p-5 text-slate-600">
+                          {workedMinutes > 0 ? (
+                            formatMinutesToHours(workedMinutes)
+                          ) : holidayInfo ? (
+                            <span className="text-[8px] font-black px-2 py-0.5 rounded bg-orange-100 text-orange-700">Feriado</span>
+                          ) : '-'}
+                        </td>
                         <td className="p-5">
                           {extraMinutes > 0 ? (
                             <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black">
@@ -1721,6 +1840,186 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         </div>
       )}
 
+      {activeTab === 'feriados' && (
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-sm font-black uppercase text-slate-900">Gestão de Feriados & Pontos Facultativos</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                  Controle os dias não trabalhados e cálculo automático de 100% de hora extra nos registros
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowAddHolidayModal(true)} 
+                className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all shrink-0"
+              >
+                <Plus size={14} /> Cadastrar Feriado / Folga Local
+              </button>
+            </div>
+
+            {/* Banner Informativo CLT */}
+            <div className="bg-orange-50/80 border border-orange-100 p-5 rounded-3xl space-y-2">
+              <div className="flex items-center gap-2 text-orange-700 font-black text-[10px] uppercase tracking-wide">
+                <span>💡</span> Como Funcionam os Feriados no Sistema de Ponto:
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[9px] text-slate-600 font-bold uppercase leading-relaxed">
+                <div className="p-3 bg-white/90 rounded-2xl border border-orange-100/60">
+                  <span className="text-orange-600 font-black">🏛️ Feriados Nacionais Automáticos:</span> Já vêm pré-configurados pela legislação brasileira (Tiradentes, Independência, Consciência Negra, Páscoa móvel, etc.).
+                </div>
+                <div className="p-3 bg-white/90 rounded-2xl border border-orange-100/60">
+                  <span className="text-orange-600 font-black">🏢 Feriados Municipais / Empresa:</span> Você pode cadastrar datas locais da sua cidade, padroeira ou recessos da empresa com um clique.
+                </div>
+                <div className="p-3 bg-white/90 rounded-2xl border border-orange-100/60">
+                  <span className="text-orange-600 font-black">⚖️ Regra de Ponto & CLT:</span> No dia de feriado, a jornada é dispensada (não gera horas negativas) e, se o funcionário trabalhar, o sistema calcula <strong>100% de horas extras</strong> automaticamente!
+                </div>
+              </div>
+            </div>
+
+            {/* Year Selector & Metrics */}
+            {(() => {
+              const allHols = getAllHolidaysForYear(selectedHolidayYear, customHolidays);
+              const nationalCount = allHols.filter(h => h.isNational).length;
+              const customCount = allHols.filter(h => !h.isNational).length;
+              const todayStr = new Date().toISOString().split('T')[0];
+              const upcomingHols = allHols.filter(h => h.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
+              const nextHol = upcomingHols[0];
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[9px] font-black text-slate-400 uppercase">Selecione o Ano:</label>
+                      <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
+                        {[2024, 2025, 2026, 2027].map(y => (
+                          <button
+                            key={y}
+                            onClick={() => setSelectedHolidayYear(y)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
+                              selectedHolidayYear === y ? 'bg-orange-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            {y}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total de Feriados no Ano</p>
+                      <p className="text-xl font-black text-slate-900">{allHols.length} <span className="text-xs text-slate-400">dias</span></p>
+                    </div>
+                    <div className="p-5 rounded-3xl bg-blue-50 border border-blue-100">
+                      <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-1">Feriados Nacionais</p>
+                      <p className="text-xl font-black text-blue-700">{nationalCount} <span className="text-xs text-blue-400">oficiais</span></p>
+                    </div>
+                    <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-100">
+                      <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">Municipais / Empresa</p>
+                      <p className="text-xl font-black text-emerald-700">{customCount} <span className="text-xs text-emerald-400">cadastrados</span></p>
+                    </div>
+                    <div className="p-5 rounded-3xl bg-amber-50 border border-amber-100">
+                      <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Próximo Feriado</p>
+                      <p className="text-xs font-black text-amber-800 truncate">
+                        {nextHol ? `${new Date(nextHol.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} - ${nextHol.description}` : 'Nenhum próximo'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Lista de Feriados */}
+          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h4 className="text-[11px] font-black uppercase text-slate-700">Calendário de Feriados e Folgas ({selectedHolidayYear})</h4>
+              <span className="text-[9px] font-bold text-slate-400 uppercase">
+                {getAllHolidaysForYear(selectedHolidayYear, customHolidays).length} Datas cadastradas
+              </span>
+            </div>
+            <table className="w-full text-left min-w-[700px]">
+              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                <tr>
+                  <th className="p-5">Data</th>
+                  <th className="p-5">Dia da Semana</th>
+                  <th className="p-5">Descrição / Nome</th>
+                  <th className="p-5">Origem</th>
+                  <th className="p-5">Tipo</th>
+                  <th className="p-5 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="text-[11px] font-bold uppercase">
+                {(() => {
+                  const hols = getAllHolidaysForYear(selectedHolidayYear, customHolidays);
+                  const todayStr = new Date().toISOString().split('T')[0];
+
+                  return hols.map(h => {
+                    const [y, m, d] = h.date.split('-').map(Number);
+                    const dateObj = new Date(y, m - 1, d, 12);
+                    const dayOfWeekLabel = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dateObj.getDay()];
+                    const isToday = h.date === todayStr;
+
+                    return (
+                      <tr key={h.id || h.date} className={`border-b hover:bg-slate-50/50 transition-colors ${isToday ? 'bg-orange-50/40' : ''}`}>
+                        <td className="p-5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-slate-900 font-black text-xs">
+                              {String(d).padStart(2, '0')}/{String(m).padStart(2, '0')}/{y}
+                            </span>
+                            {isToday && (
+                              <span className="bg-orange-500 text-white text-[7px] font-black px-2 py-0.5 rounded-full">
+                                HOJE
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-5 text-slate-500">{dayOfWeekLabel}</td>
+                        <td className="p-5 font-black text-slate-900">{h.description}</td>
+                        <td className="p-5">
+                          {h.isNational ? (
+                            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[8px] font-black">
+                              🏛️ Nacional Oficial
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-[8px] font-black">
+                              🏢 Municipal / Empresa
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-5">
+                          <span className={`px-2.5 py-1 rounded-full text-[8px] font-black ${
+                            h.type === 'feriado' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {h.type === 'feriado' ? 'Feriado' : 'Ponto Facultativo'}
+                          </span>
+                        </td>
+                        <td className="p-5 text-center">
+                          {!h.isNational && h.id ? (
+                            <button
+                              onClick={() => handleDeleteHoliday(h.id!, h.description)}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl text-[9px] font-black transition-all"
+                              title="Remover Feriado Local"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          ) : (
+                            <span className="text-slate-300 text-[8px] font-black" title="Feriado nacional fixado por lei federal">
+                              🔒 Fixo
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {showAddModal && (
         <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
           <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in overflow-y-auto max-h-[90vh] no-scrollbar">
@@ -2052,6 +2351,80 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <button onClick={() => setShowAdminVacationModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Cancelar</button>
               <button onClick={handleCreateAdminVacation} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Gravar Férias</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAddHolidayModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in overflow-y-auto max-h-[90vh] no-scrollbar">
+            <div className="w-16 h-16 rounded-[28px] bg-orange-100 text-orange-600 flex items-center justify-center mx-auto text-2xl mb-4">
+              📅
+            </div>
+            <h2 className="text-[14px] font-black uppercase text-center mb-1 text-slate-900 tracking-widest">
+              Cadastrar Feriado / Folga
+            </h2>
+            <p className="text-[9px] font-bold uppercase text-slate-400 text-center mb-6">
+              Adicione feriados municipais, padroeiras ou recessos internos da sua empresa
+            </p>
+
+            <form onSubmit={handleAddHoliday} className="space-y-4">
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data do Feriado / Folga</label>
+                <input 
+                  type="date" 
+                  required
+                  value={newHolidayDate} 
+                  onChange={e => setNewHolidayDate(e.target.value)} 
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500" 
+                />
+              </div>
+
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Nome / Descrição</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: Aniversário da Cidade, Recesso Coletivo"
+                  value={newHolidayName} 
+                  onChange={e => setNewHolidayName(e.target.value.toUpperCase())} 
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500" 
+                />
+              </div>
+
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Tipo de Folga</label>
+                <select 
+                  value={newHolidayType} 
+                  onChange={e => setNewHolidayType(e.target.value as any)} 
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border"
+                >
+                  <option value="feriado">Feriado Municipal / Estadual</option>
+                  <option value="ponto_facultativo">Ponto Facultativo / Recesso</option>
+                  <option value="evento">Evento / Folga Especial</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-orange-50 rounded-2xl border border-orange-100 text-[8px] font-bold text-orange-700 uppercase leading-relaxed">
+                ⚖️ Este dia dispensará a cobrança de jornada dos colaboradores no livro de ponto. Caso algum colaborador trabalhe, o sistema gerará 100% de horas extras.
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddHolidayModal(false)} 
+                  className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-[2] py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl"
+                >
+                  Salvar Feriado
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

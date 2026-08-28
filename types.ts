@@ -126,9 +126,12 @@ export interface NotebookSummary {
 // Interface para Feriados e Eventos
 export interface Holiday {
   id: string;
-  date: string;
+  date: string; // YYYY-MM-DD
   description: string;
-  type: 'feriado' | 'evento';
+  type: 'feriado' | 'ponto_facultativo' | 'evento';
+  isNational?: boolean;
+  companyCode?: string;
+  coverage?: 'geral' | 'setorial';
 }
 
 // Interface para Gestão de Vendas e Comissões
