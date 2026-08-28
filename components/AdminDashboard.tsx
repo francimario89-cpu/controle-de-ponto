@@ -5,6 +5,7 @@ import { PointRecord, Company, Employee, AttendanceRequest } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import ComplianceAudit from './ComplianceAudit';
+import SalesView from './SalesView';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -56,6 +57,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [selectedDateIndividual, setSelectedDateIndividual] = useState<string>(new Date().toISOString().split('T')[0]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
+
+  // Estados para Gestão de Férias pelo Admin
+  const [showAdminVacationModal, setShowAdminVacationModal] = useState(false);
+  const [adminVacationMatricula, setAdminVacationMatricula] = useState('');
+  const [adminVacationStart, setAdminVacationStart] = useState('');
+  const [adminVacationEnd, setAdminVacationEnd] = useState('');
+  const [adminVacationStatus, setAdminVacationStatus] = useState<'approved' | 'pending'>('approved');
+  const [adminVacationNote, setAdminVacationNote] = useState('');
+  const [vacationFilterMatricula, setVacationFilterMatricula] = useState('todos');
   
   const [newEmp, setNewEmp] = useState({ 
     name: '', 
@@ -142,15 +152,95 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     if (!start || !end) return 0;
     const [h1, m1] = start.split(':').map(Number);
     const [h2, m2] = end.split(':').map(Number);
-    return (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return 0;
+    const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+    return diff > 0 ? diff : 0;
   };
 
   const formatMinutesToHours = (minutes: number) => {
-    if (minutes <= 0) return "";
+    if (!minutes || minutes <= 0) return "";
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
+
+  const monthlyReportStats = useMemo(() => {
+    const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
+    const targetEmployees = reportFilter.matricula === 'todos' 
+      ? employees 
+      : employees.filter(e => e.matricula === reportFilter.matricula);
+
+    const empStats = targetEmployees.map(emp => {
+      let empWorkedMin = 0;
+      let empExtraMin = 0;
+      let empDaysCount = 0;
+      const weeklyHours = emp.weeklyHours || company?.config?.weeklyHours || 44;
+      const dailyTarget = weeklyHours === 40 ? 480 : 528;
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(reportFilter.year, reportFilter.month, day);
+        const dayOfWeek = dateObj.getDay();
+
+        const dayRecs = filteredRecords.filter(r => {
+          const rd = new Date(r.timestamp);
+          return r.matricula === emp.matricula &&
+                 rd.getDate() === day;
+        }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        let e1 = dayRecs[0] ? new Date(dayRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        let s1 = dayRecs[1] ? new Date(dayRecs[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        let e2 = dayRecs[2] ? new Date(dayRecs[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        let s2 = dayRecs[3] ? new Date(dayRecs[3].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+        let workedMin = 0;
+        if (e1 && s1 && e2 && s2) {
+          workedMin = calculateHoursDiff(e1, s1) + calculateHoursDiff(e2, s2);
+        } else if (e1 && s2 && !s1 && !e2) {
+          workedMin = calculateHoursDiff(e1, s2);
+        } else if (e1 && s1 && !e2 && !s2) {
+          workedMin = calculateHoursDiff(e1, s1);
+        }
+
+        let extraMin = 0;
+        if (workedMin > 0) {
+          if (dayOfWeek === 0) {
+            extraMin = workedMin;
+          } else if (dayOfWeek === 6) {
+            extraMin = workedMin > 240 ? (workedMin - 240) : (weeklyHours >= 44 && dailyTarget === 528 ? workedMin : 0);
+          } else {
+            if (workedMin > dailyTarget) {
+              extraMin = workedMin - dailyTarget;
+            }
+          }
+
+          empWorkedMin += workedMin;
+          empExtraMin += extraMin;
+          empDaysCount++;
+        }
+      }
+
+      const balanceMin = empWorkedMin - (empDaysCount * dailyTarget);
+
+      return {
+        employee: emp,
+        workedMin: empWorkedMin,
+        extraMin: empExtraMin,
+        daysCount: empDaysCount,
+        balanceMin
+      };
+    });
+
+    const totalWorkedMin = empStats.reduce((acc, s) => acc + s.workedMin, 0);
+    const totalExtraMin = empStats.reduce((acc, s) => acc + s.extraMin, 0);
+    const totalDays = empStats.reduce((acc, s) => acc + s.daysCount, 0);
+
+    return {
+      empStats,
+      totalWorkedMin,
+      totalExtraMin,
+      totalDays
+    };
+  }, [filteredRecords, reportFilter, employees, company]);
 
   const handleExportPDF = () => {
     const records = filteredRecords;
@@ -163,132 +253,275 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       ? employees 
       : employees.filter(e => e.matricula === reportFilter.matricula);
 
+    if (employeesToExport.length === 0) {
+      alert("Nenhum colaborador encontrado para o filtro selecionado.");
+      return;
+    }
+
     employeesToExport.forEach((emp, index) => {
       if (index > 0) doc.addPage();
 
       // TITULO
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
       const monthLabel = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-      doc.text(`FOLHA DE PONTO | MÊS/ANO: ${monthLabel} / ${reportFilter.year}`, pageWidth / 2, 12, { align: 'center' });
+      doc.text(`FOLHA DE PONTO / ESPELHO DE PONTO ELETRÔNICO`, pageWidth / 2, 10, { align: 'center' });
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`MÊS/ANO: ${monthLabel} / ${reportFilter.year}  |  Portaria MTP nº 671/2021`, pageWidth / 2, 14, { align: 'center' });
 
       // BOX 1: DADOS DO EMPREGADOR
-      doc.setFontSize(8);
-      doc.rect(margin, 15, contentWidth, 24);
-      doc.text("DADOS DO EMPREGADOR", pageWidth / 2, 19, { align: 'center' });
-      doc.line(margin, 21, pageWidth - margin, 21);
+      doc.setFontSize(7.5);
+      doc.rect(margin, 17, contentWidth, 20);
+      doc.setFont("helvetica", "bold");
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, 17, contentWidth, 4.5, 'F');
+      doc.text("DADOS DO EMPREGADOR", pageWidth / 2, 20.5, { align: 'center' });
+      doc.line(margin, 21.5, pageWidth - margin, 21.5);
       
       doc.setFont("helvetica", "normal");
-      doc.text(`Nome: ${company?.name || ''}`, margin + 2, 25);
-      // Alterado de CPF para CNPJ conforme solicitação
-      doc.text(`CNPJ: ${company?.cnpj || ''}`, pageWidth / 2 + 20, 25);
-      doc.text(`Endereço: ${company?.address || ''}`, margin + 2, 29);
-      doc.text(`Cidade: ${company?.city || ''}`, margin + 2, 33);
-      doc.text(`Estado: ${company?.state || ''}`, pageWidth / 2 - 10, 33);
-      doc.text(`CEP: ${company?.zip || ''}`, pageWidth / 2 + 20, 33);
-      doc.text(`Bairro: ${company?.neighborhood || ''}`, margin + 2, 37);
+      doc.text(`Razão Social / Nome: ${company?.name || 'EMPRESA'}`, margin + 2, 26);
+      doc.text(`CNPJ: ${company?.cnpj || 'NÃO INFORMADO'}`, pageWidth / 2 + 15, 26);
+      doc.text(`Endereço: ${company?.address || 'NÃO INFORMADO'}`, margin + 2, 30);
+      doc.text(`Cidade/UF: ${company?.city || ''} - ${company?.state || ''}`, margin + 2, 34);
+      doc.text(`CEP: ${company?.zip || ''}`, pageWidth / 2 + 15, 34);
 
       // BOX 2: DADOS DO COLABORADOR
-      doc.rect(margin, 41, contentWidth, 30);
+      doc.rect(margin, 39, contentWidth, 26);
       doc.setFont("helvetica", "bold");
-      doc.text("DADOS DO COLABORADOR", pageWidth / 2, 45, { align: 'center' });
-      doc.line(margin, 47, pageWidth - margin, 47);
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, 39, contentWidth, 4.5, 'F');
+      doc.text("DADOS DO COLABORADOR", pageWidth / 2, 42.5, { align: 'center' });
+      doc.line(margin, 43.5, pageWidth - margin, 43.5);
       
       doc.setFont("helvetica", "normal");
-      doc.text(`Nome: ${emp.name}`, margin + 2, 51);
-      doc.text(`CPF: ${emp.cpf || ''}`, pageWidth / 2 + 20, 51);
-      doc.text(`Carteira de trabalho nº: ${emp.ctpsNumber || ''}`, margin + 2, 56);
-      doc.text(`Série: ${emp.ctpsSeries || ''}`, pageWidth / 2 - 20, 56);
-      doc.text(`Cargo: ${emp.roleFunction || ''}`, pageWidth / 2 + 20, 56);
-      
-      doc.setFont("helvetica", "bold");
-      doc.text("Horário de trabalho", margin + 2, 63);
-      doc.text("contratado", margin + 2, 66);
-      
-      // Linhas do horário no box
-      doc.rect(margin + 40, 60, contentWidth - 40, 9);
-      doc.setFontSize(7);
-      doc.text("Entrada: ______   Saída/almoço: ______   Retorno/almoço: ______   Saída: ______", margin + 42, 66);
-      doc.setFontSize(8);
+      doc.text(`Nome: ${emp.name}`, margin + 2, 48);
+      doc.text(`Matrícula: ${emp.matricula}`, pageWidth / 2 + 15, 48);
+      doc.text(`CPF: ${emp.cpf || 'NÃO INFORMADO'}`, margin + 2, 52);
+      doc.text(`CTPS: ${emp.ctpsNumber || '---'} / Série: ${emp.ctpsSeries || '---'}`, pageWidth / 2 + 15, 52);
+      doc.text(`Cargo / Função: ${emp.roleFunction || 'COLABORADOR'}`, margin + 2, 56);
+      doc.text(`Jornada: ${emp.workShift || '08:00 - 12:00 / 14:00 - 18:00'} (${emp.weeklyHours || 44}h semanais)`, pageWidth / 2 + 15, 56);
+      doc.text(`Horário Contratado: Entrada: 08:00 | Saída Intervalo: 12:00 | Retorno: 13:00/14:00 | Saída: 18:00`, margin + 2, 61);
 
       // TABELA DE PONTO
       const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
-      const body = [];
+      const body: any[] = [];
 
-      // Jornada contratada média (8h48m p/ 44h sem) = 528 min
-      const dailyContractedMinutes = 528; 
+      const weeklyHours = emp.weeklyHours || company?.config?.weeklyHours || 44;
+      const dailyTargetMinutes = weeklyHours === 40 ? 480 : 528; // 8h ou 8h48min (44h seg a sex)
+
+      let totalWorkedMinutes = 0;
+      let totalExtraMinutes = 0;
+      let daysWorkedCount = 0;
 
       for (let day = 1; day <= 31; day++) {
         const dayStr = String(day).padStart(2, '0');
-        const dayRecs = records.filter(r => 
-          r.matricula === emp.matricula && 
-          new Date(r.timestamp).toLocaleDateString('pt-BR').startsWith(dayStr + '/')
-        ).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        const dateObj = new Date(reportFilter.year, reportFilter.month, day);
+        const dayOfWeek = dateObj.getDay(); // 0 = Domingo, 6 = Sábado
+        const dayOfWeekLabel = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][dayOfWeek];
 
-        const e1 = dayRecs[0] ? new Date(dayRecs[0].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
-        const s1 = dayRecs[1] ? new Date(dayRecs[1].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
-        const e2 = dayRecs[2] ? new Date(dayRecs[2].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
-        const s2 = dayRecs[3] ? new Date(dayRecs[3].timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
-
-        let extraStr = "";
-        if (day <= daysInMonth && e1 && s1 && e2 && s2) {
-            const worked = calculateHoursDiff(e1, s1) + calculateHoursDiff(e2, s2);
-            if (worked > dailyContractedMinutes) {
-                extraStr = formatMinutesToHours(worked - dailyContractedMinutes);
-            }
+        if (day > daysInMonth) {
+          body.push([`${dayStr}`, '', '', '', '', '', '', '']);
+          continue;
         }
 
+        const dayRecs = records.filter(r => {
+          const rd = new Date(r.timestamp);
+          return r.matricula === emp.matricula &&
+                 rd.getDate() === day &&
+                 rd.getMonth() === reportFilter.month &&
+                 rd.getFullYear() === reportFilter.year;
+        }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        let e1 = '';
+        let s1 = '';
+        let e2 = '';
+        let s2 = '';
+
+        if (dayRecs.length === 1) {
+          e1 = new Date(dayRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } else if (dayRecs.length === 2) {
+          e1 = new Date(dayRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s2 = new Date(dayRecs[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } else if (dayRecs.length === 3) {
+          e1 = new Date(dayRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s1 = new Date(dayRecs[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          e2 = new Date(dayRecs[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } else if (dayRecs.length >= 4) {
+          e1 = new Date(dayRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s1 = new Date(dayRecs[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          e2 = new Date(dayRecs[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s2 = new Date(dayRecs[3].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        let workedMinutes = 0;
+        if (e1 && s1 && e2 && s2) {
+          workedMinutes = calculateHoursDiff(e1, s1) + calculateHoursDiff(e2, s2);
+        } else if (e1 && s2 && !s1 && !e2) {
+          workedMinutes = calculateHoursDiff(e1, s2);
+        } else if (e1 && s1 && !e2 && !s2) {
+          workedMinutes = calculateHoursDiff(e1, s1);
+        }
+
+        let extraMinutes = 0;
+        if (workedMinutes > 0) {
+          if (dayOfWeek === 0) {
+            // Domingo (DSR)
+            extraMinutes = workedMinutes;
+          } else if (dayOfWeek === 6) {
+            // Sábado
+            extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : (weeklyHours >= 44 && dailyTargetMinutes === 528 ? workedMinutes : 0);
+          } else {
+            if (workedMinutes > dailyTargetMinutes) {
+              extraMinutes = workedMinutes - dailyTargetMinutes;
+            }
+          }
+
+          totalWorkedMinutes += workedMinutes;
+          totalExtraMinutes += extraMinutes;
+          daysWorkedCount++;
+        }
+
+        const workedStr = workedMinutes > 0 ? formatMinutesToHours(workedMinutes) : '';
+        const extraStr = extraMinutes > 0 ? formatMinutesToHours(extraMinutes) : '';
+
         body.push([
-          dayStr,
-          day <= daysInMonth ? e1 : '',
-          day <= daysInMonth ? s1 : '',
-          day <= daysInMonth ? e2 : '',
-          day <= daysInMonth ? s2 : '',
-          '', // RUBRICA
-          day <= daysInMonth ? extraStr : '',
-          ''  // VISTO
+          `${dayStr} ${dayOfWeekLabel}`,
+          e1,
+          s1,
+          e2,
+          s2,
+          workedStr,
+          extraStr,
+          ''
         ]);
       }
 
       doc.autoTable({
-        startY: 75,
-        head: [['DIA\nMÊS', 'ENTRADA', 'INÍCIO DO\nINTERVALO', 'FIM DO\nINTERVALO', 'SAÍDA', 'RUBRICA', 'HORA EXTRA', 'VISTO']],
+        startY: 67,
+        head: [['DIA', 'ENTRADA', 'INÍCIO INT.', 'FIM INT.', 'SAÍDA', 'TOTAL DIA', 'HORA EXTRA', 'RUBRICA']],
         body: body,
+        foot: [[
+          'TOTAIS',
+          '',
+          '',
+          '',
+          '',
+          formatMinutesToHours(totalWorkedMinutes) || '00:00',
+          formatMinutesToHours(totalExtraMinutes) || '00:00',
+          ''
+        ]],
         theme: 'grid',
         headStyles: { 
-            fillColor: [255, 255, 255], 
-            textColor: [0, 0, 0], 
-            lineWidth: 0.1, 
-            fontSize: 6, 
-            halign: 'center', 
-            valign: 'middle', 
-            fontStyle: 'bold' 
+          fillColor: [241, 245, 249], 
+          textColor: [15, 23, 42], 
+          lineWidth: 0.1, 
+          fontSize: 6, 
+          halign: 'center', 
+          valign: 'middle', 
+          fontStyle: 'bold' 
+        },
+        footStyles: {
+          fillColor: [226, 232, 240],
+          textColor: [15, 23, 42],
+          lineWidth: 0.1,
+          fontSize: 6.5,
+          halign: 'center',
+          valign: 'middle',
+          fontStyle: 'bold'
         },
         styles: { 
-            fontSize: 7, 
-            cellPadding: 0.5, 
-            halign: 'center', 
-            textColor: [0, 0, 0], 
-            lineWidth: 0.1,
-            minCellHeight: 6
+          fontSize: 6, 
+          cellPadding: 0.35, 
+          halign: 'center', 
+          textColor: [0, 0, 0], 
+          lineWidth: 0.1,
+          minCellHeight: 4.6
         },
         columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 25 },
-          3: { cellWidth: 25 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 25 },
-          6: { cellWidth: 25 },
-          7: { cellWidth: 15 }
+          0: { cellWidth: 14, fontStyle: 'bold' },
+          1: { cellWidth: 23 },
+          2: { cellWidth: 24 },
+          3: { cellWidth: 24 },
+          4: { cellWidth: 23 },
+          5: { cellWidth: 26, fontStyle: 'bold' },
+          6: { cellWidth: 26, fontStyle: 'bold' },
+          7: { cellWidth: 30 }
         },
         margin: { left: margin, right: margin }
       });
 
-      const finalY = (doc as any).lastAutoTable.finalY + 10;
-      doc.setFontSize(8);
-      // Removido 'doméstico' e alterado para 'colaborador' conforme solicitado
-      doc.text(`Assinatura do colaborador: __________________________________________________________________`, margin, finalY);
+      const finalY = (doc as any).lastAutoTable.finalY + 3;
+
+      // BOX RESUMO GERAL DO MÊS / BANCO DE HORAS
+      doc.rect(margin, finalY, contentWidth, 18);
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, finalY, contentWidth, 4.5, 'F');
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text("RESUMO GERAL DO MÊS / BANCO DE HORAS", pageWidth / 2, finalY + 3.2, { align: 'center' });
+      doc.line(margin, finalY + 4.5, pageWidth - margin, finalY + 4.5);
+
+      doc.setFontSize(6.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+
+      // Linha 1 de métricas
+      doc.text(`Total Horas Trabalhadas:`, margin + 3, finalY + 8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${formatMinutesToHours(totalWorkedMinutes) || '00:00'} h`, margin + 38, finalY + 8.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Total Horas Extras:`, margin + 65, finalY + 8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${formatMinutesToHours(totalExtraMinutes) || '00:00'} h`, margin + 96, finalY + 8.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Dias Trabalhados:`, margin + 130, finalY + 8.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${daysWorkedCount} dias`, margin + 158, finalY + 8.5);
+
+      // Linha 2 de métricas
+      doc.setFont("helvetica", "normal");
+      const expectedMonthlyMin = daysWorkedCount * dailyTargetMinutes;
+      const balanceMin = totalWorkedMinutes - expectedMonthlyMin;
+      const balanceSign = balanceMin >= 0 ? '+' : '-';
+      const balanceStr = `${balanceSign}${formatMinutesToHours(Math.abs(balanceMin)) || '00:00'} h`;
+
+      doc.text(`Jornada Mensal Base:`, margin + 3, finalY + 13.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`~${weeklyHours === 40 ? '176' : '220'}h (${weeklyHours}h/sem)`, margin + 38, finalY + 13.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Saldo / Banco de Horas:`, margin + 65, finalY + 13.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(balanceStr, margin + 96, finalY + 13.5);
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Conformidade Legal:`, margin + 130, finalY + 13.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`CLT / Port. 671 MTP`, margin + 158, finalY + 13.5);
+
+      // Disclaimer
+      const disclaimY = finalY + 21;
+      doc.setFontSize(5.5);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(100, 116, 139);
+      doc.text("Reconheço a exatidão das marcações acima registradas nos termos do Art. 74 da CLT e Portaria MTP nº 671/2021.", margin, disclaimY);
+
+      // Linhas de Assinatura
+      const signLineY = disclaimY + 8;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.setTextColor(0, 0, 0);
+
+      doc.line(margin + 5, signLineY, margin + 80, signLineY);
+      doc.text(`Assinatura do Colaborador (${emp.name})`, margin + 42.5, signLineY + 3.2, { align: 'center' });
+
+      doc.line(pageWidth - margin - 80, signLineY, pageWidth - margin - 5, signLineY);
+      doc.text("Assinatura do Empregador / RH", pageWidth - margin - 42.5, signLineY + 3.2, { align: 'center' });
     });
 
     doc.save(`FOLHA_PONTO_${company?.name || 'EMPRESA'}_${reportFilter.month + 1}_${reportFilter.year}.pdf`);
@@ -388,6 +621,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       await updateDoc(doc(db, "vacations", id), { status });
       alert(`SOLICITAÇÃO ${status === 'approved' ? 'APROVADA' : 'RECUSADA'}!`);
     } catch (e) { alert("ERRO AO ATUALIZAR STATUS."); }
+  };
+
+  const handleCreateAdminVacation = async () => {
+    if (!adminVacationMatricula || !adminVacationStart || !adminVacationEnd) {
+      alert("Por favor, selecione o colaborador e informe a data de início e término.");
+      return;
+    }
+
+    if (new Date(adminVacationStart) > new Date(adminVacationEnd)) {
+      alert("A data de início não pode ser posterior à data de término.");
+      return;
+    }
+
+    const selectedEmp = employees.find(e => e.matricula === adminVacationMatricula);
+    if (!selectedEmp) {
+      alert("Colaborador não encontrado.");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "vacations"), {
+        userId: selectedEmp.matricula,
+        userName: selectedEmp.name,
+        startDate: adminVacationStart,
+        endDate: adminVacationEnd,
+        status: adminVacationStatus,
+        note: adminVacationNote || '',
+        companyCode: company?.id,
+        createdAt: new Date()
+      });
+      alert("FÉRIAS REGISTRADAS COM SUCESSO!");
+      setShowAdminVacationModal(false);
+      setAdminVacationMatricula('');
+      setAdminVacationStart('');
+      setAdminVacationEnd('');
+      setAdminVacationNote('');
+      setAdminVacationStatus('approved');
+    } catch (e) {
+      alert("Erro ao registrar férias no sistema.");
+    }
+  };
+
+  const handleDeleteVacation = async (id: string) => {
+    if (confirm("Deseja realmente excluir este lançamento de férias?")) {
+      try {
+        await deleteDoc(doc(db, "vacations", id));
+        alert("Férias excluídas com sucesso!");
+      } catch (e) {
+        alert("Erro ao excluir.");
+      }
+    }
   };
 
   const handleManualPunch = async () => {
@@ -490,6 +774,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           { id: 'aprovacoes', label: 'Pedidos', icon: '✅' },
           { id: 'correcao', label: 'Correção', icon: '✏️' },
           { id: 'ferias', label: 'Férias', icon: '🏖️' },
+          { id: 'vendas', label: 'Vendas', icon: '💰' },
           { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
           { id: 'pontos_individuais', label: 'Individuais', icon: '👤' },
           { id: 'audit', label: 'IA Audit', icon: '⚖️' }
@@ -634,17 +919,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       {activeTab === 'saldos' && (
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-sm font-black uppercase">Exportar Folha Ponto (PDF A4)</h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-sm font-black uppercase text-slate-900">Folhas de Ponto Oficiais (PDF / CLT)</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Conforme Portaria MTP nº 671/2021 com Somatório de Horas e Horas Extras</p>
+              </div>
               <div className="flex gap-2">
-                <button onClick={handleExportCSV} className="bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">
-                  📊 Exportar CSV
+                <button onClick={handleExportCSV} className="bg-slate-100 text-slate-600 px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">
+                  📊 CSV
                 </button>
-                <button onClick={handleExportPDF} className="bg-orange-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2">
-                  📥 Baixar Folha Oficial
+                <button onClick={handleExportPDF} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all">
+                  📥 Baixar Folha PDF A4
                 </button>
               </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
                 <option value="todos">Todos Colaboradores</option>
@@ -657,6 +946,92 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
+
+            {/* Metric Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+              <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Horas Trabalhadas</p>
+                <p className="text-xl font-black text-slate-900">{formatMinutesToHours(monthlyReportStats.totalWorkedMin) || '00:00'} <span className="text-xs text-slate-400">h</span></p>
+              </div>
+              <div className="p-5 rounded-3xl bg-orange-50 border border-orange-100">
+                <p className="text-[8px] font-black text-orange-400 uppercase tracking-widest mb-1">Horas Extras</p>
+                <p className="text-xl font-black text-orange-600">{formatMinutesToHours(monthlyReportStats.totalExtraMin) || '00:00'} <span className="text-xs text-orange-400">h</span></p>
+              </div>
+              <div className="p-5 rounded-3xl bg-blue-50 border border-blue-100">
+                <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Dias Registrados</p>
+                <p className="text-xl font-black text-blue-700">{monthlyReportStats.totalDays} <span className="text-xs text-blue-400">dias</span></p>
+              </div>
+              <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-100">
+                <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">Colaboradores</p>
+                <p className="text-xl font-black text-emerald-700">{monthlyReportStats.empStats.length} <span className="text-xs text-emerald-400">ativos</span></p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela de Resumo dos Colaboradores */}
+          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h4 className="text-[11px] font-black uppercase text-slate-700">Resumo Consolidado por Colaborador</h4>
+              <span className="text-[9px] font-bold text-slate-400 uppercase">
+                {new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase()} / {reportFilter.year}
+              </span>
+            </div>
+            <table className="w-full text-left min-w-[700px]">
+              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                <tr>
+                  <th className="p-5">Colaborador</th>
+                  <th className="p-5">Matrícula</th>
+                  <th className="p-5">Cargo</th>
+                  <th className="p-5">Dias Trab.</th>
+                  <th className="p-5">Horas Trab.</th>
+                  <th className="p-5">Horas Extras</th>
+                  <th className="p-5">Saldo</th>
+                  <th className="p-5 text-center">PDF</th>
+                </tr>
+              </thead>
+              <tbody className="text-[11px] font-bold uppercase">
+                {monthlyReportStats.empStats.map(stat => (
+                  <tr key={stat.employee.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                    <td className="p-5 font-black text-slate-900">{stat.employee.name}</td>
+                    <td className="p-5 text-slate-400">{stat.employee.matricula}</td>
+                    <td className="p-5 text-slate-500">{stat.employee.roleFunction || '-'}</td>
+                    <td className="p-5">{stat.daysCount} dias</td>
+                    <td className="p-5 font-black text-slate-800">{formatMinutesToHours(stat.workedMin) || '00:00'} h</td>
+                    <td className="p-5">
+                      {stat.extraMin > 0 ? (
+                        <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full text-[9px] font-black">
+                          +{formatMinutesToHours(stat.extraMin)} h
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="p-5">
+                      <span className={`text-[10px] font-black ${stat.balanceMin >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {stat.balanceMin >= 0 ? '+' : '-'}{formatMinutesToHours(Math.abs(stat.balanceMin)) || '00:00'} h
+                      </span>
+                    </td>
+                    <td className="p-5 text-center">
+                      <button 
+                        onClick={() => {
+                          setReportFilter(prev => ({ ...prev, matricula: stat.employee.matricula }));
+                          setTimeout(handleExportPDF, 100);
+                        }}
+                        className="bg-orange-50 text-orange-600 hover:bg-orange-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all"
+                        title="Baixar folha individual deste colaborador"
+                      >
+                        PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {monthlyReportStats.empStats.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="p-10 text-center text-slate-400">Nenhum registro encontrado para este período</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -963,51 +1338,185 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       {activeTab === 'ferias' && (
         <div className="space-y-6">
-          <h3 className="text-sm font-black uppercase px-2">Solicitações de Férias</h3>
+          <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-sm font-black uppercase text-slate-900">Gestão & Escala de Férias (CLT)</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Acompanhe pedidos de colaboradores ou programe o descanso direto pelo RH</p>
+              </div>
+              <button 
+                onClick={() => {
+                  if (employees.length > 0) setAdminVacationMatricula(employees[0].matricula);
+                  setShowAdminVacationModal(true);
+                }} 
+                className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all shrink-0"
+              >
+                + Programar Férias Direto
+              </button>
+            </div>
+
+            {/* Como Funciona Guide Box */}
+            <div className="bg-orange-50/70 border border-orange-100 p-5 rounded-3xl space-y-2">
+              <div className="flex items-center gap-2 text-orange-700 font-black text-[10px] uppercase tracking-wide">
+                <span>💡</span> Como Funciona a Gestão de Férias:
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[9px] text-slate-600 font-bold uppercase leading-relaxed">
+                <div className="p-3 bg-white/80 rounded-2xl border border-orange-100/50">
+                  <span className="text-orange-600 font-black">1. Pelo Colaborador:</span> Ele acessa o app no menu <strong className="text-slate-800">"Minhas Férias"</strong> e envia a data de início e fim.
+                </div>
+                <div className="p-3 bg-white/80 rounded-2xl border border-orange-100/50">
+                  <span className="text-orange-600 font-black">2. Pelo Painel RH:</span> O pedido aparece aqui nesta lista para você clicar em <strong className="text-emerald-600">"Aprovar"</strong> ou <strong className="text-rose-600">"Recusar"</strong>.
+                </div>
+                <div className="p-3 bg-white/80 rounded-2xl border border-orange-100/50">
+                  <span className="text-orange-600 font-black">3. Lançamento Direto:</span> Use o botão acima para agendar as férias de qualquer membro da equipe imediatamente.
+                </div>
+              </div>
+            </div>
+
+            {/* Metric Cards */}
+            {(() => {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const approvedCount = vacationRequests.filter(v => v.status === 'approved').length;
+              const pendingCount = vacationRequests.filter(v => v.status === 'pending').length;
+              const activeNowCount = vacationRequests.filter(v => v.status === 'approved' && v.startDate <= todayStr && v.endDate >= todayStr).length;
+
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Registros</p>
+                    <p className="text-xl font-black text-slate-900">{vacationRequests.length}</p>
+                  </div>
+                  <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-100">
+                    <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">Aprovadas / Programadas</p>
+                    <p className="text-xl font-black text-emerald-700">{approvedCount}</p>
+                  </div>
+                  <div className="p-5 rounded-3xl bg-amber-50 border border-amber-100">
+                    <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-1">Aguardando Aprovação</p>
+                    <p className="text-xl font-black text-amber-700">{pendingCount}</p>
+                  </div>
+                  <div className="p-5 rounded-3xl bg-blue-50 border border-blue-100">
+                    <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Em Férias Hoje</p>
+                    <p className="text-xl font-black text-blue-700">{activeNowCount}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex items-center gap-3 pt-2">
+              <label className="text-[9px] font-black text-slate-400 uppercase">Filtrar por Colaborador:</label>
+              <select 
+                value={vacationFilterMatricula} 
+                onChange={e => setVacationFilterMatricula(e.target.value)}
+                className="p-3 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border max-w-xs"
+              >
+                <option value="todos">Todos Colaboradores</option>
+                {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-left min-w-[600px]">
+            <table className="w-full text-left min-w-[750px]">
               <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
                 <tr>
                   <th className="p-5">Colaborador</th>
-                  <th className="p-5">Período</th>
+                  <th className="p-5">Início</th>
+                  <th className="p-5">Término</th>
+                  <th className="p-5">Duração</th>
                   <th className="p-5">Status</th>
+                  <th className="p-5">Obs / Justificativa</th>
                   <th className="p-5 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
-                {vacationRequests.map(req => (
-                  <tr key={req.id} className="border-b">
-                    <td className="p-5">{req.userName}</td>
-                    <td className="p-5">
-                      {new Date(req.startDate).toLocaleDateString('pt-BR')} - {new Date(req.endDate).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="p-5">
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
-                        req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 
-                        req.status === 'rejected' ? 'bg-red-50 text-red-600' : 
-                        'bg-amber-50 text-amber-600'
-                      }`}>
-                        {req.status}
-                      </span>
-                    </td>
-                    <td className="p-5 text-center flex justify-center gap-2">
-                      {req.status === 'pending' && (
-                        <>
-                          <button onClick={() => handleVacationStatus(req.id, 'approved')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Aprovar</button>
-                          <button onClick={() => handleVacationStatus(req.id, 'rejected')} className="bg-red-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Recusar</button>
-                        </>
-                      )}
-                      {req.status !== 'pending' && <span className="text-slate-300 text-[8px]">FINALIZADO</span>}
+                {vacationRequests
+                  .filter(req => vacationFilterMatricula === 'todos' || req.userId === vacationFilterMatricula)
+                  .map(req => {
+                    const startObj = new Date(req.startDate);
+                    const endObj = new Date(req.endDate);
+                    const diffDays = Math.ceil(Math.abs(endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+                    return (
+                      <tr key={req.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                        <td className="p-5">
+                          <p className="font-black text-slate-900">{req.userName}</p>
+                          <p className="text-[8px] text-slate-400 font-bold">Matrícula: {req.userId}</p>
+                        </td>
+                        <td className="p-5 font-black text-slate-700">
+                          {startObj.toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="p-5 font-black text-slate-700">
+                          {endObj.toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="p-5">
+                          <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-xl text-[9px] font-black">
+                            {isNaN(diffDays) ? '-' : `${diffDays} dias`}
+                          </span>
+                        </td>
+                        <td className="p-5">
+                          <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase ${
+                            req.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 
+                            req.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {req.status === 'approved' ? 'Aprovado' : req.status === 'rejected' ? 'Recusado' : 'Pendente'}
+                          </span>
+                        </td>
+                        <td className="p-5 text-[9px] text-slate-400 max-w-[180px] truncate">
+                          {req.note || 'Sem observações'}
+                        </td>
+                        <td className="p-5 text-center">
+                          <div className="flex justify-center gap-2">
+                            {req.status === 'pending' && (
+                              <>
+                                <button onClick={() => handleVacationStatus(req.id, 'approved')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">
+                                  Aprovar
+                                </button>
+                                <button onClick={() => handleVacationStatus(req.id, 'rejected')} className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">
+                                  Recusar
+                                </button>
+                              </>
+                            )}
+                            <button 
+                              onClick={() => handleDeleteVacation(req.id)}
+                              className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all"
+                              title="Excluir Registro"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                {vacationRequests.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-12 text-center">
+                      <div className="max-w-xs mx-auto space-y-3">
+                        <span className="text-3xl">🏖️</span>
+                        <p className="text-xs font-black uppercase text-slate-700">Nenhuma solicitação de férias cadastrada</p>
+                        <p className="text-[9px] text-slate-400 uppercase font-bold">Os colaboradores podem pedir pelo app ou você pode programar as férias agora.</p>
+                        <button 
+                          onClick={() => {
+                            if (employees.length > 0) setAdminVacationMatricula(employees[0].matricula);
+                            setShowAdminVacationModal(true);
+                          }}
+                          className="bg-orange-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase shadow-md inline-block"
+                        >
+                          + Programar Férias Agora
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))}
-                {vacationRequests.length === 0 && (
-                  <tr><td colSpan={4} className="p-10 text-center text-slate-400">Nenhuma solicitação de férias</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
+      )}
+
+      {activeTab === 'vendas' && (
+        <SalesView company={company} employees={employees} />
       )}
 
       {showAddModal && (
@@ -1232,6 +1741,92 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="p-6 text-center">
               <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-900">Confirmação de Identidade</h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Foto capturada no momento da batida</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAdminVacationModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-white rounded-[44px] w-full max-w-md p-8 shadow-2xl space-y-4 animate-in zoom-in">
+            <h2 className="text-sm font-black text-center uppercase mb-1 text-orange-600">Programar Férias Direto</h2>
+            <p className="text-[10px] font-bold text-center text-slate-400 uppercase mb-4">Lançamento oficial pelo RH / Empregador</p>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Colaborador</label>
+                <select 
+                  value={adminVacationMatricula} 
+                  onChange={e => setAdminVacationMatricula(e.target.value)}
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border"
+                >
+                  <option value="">Selecione o Colaborador...</option>
+                  {employees.map(e => <option key={e.id} value={e.matricula}>{e.name} (Matrícula: {e.matricula})</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data de Início</label>
+                  <input 
+                    type="date" 
+                    value={adminVacationStart} 
+                    onChange={e => setAdminVacationStart(e.target.value)} 
+                    className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data de Término</label>
+                  <input 
+                    type="date" 
+                    value={adminVacationEnd} 
+                    onChange={e => setAdminVacationEnd(e.target.value)} 
+                    className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" 
+                  />
+                </div>
+              </div>
+
+              {adminVacationStart && adminVacationEnd && (
+                <div className="p-3 bg-orange-50 rounded-2xl border border-orange-100 flex justify-between items-center text-[9px] font-black uppercase text-orange-700">
+                  <span>Duração Estimada:</span>
+                  <span>
+                    {(() => {
+                      const s = new Date(adminVacationStart);
+                      const en = new Date(adminVacationEnd);
+                      const d = Math.ceil(Math.abs(en.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                      return isNaN(d) ? '-' : `${d} dias de descanso`;
+                    })()}
+                  </span>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Status Inicial</label>
+                <select 
+                  value={adminVacationStatus} 
+                  onChange={e => setAdminVacationStatus(e.target.value as any)}
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border"
+                >
+                  <option value="approved">Aprovado / Programado</option>
+                  <option value="pending">Pendente de Confirmação</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Observação / Período Aquisitivo (Opcional)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Férias regulares 2025/2026 - 30 dias"
+                  value={adminVacationNote} 
+                  onChange={e => setAdminVacationNote(e.target.value)}
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" 
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button onClick={() => setShowAdminVacationModal(false)} className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400">Cancelar</button>
+              <button onClick={handleCreateAdminVacation} className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl">Gravar Férias</button>
             </div>
           </div>
         </div>

@@ -125,7 +125,7 @@ const App: React.FC = () => {
   };
 
   const isAdmin = user?.role === 'admin';
-  const isAdminView = isAdmin && ['dashboard', 'colaboradores', 'aprovacoes', 'saldos', 'audit', 'company_profile'].includes(activeView);
+  const isAdminView = isAdmin && ['dashboard', 'colaboradores', 'aprovacoes', 'saldos', 'audit', 'company_profile', 'vendas'].includes(activeView);
 
   if (!user) return <Login onLogin={handleLogin} />;
 

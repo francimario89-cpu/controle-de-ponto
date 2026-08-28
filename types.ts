@@ -130,3 +130,18 @@ export interface Holiday {
   description: string;
   type: 'feriado' | 'evento';
 }
+
+// Interface para Gestão de Vendas e Comissões
+export interface Sale {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  companyCode: string;
+  date: Date;
+  amount: number;
+  ticketValue: 150 | 200 | 300;
+  commissionValue: number;
+  commissionStatus: 'pending' | 'paid';
+  customerName?: string;
+  createdAt: Date;
+}
