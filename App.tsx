@@ -18,6 +18,7 @@ import CompanyProfile from './components/CompanyProfile';
 import BottomNav from './components/BottomNav';
 import VacationView from './components/VacationView';
 import SettingsView from './components/SettingsView';
+import CompaniesView from './components/CompaniesView';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -87,6 +88,11 @@ const App: React.FC = () => {
     setUser(u);
     if (c) setCompany(c);
     localStorage.setItem('fortime_user', JSON.stringify(u));
+    if (u.role === 'master') {
+      setActiveView('companies');
+    } else {
+      setActiveView('dashboard');
+    }
   };
 
   const handleLogout = () => {
@@ -124,8 +130,9 @@ const App: React.FC = () => {
     }
   };
 
-  const isAdmin = user?.role === 'admin';
-  const isAdminView = isAdmin && ['dashboard', 'colaboradores', 'aprovacoes', 'feriados', 'saldos', 'audit', 'company_profile', 'ferias', 'correcao', 'pontos_individuais'].includes(activeView);
+  const isMaster = user?.role === 'master';
+  const isAdmin = user?.role === 'admin' || isMaster;
+  const isAdminView = isAdmin && ['companies', 'dashboard', 'colaboradores', 'aprovacoes', 'feriados', 'saldos', 'audit', 'company_profile', 'ferias', 'correcao', 'pontos_individuais'].includes(activeView);
 
   if (!user) return <Login onLogin={handleLogin} />;
 
@@ -151,7 +158,9 @@ const App: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto no-scrollbar">
           <div className={`mx-auto w-full h-full ${isAdminView ? 'p-6 md:p-10' : 'max-w-md p-4'}`}>
-            {!isAdmin ? (
+            {activeView === 'companies' ? (
+              <CompaniesView />
+            ) : !isAdmin ? (
               <>
                 {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} records={records.filter(r => r.matricula === user.matricula)} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
                 {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}

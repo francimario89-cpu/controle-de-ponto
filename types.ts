@@ -60,7 +60,7 @@ export interface User {
   photo?: string;
   companyCode: string;
   companyName?: string;
-  role: 'admin' | 'employee' | 'totem';
+  role: 'admin' | 'employee' | 'totem' | 'master';
   matricula?: string;
   cpf?: string;
   phone?: string;

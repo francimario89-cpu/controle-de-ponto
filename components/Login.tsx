@@ -9,7 +9,9 @@ interface LoginProps {
   onLogin: (user: User, company?: Company) => void;
 }
 
-const MASTER_KEY = "FORTIME2025"; 
+const MASTER_KEY = "Murilo2018@"; 
+const MASTER_EMAIL = "francimario89@gmail.com";
+const MASTER_PASSWORD = "Murilo2018@";
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [role, setRole] = useState<'admin' | 'employee' | 'totem' | null>(null);
@@ -31,8 +33,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleAdminAuth = async () => {
     setLoading(true); setError(''); setSuccessMessage('');
     try {
+      const cleanEmail = email.trim().toLowerCase();
+      
+      // Verificação de Acesso Master
+      if (adminMode === 'login' && cleanEmail === MASTER_EMAIL.toLowerCase() && password === MASTER_PASSWORD) {
+        onLogin({
+          name: "SUPER MASTER",
+          email: MASTER_EMAIL,
+          companyCode: "MASTER",
+          companyName: "GESTÃO GLOBAL DE EMPRESAS",
+          role: 'master'
+        });
+        setLoading(false);
+        return;
+      }
+
       if (adminMode === 'signup') {
-        if (masterKey !== MASTER_KEY) { setError('CHAVE MESTRA INVÁLIDA'); setLoading(false); return; }
+        if (masterKey !== MASTER_KEY && masterKey !== "FORTIME2025") { setError('CHAVE MESTRA INVÁLIDA'); setLoading(false); return; }
         const code = Math.random().toString(36).substring(2, 8).toUpperCase();
         const comp: Company = { id: code, name: companyName, cnpj: '', address: '', accessCode: code, adminEmail: email, adminPassword: password };
         await setDoc(doc(db, "companies", code), comp);
@@ -50,7 +67,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           }
         } else setError('USUÁRIO NÃO ENCONTRADO');
       } else if (adminMode === 'forgot') {
-        if (masterKey !== MASTER_KEY) { setError('CHAVE MESTRA INVÁLIDA'); setLoading(false); return; }
+        if (masterKey !== MASTER_KEY && masterKey !== "FORTIME2025") { setError('CHAVE MESTRA INVÁLIDA'); setLoading(false); return; }
         const q = query(collection(db, "companies"), where("adminEmail", "==", email), limit(1));
         const snap = await getDocs(q);
         if (!snap.empty) {
