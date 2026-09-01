@@ -128,8 +128,9 @@ export interface Holiday {
   id: string;
   date: string; // YYYY-MM-DD
   description: string;
-  type: 'feriado' | 'ponto_facultativo' | 'evento';
+  type: 'feriado' | 'ponto_facultativo' | 'evento' | 'ignorado';
   isNational?: boolean;
+  isExcluded?: boolean;
   companyCode?: string;
   coverage?: 'geral' | 'setorial';
 }

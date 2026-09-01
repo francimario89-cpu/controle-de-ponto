@@ -1,19 +1,37 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Company, Holiday } from '../types';
+import { getAllHolidaysForYear } from '../utils/holidays';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface HolidaysViewProps {
   company: Company | null;
 }
 
 const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
-  // Inicia na data atual do usuário (Brasília)
   const [currentDate, setCurrentDate] = useState(new Date()); 
-  const holidays = company?.holidays || [];
+  const [customHolidays, setCustomHolidays] = useState<Holiday[]>([]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const monthName = currentDate.toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+
+  useEffect(() => {
+    if (company?.id) {
+      const q = query(collection(db, "holidays"), where("companyCode", "==", company.id));
+      const unsub = onSnapshot(q, (snap) => {
+        const hols: Holiday[] = [];
+        snap.forEach(d => {
+          hols.push({ id: d.id, ...d.data() } as Holiday);
+        });
+        setCustomHolidays(hols);
+      });
+      return () => unsub();
+    }
+  }, [company?.id]);
+
+  const holidays = getAllHolidaysForYear(year, customHolidays, false);
 
   const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
   const firstDayOfMonth = (y: number, m: number) => new Date(y, m, 1).getDay();
@@ -52,6 +70,7 @@ const HolidaysView: React.FC<HolidaysViewProps> = ({ company }) => {
     const norm = normalizeDate(h.date);
     return norm.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`);
   }).sort((a, b) => normalizeDate(a.date).localeCompare(normalizeDate(b.date)));
+
 
   return (
     <div className="p-4 space-y-6 pb-24">

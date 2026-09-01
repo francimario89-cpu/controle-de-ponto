@@ -4,7 +4,7 @@ import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck } f
 import { PointRecord, Company, Employee, AttendanceRequest, Holiday } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getAllHolidaysForYear, getHolidayForDate } from '../utils/holidays';
+import { getAllHolidaysForYear, getAllHolidaysWithStatus, getHolidayForDate } from '../utils/holidays';
 import ComplianceAudit from './ComplianceAudit';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -37,6 +37,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [vacationRequests, setVacationRequests] = useState<any[]>([]);
   const [customHolidays, setCustomHolidays] = useState<Holiday[]>([]);
   const [selectedHolidayYear, setSelectedHolidayYear] = useState<number>(new Date().getFullYear());
+  const [holidayFilterStatus, setHolidayFilterStatus] = useState<'all' | 'active' | 'excluded'>('all');
   const [showAddHolidayModal, setShowAddHolidayModal] = useState(false);
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
@@ -175,12 +176,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   };
 
   const handleDeleteHoliday = async (id: string, name: string) => {
-    if (confirm(`Deseja remover o feriado "${name}"?`)) {
+    if (confirm(`Deseja remover permanentemente o feriado "${name}" cadastrado pela empresa?`)) {
       try {
         await deleteDoc(doc(db, "holidays", id));
         alert("Feriado removido com sucesso!");
       } catch (err) {
         alert("Erro ao remover feriado.");
+      }
+    }
+  };
+
+  const handleExcludeNationalHoliday = async (h: Holiday) => {
+    if (!company?.id) return;
+    const formattedDate = h.date.split('-').reverse().join('/');
+    const confirmed = confirm(
+      `Deseja excluir o feriado "${h.description}" (${formattedDate})?\n\n` +
+      `Ao excluir este feriado:\n` +
+      `• A empresa terá expediente normal neste dia;\n` +
+      `• Não haverá dispensa automática de jornada;\n` +
+      `• As horas trabalhadas serão calculadas como jornada normal.\n\n` +
+      `Deseja confirmar a exclusão deste feriado para sua empresa?`
+    );
+
+    if (confirmed) {
+      try {
+        await addDoc(collection(db, "holidays"), {
+          companyCode: company.id,
+          date: h.date,
+          description: h.description,
+          type: 'ignorado',
+          isNational: true,
+          isExcluded: true,
+          createdAt: new Date()
+        });
+        alert(`Feriado "${h.description}" excluído com sucesso! A empresa terá expediente normal no dia ${formattedDate}.`);
+      } catch (err) {
+        alert("Erro ao salvar exclusão do feriado.");
+      }
+    }
+  };
+
+  const handleRestoreHoliday = async (h: Holiday) => {
+    if (!company?.id) return;
+    const formattedDate = h.date.split('-').reverse().join('/');
+    const confirmed = confirm(
+      `Deseja reativar o feriado "${h.description}" (${formattedDate}) para que a empresa conceda folga aos colaboradores?`
+    );
+
+    if (confirmed) {
+      try {
+        const target = customHolidays.find(ch => ch.date === h.date && (ch.isExcluded || ch.type === 'ignorado'));
+        if (target?.id) {
+          await deleteDoc(doc(db, "holidays", target.id));
+        } else if (h.id && !h.isNational) {
+          await updateDoc(doc(db, "holidays", h.id), { isExcluded: false, type: 'feriado' });
+        }
+        alert(`Feriado "${h.description}" reativado com sucesso! O dia ${formattedDate} volta a ser considerado folga/feriado.`);
+      } catch (err) {
+        alert("Erro ao reativar feriado.");
       }
     }
   };
@@ -1889,7 +1942,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <div>
                 <h3 className="text-sm font-black uppercase text-slate-900">Gestão de Feriados & Pontos Facultativos</h3>
                 <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
-                  Controle os dias não trabalhados e cálculo automático de 100% de hora extra nos registros
+                  Controle os dias de folga da empresa e configure expediente normal para feriados não concedidos
                 </p>
               </div>
               <button 
@@ -1900,38 +1953,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               </button>
             </div>
 
-            {/* Banner Informativo CLT */}
+            {/* Banner Informativo CLT & Exclusão de Feriados */}
             <div className="bg-orange-50/80 border border-orange-100 p-5 rounded-3xl space-y-2">
               <div className="flex items-center gap-2 text-orange-700 font-black text-[10px] uppercase tracking-wide">
-                <span>💡</span> Como Funcionam os Feriados no Sistema de Ponto:
+                <span>💡</span> Regras de Feriados & Expediente Normal:
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[9px] text-slate-600 font-bold uppercase leading-relaxed">
                 <div className="p-3 bg-white/90 rounded-2xl border border-orange-100/60">
-                  <span className="text-orange-600 font-black">🏛️ Feriados Nacionais Automáticos:</span> Já vêm pré-configurados pela legislação brasileira (Tiradentes, Independência, Consciência Negra, Páscoa móvel, etc.).
+                  <span className="text-orange-600 font-black">🏛️ Feriados Nacionais & Locais:</span> O sistema traz os feriados oficiais e permite adicionar feriados municipais ou recessos da empresa.
                 </div>
                 <div className="p-3 bg-white/90 rounded-2xl border border-orange-100/60">
-                  <span className="text-orange-600 font-black">🏢 Feriados Municipais / Empresa:</span> Você pode cadastrar datas locais da sua cidade, padroeira ou recessos da empresa com um clique.
+                  <span className="text-rose-600 font-black">🚫 A Empresa Vai Trabalhar no Dia?</span> Clique no botão <strong>"Excluir / Trabalhar Normal"</strong> de qualquer feriado para cancelar a folga. O dia passará a ser calculado como jornada de trabalho normal!
                 </div>
                 <div className="p-3 bg-white/90 rounded-2xl border border-orange-100/60">
-                  <span className="text-orange-600 font-black">⚖️ Regra de Ponto & CLT:</span> No dia de feriado, a jornada é dispensada (não gera horas negativas) e, se o funcionário trabalhar, o sistema calcula <strong>100% de horas extras</strong> automaticamente!
+                  <span className="text-emerald-600 font-black">🔄 Reativação a Qualquer Momento:</span> Se mudar de ideia e resolver dar a folga aos colaboradores, basta clicar em <strong>"Reativar Folga"</strong>.
                 </div>
               </div>
             </div>
 
             {/* Year Selector & Metrics */}
             {(() => {
-              const allHols = getAllHolidaysForYear(selectedHolidayYear, customHolidays);
-              const nationalCount = allHols.filter(h => h.isNational).length;
-              const customCount = allHols.filter(h => !h.isNational).length;
+              const allHols = getAllHolidaysWithStatus(selectedHolidayYear, customHolidays);
+              const activeHols = allHols.filter(h => !h.isExcluded);
+              const excludedHols = allHols.filter(h => h.isExcluded);
+              const nationalCount = activeHols.filter(h => h.isNational).length;
+              const customCount = activeHols.filter(h => !h.isNational).length;
               const todayStr = new Date().toISOString().split('T')[0];
-              const upcomingHols = allHols.filter(h => h.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
+              const upcomingHols = activeHols.filter(h => h.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
               const nextHol = upcomingHols[0];
 
               return (
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div className="flex items-center gap-2">
-                      <label className="text-[9px] font-black text-slate-400 uppercase">Selecione o Ano:</label>
+                      <label className="text-[9px] font-black text-slate-400 uppercase">Ano:</label>
                       <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
                         {[2024, 2025, 2026, 2027].map(y => (
                           <button
@@ -1946,26 +2001,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                         ))}
                       </div>
                     </div>
+
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+                      <button
+                        onClick={() => setHolidayFilterStatus('all')}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+                          holidayFilterStatus === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Todos ({allHols.length})
+                      </button>
+                      <button
+                        onClick={() => setHolidayFilterStatus('active')}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+                          holidayFilterStatus === 'active' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Folgas Ativas ({activeHols.length})
+                      </button>
+                      <button
+                        onClick={() => setHolidayFilterStatus('excluded')}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+                          holidayFilterStatus === 'excluded' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Excluídos / Trabalho Normal ({excludedHols.length})
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-5 rounded-3xl bg-slate-50 border border-slate-100">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Total de Feriados no Ano</p>
-                      <p className="text-xl font-black text-slate-900">{allHols.length} <span className="text-xs text-slate-400">dias</span></p>
+                    <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-100">
+                      <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Folgas Concedidas</p>
+                      <p className="text-xl font-black text-emerald-800">{activeHols.length} <span className="text-xs text-emerald-600">dias</span></p>
                     </div>
                     <div className="p-5 rounded-3xl bg-blue-50 border border-blue-100">
-                      <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-1">Feriados Nacionais</p>
+                      <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-1">Nacionais Ativos</p>
                       <p className="text-xl font-black text-blue-700">{nationalCount} <span className="text-xs text-blue-400">oficiais</span></p>
                     </div>
-                    <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-100">
-                      <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">Municipais / Empresa</p>
-                      <p className="text-xl font-black text-emerald-700">{customCount} <span className="text-xs text-emerald-400">cadastrados</span></p>
-                    </div>
                     <div className="p-5 rounded-3xl bg-amber-50 border border-amber-100">
-                      <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Próximo Feriado</p>
-                      <p className="text-xs font-black text-amber-800 truncate">
-                        {nextHol ? `${new Date(nextHol.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} - ${nextHol.description}` : 'Nenhum próximo'}
-                      </p>
+                      <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Municipais / Empresa</p>
+                      <p className="text-xl font-black text-amber-700">{customCount} <span className="text-xs text-emerald-600">locais</span></p>
+                    </div>
+                    <div className="p-5 rounded-3xl bg-rose-50 border border-rose-100">
+                      <p className="text-[8px] font-black text-rose-600 uppercase tracking-widest mb-1">Excluídos (Trabalho Normal)</p>
+                      <p className="text-xl font-black text-rose-700">{excludedHols.length} <span className="text-xs text-rose-500">dias</span></p>
                     </div>
                   </div>
                 </div>
@@ -1978,36 +2058,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="p-6 border-b flex justify-between items-center">
               <h4 className="text-[11px] font-black uppercase text-slate-700">Calendário de Feriados e Folgas ({selectedHolidayYear})</h4>
               <span className="text-[9px] font-bold text-slate-400 uppercase">
-                {getAllHolidaysForYear(selectedHolidayYear, customHolidays).length} Datas cadastradas
+                {getAllHolidaysWithStatus(selectedHolidayYear, customHolidays).filter(h => {
+                  if (holidayFilterStatus === 'active') return !h.isExcluded;
+                  if (holidayFilterStatus === 'excluded') return h.isExcluded;
+                  return true;
+                }).length} Registros exibidos
               </span>
             </div>
-            <table className="w-full text-left min-w-[700px]">
+            <table className="w-full text-left min-w-[750px]">
               <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
                 <tr>
                   <th className="p-5">Data</th>
                   <th className="p-5">Dia da Semana</th>
                   <th className="p-5">Descrição / Nome</th>
                   <th className="p-5">Origem</th>
-                  <th className="p-5">Tipo</th>
+                  <th className="p-5">Status na Empresa</th>
                   <th className="p-5 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
                 {(() => {
-                  const hols = getAllHolidaysForYear(selectedHolidayYear, customHolidays);
+                  const allHols = getAllHolidaysWithStatus(selectedHolidayYear, customHolidays);
+                  const filteredHols = allHols.filter(h => {
+                    if (holidayFilterStatus === 'active') return !h.isExcluded;
+                    if (holidayFilterStatus === 'excluded') return h.isExcluded;
+                    return true;
+                  });
                   const todayStr = new Date().toISOString().split('T')[0];
 
-                  return hols.map(h => {
+                  return filteredHols.map(h => {
                     const [y, m, d] = h.date.split('-').map(Number);
                     const dateObj = new Date(y, m - 1, d, 12);
                     const dayOfWeekLabel = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][dateObj.getDay()];
                     const isToday = h.date === todayStr;
 
                     return (
-                      <tr key={h.id || h.date} className={`border-b hover:bg-slate-50/50 transition-colors ${isToday ? 'bg-orange-50/40' : ''}`}>
+                      <tr 
+                        key={h.id || h.date} 
+                        className={`border-b transition-colors ${
+                          h.isExcluded 
+                            ? 'bg-slate-50/60 opacity-80' 
+                            : isToday 
+                            ? 'bg-orange-50/40' 
+                            : 'hover:bg-slate-50/50'
+                        }`}
+                      >
                         <td className="p-5">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-slate-900 font-black text-xs">
+                            <span className={`font-mono font-black text-xs ${h.isExcluded ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                               {String(d).padStart(2, '0')}/{String(m).padStart(2, '0')}/{y}
                             </span>
                             {isToday && (
@@ -2018,7 +2116,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                           </div>
                         </td>
                         <td className="p-5 text-slate-500">{dayOfWeekLabel}</td>
-                        <td className="p-5 font-black text-slate-900">{h.description}</td>
+                        <td className="p-5 font-black text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <span className={h.isExcluded ? 'line-through text-slate-500' : ''}>{h.description}</span>
+                            {h.isExcluded && (
+                              <span className="bg-rose-100 text-rose-700 text-[8px] font-black px-2 py-0.5 rounded-md">
+                                NÃO HAVERÁ FOLGA
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-5">
                           {h.isNational ? (
                             <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[8px] font-black">
@@ -2031,31 +2138,71 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                           )}
                         </td>
                         <td className="p-5">
-                          <span className={`px-2.5 py-1 rounded-full text-[8px] font-black ${
-                            h.type === 'feriado' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                          }`}>
-                            {h.type === 'feriado' ? 'Feriado' : 'Ponto Facultativo'}
-                          </span>
-                        </td>
-                        <td className="p-5 text-center">
-                          {!h.isNational && h.id ? (
-                            <button
-                              onClick={() => handleDeleteHoliday(h.id!, h.description)}
-                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl text-[9px] font-black transition-all"
-                              title="Remover Feriado Local"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                          {h.isExcluded ? (
+                            <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1 rounded-full text-[8px] font-black">
+                              <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                              Expediente Normal (Dia Útil)
+                            </span>
                           ) : (
-                            <span className="text-slate-300 text-[8px] font-black" title="Feriado nacional fixado por lei federal">
-                              🔒 Fixo
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[8px] font-black ${
+                              h.type === 'feriado' 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${h.type === 'feriado' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                              {h.type === 'feriado' ? 'Folga / Feriado' : 'Ponto Facultativo'}
                             </span>
                           )}
+                        </td>
+                        <td className="p-5 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {h.isExcluded ? (
+                              <button
+                                onClick={() => handleRestoreHoliday(h)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1"
+                                title="Reativar Feriado / Conceder Folga"
+                              >
+                                <span>🔄</span> Reativar Folga
+                              </button>
+                            ) : (
+                              <>
+                                {!h.isNational && h.id ? (
+                                  <button
+                                    onClick={() => handleDeleteHoliday(h.id!, h.description)}
+                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl text-[9px] font-black transition-all flex items-center gap-1"
+                                    title="Remover Feriado Local Cadastrado"
+                                  >
+                                    <Trash2 size={13} />
+                                    <span className="text-[8px]">Excluir</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleExcludeNationalHoliday(h)}
+                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all flex items-center gap-1 border border-rose-200"
+                                    title="Excluir Feriado / Empresa terá Expediente Normal"
+                                  >
+                                    <span>🚫</span> Excluir / Trabalhar Normal
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
                   });
                 })()}
+                {getAllHolidaysWithStatus(selectedHolidayYear, customHolidays).filter(h => {
+                  if (holidayFilterStatus === 'active') return !h.isExcluded;
+                  if (holidayFilterStatus === 'excluded') return h.isExcluded;
+                  return true;
+                }).length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-10 text-center text-slate-400">
+                      Nenhum feriado encontrado para o filtro selecionado.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

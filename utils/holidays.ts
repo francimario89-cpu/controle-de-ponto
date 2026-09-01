@@ -156,36 +156,76 @@ export function getNationalHolidays(year: number): Holiday[] {
 /**
  * Combina feriados nacionais automáticos com os feriados customizados cadastrados pela empresa.
  */
-export function getAllHolidaysForYear(year: number, customHolidays: Holiday[] = []): Holiday[] {
+export function getAllHolidaysForYear(
+  year: number, 
+  customHolidays: Holiday[] = [], 
+  includeExcluded = false
+): Holiday[] {
   const national = getNationalHolidays(year);
   
-  // Filtra customizados do ano
-  const customThisYear = customHolidays.filter(h => {
-    return h.date && h.date.startsWith(`${year}-`);
+  // Identifica datas excluídas/desativadas pela empresa
+  const excludedSet = new Set<string>();
+  const excludedDocsMap = new Map<string, Holiday>();
+  
+  customHolidays.forEach(h => {
+    if (h.isExcluded || h.type === ('ignorado' as any)) {
+      if (h.date) {
+        excludedSet.add(h.date);
+        excludedDocsMap.set(h.date, h);
+      }
+    }
   });
 
-  // Mapa para evitar duplicidades de mesma data (customizado prevalece ou enriquece)
+  // Filtra customizados válidos do ano
+  const customThisYear = customHolidays.filter(h => {
+    return h.date && h.date.startsWith(`${year}-`) && !h.isExcluded && h.type !== ('ignorado' as any);
+  });
+
   const map = new Map<string, Holiday>();
   
   for (const h of national) {
-    map.set(h.date, h);
+    const isExcluded = excludedSet.has(h.date);
+    if (!isExcluded) {
+      map.set(h.date, { ...h, isExcluded: false });
+    } else if (includeExcluded) {
+      const exDoc = excludedDocsMap.get(h.date);
+      map.set(h.date, { ...h, id: exDoc?.id || h.id, isExcluded: true });
+    }
   }
 
   for (const h of customThisYear) {
-    map.set(h.date, h);
+    map.set(h.date, { ...h, isExcluded: false });
+  }
+
+  if (includeExcluded) {
+    customHolidays
+      .filter(h => h.date && h.date.startsWith(`${year}-`) && (h.isExcluded || h.type === ('ignorado' as any)))
+      .forEach(h => {
+        if (!map.has(h.date)) {
+          map.set(h.date, { ...h, isExcluded: true });
+        }
+      });
   }
 
   return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /**
- * Verifica se uma data específica (YYYY-MM-DD) é feriado ou ponto facultativo.
+ * Retorna todos os feriados para o ano com seu status (ativo ou excluído)
+ */
+export function getAllHolidaysWithStatus(year: number, customHolidays: Holiday[] = []): Holiday[] {
+  return getAllHolidaysForYear(year, customHolidays, true);
+}
+
+/**
+ * Verifica se uma data específica (YYYY-MM-DD) é feriado ativo ou ponto facultativo ativo da empresa.
  */
 export function getHolidayForDate(dateStr: string, customHolidays: Holiday[] = []): Holiday | null {
   if (!dateStr) return null;
   const year = parseInt(dateStr.split('-')[0]);
   if (!year || isNaN(year)) return null;
 
-  const allHolidays = getAllHolidaysForYear(year, customHolidays);
-  return allHolidays.find(h => h.date === dateStr) || null;
+  const activeHolidays = getAllHolidaysForYear(year, customHolidays, false);
+  return activeHolidays.find(h => h.date === dateStr) || null;
 }
+
