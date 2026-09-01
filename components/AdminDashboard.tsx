@@ -1509,77 +1509,92 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="space-y-6">
           <h3 className="text-sm font-black uppercase px-2">Solicitações de Ajuste e Abono</h3>
           <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-left min-w-[800px]">
+            <table className="w-full text-left min-w-[850px]">
               <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
                 <tr>
                   <th className="p-5">Data Pedido</th>
                   <th className="p-5">Colaborador</th>
                   <th className="p-5">Tipo</th>
                   <th className="p-5">Data Ref.</th>
+                  <th className="p-5">Horários Solicitados</th>
                   <th className="p-5">Motivo/Justificativa</th>
                   <th className="p-5">Status</th>
                   <th className="p-5 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
-                {requests.map(req => (
-                  <tr key={req.id} className="border-b hover:bg-slate-50/50 transition-colors">
-                    <td className="p-5 text-slate-400">{req.createdAt.toLocaleDateString('pt-BR')}</td>
-                    <td className="p-5 font-black text-slate-800">{req.userName}</td>
-                    <td className="p-5">
-                      <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase ${
-                        req.type === 'atestado' ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-50 text-blue-600'
-                      }`}>
-                        {req.type === 'atestado' ? 'ATESTADO' : 'INCLUSÃO'}
-                      </span>
-                    </td>
-                    <td className="p-5 font-mono text-slate-700">
-                      {req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
-                    </td>
-                    <td className="p-5 text-[9px] text-slate-500 max-w-[220px]">
-                      <div className="flex flex-col gap-1">
-                        <span className="truncate font-semibold">{req.reason}</span>
-                        {(req as any).suggestedTimes && (req as any).suggestedTimes.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {(req as any).suggestedTimes.map((tm: string, idx: number) => (
-                              <span key={idx} className="bg-slate-100 text-slate-700 font-mono px-1.5 py-0.5 rounded text-[8px]">
+                {requests.map(req => {
+                  const reqTimes: string[] = (req as any).times || (req as any).suggestedTimes || [];
+
+                  return (
+                    <tr key={req.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                      <td className="p-5 text-slate-400">{req.createdAt.toLocaleDateString('pt-BR')}</td>
+                      <td className="p-5 font-black text-slate-800">{req.userName}</td>
+                      <td className="p-5">
+                        <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase ${
+                          req.type === 'atestado' ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-50 text-blue-600'
+                        }`}>
+                          {req.type === 'atestado' ? 'ATESTADO' : 'INCLUSÃO'}
+                        </span>
+                      </td>
+                      <td className="p-5 font-mono text-slate-700">
+                        {req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                      </td>
+                      <td className="p-5">
+                        {reqTimes.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {reqTimes.map((tm: string, idx: number) => (
+                              <span key={idx} className="bg-slate-100 border border-slate-200 text-slate-800 font-mono font-black px-2 py-0.5 rounded-md text-[9px]">
                                 {tm}
                               </span>
                             ))}
                           </div>
+                        ) : req.type === 'atestado' ? (
+                          <span className="text-indigo-600 text-[8px] font-black bg-indigo-50 px-2 py-1 rounded-md">
+                            Abono do Dia
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[8px] font-semibold">
+                            Horário a definir
+                          </span>
                         )}
-                        {req.attachment && (
-                          <button 
-                            onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
-                            className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase mt-0.5"
-                          >
-                            <Camera size={10} /> Ver Anexo
-                          </button>
+                      </td>
+                      <td className="p-5 text-[9px] text-slate-500 max-w-[200px]">
+                        <div className="flex flex-col gap-1">
+                          <span className="truncate font-semibold">{req.reason}</span>
+                          {req.attachment && (
+                            <button 
+                              onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
+                              className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase mt-0.5"
+                            >
+                              <Camera size={10} /> Ver Anexo
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-5">
+                        <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
+                          req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 
+                          req.status === 'rejected' ? 'bg-red-50 text-red-600' : 
+                          'bg-amber-50 text-amber-600'
+                        }`}>
+                          {req.status === 'pending' ? 'PENDENTE' : req.status === 'approved' ? 'APROVADO' : 'RECUSADO'}
+                        </span>
+                      </td>
+                      <td className="p-5 text-center flex justify-center gap-2">
+                        {req.status === 'pending' && (
+                          <>
+                            <button onClick={() => handleRequestStatus(req.id, 'approved')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Aprovar</button>
+                            <button onClick={() => handleRequestStatus(req.id, 'rejected')} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Recusar</button>
+                          </>
                         )}
-                      </div>
-                    </td>
-                    <td className="p-5">
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
-                        req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 
-                        req.status === 'rejected' ? 'bg-red-50 text-red-600' : 
-                        'bg-amber-50 text-amber-600'
-                      }`}>
-                        {req.status === 'pending' ? 'PENDENTE' : req.status === 'approved' ? 'APROVADO' : 'RECUSADO'}
-                      </span>
-                    </td>
-                    <td className="p-5 text-center flex justify-center gap-2">
-                      {req.status === 'pending' && (
-                        <>
-                          <button onClick={() => handleRequestStatus(req.id, 'approved')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Aprovar</button>
-                          <button onClick={() => handleRequestStatus(req.id, 'rejected')} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Recusar</button>
-                        </>
-                      )}
-                      {req.status !== 'pending' && <span className="text-slate-300 text-[8px] font-black">CONCLUÍDO</span>}
-                    </td>
-                  </tr>
-                ))}
+                        {req.status !== 'pending' && <span className="text-slate-300 text-[8px] font-black">CONCLUÍDO</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {requests.length === 0 && (
-                  <tr><td colSpan={7} className="p-10 text-center text-slate-400">Nenhuma solicitação pendente</td></tr>
+                  <tr><td colSpan={8} className="p-10 text-center text-slate-400">Nenhuma solicitação pendente</td></tr>
                 )}
               </tbody>
             </table>
