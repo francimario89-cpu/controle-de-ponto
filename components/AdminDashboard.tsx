@@ -1382,6 +1382,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                   <th className="p-5">Saída</th>
                   <th className="p-5">Total Trabalhado</th>
                   <th className="p-5">Horas Extras</th>
+                  <th className="p-5 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
@@ -1448,25 +1449,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     }
 
                     return (
-                      <tr key={emp.id} className="border-b">
-                        <td className="p-5">{emp.name}</td>
+                      <tr key={emp.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                        <td className="p-5 font-black text-slate-800">{emp.name}</td>
                         <td className="p-5">
-                          <div>{e1}</div>
+                          <div className="font-mono">{e1}</div>
                           {renderRecordIcons(dayRecs[0])}
                         </td>
                         <td className="p-5">
-                          <div>{s1}</div>
+                          <div className="font-mono">{s1}</div>
                           {renderRecordIcons(dayRecs[1])}
                         </td>
                         <td className="p-5">
-                          <div>{e2}</div>
+                          <div className="font-mono">{e2}</div>
                           {renderRecordIcons(dayRecs[2])}
                         </td>
                         <td className="p-5">
-                          <div>{s2}</div>
+                          <div className="font-mono">{s2}</div>
                           {renderRecordIcons(dayRecs[3])}
                         </td>
-                        <td className="p-5 text-slate-600">
+                        <td className="p-5 text-slate-600 font-mono">
                           {workedMinutes > 0 ? (
                             formatMinutesToHours(workedMinutes)
                           ) : holidayInfo ? (
@@ -1475,10 +1476,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                         </td>
                         <td className="p-5">
                           {extraMinutes > 0 ? (
-                            <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black">
+                            <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black font-mono">
                               +{formatMinutesToHours(extraMinutes)}
                             </span>
                           ) : '-'}
+                        </td>
+                        <td className="p-5 text-center">
+                          <button
+                            onClick={() => {
+                              setSelectedEmployeeManualPunch(emp);
+                              setManualPunchDate(selectedDateIndividual);
+                              setShowManualPunchModal(true);
+                            }}
+                            className="bg-orange-50 hover:bg-orange-100 text-orange-600 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1 mx-auto"
+                            title="Adicionar batida manual nesta data"
+                          >
+                            <Plus size={10} /> Lançar Ponto
+                          </button>
                         </td>
                       </tr>
                     );
@@ -1509,22 +1523,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
                 {requests.map(req => (
-                  <tr key={req.id} className="border-b">
+                  <tr key={req.id} className="border-b hover:bg-slate-50/50 transition-colors">
                     <td className="p-5 text-slate-400">{req.createdAt.toLocaleDateString('pt-BR')}</td>
-                    <td className="p-5">{req.userName}</td>
+                    <td className="p-5 font-black text-slate-800">{req.userName}</td>
                     <td className="p-5">
-                      <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black">
-                        {req.type}
+                      <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase ${
+                        req.type === 'atestado' ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-50 text-blue-600'
+                      }`}>
+                        {req.type === 'atestado' ? 'ATESTADO' : 'INCLUSÃO'}
                       </span>
                     </td>
-                    <td className="p-5">{new Date(req.date).toLocaleDateString('pt-BR')}</td>
-                    <td className="p-5 text-[9px] text-slate-500 max-w-[200px]">
+                    <td className="p-5 font-mono text-slate-700">
+                      {req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                    </td>
+                    <td className="p-5 text-[9px] text-slate-500 max-w-[220px]">
                       <div className="flex flex-col gap-1">
-                        <span className="truncate">{req.reason}</span>
+                        <span className="truncate font-semibold">{req.reason}</span>
+                        {(req as any).suggestedTimes && (req as any).suggestedTimes.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {(req as any).suggestedTimes.map((tm: string, idx: number) => (
+                              <span key={idx} className="bg-slate-100 text-slate-700 font-mono px-1.5 py-0.5 rounded text-[8px]">
+                                {tm}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {req.attachment && (
                           <button 
                             onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
-                            className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase"
+                            className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase mt-0.5"
                           >
                             <Camera size={10} /> Ver Anexo
                           </button>
@@ -1543,11 +1570,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     <td className="p-5 text-center flex justify-center gap-2">
                       {req.status === 'pending' && (
                         <>
-                          <button onClick={() => handleRequestStatus(req.id, 'approved')} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Aprovar</button>
-                          <button onClick={() => handleRequestStatus(req.id, 'rejected')} className="bg-red-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase">Recusar</button>
+                          <button onClick={() => handleRequestStatus(req.id, 'approved')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Aprovar</button>
+                          <button onClick={() => handleRequestStatus(req.id, 'rejected')} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Recusar</button>
                         </>
                       )}
-                      {req.status !== 'pending' && <span className="text-slate-300 text-[8px]">CONCLUÍDO</span>}
+                      {req.status !== 'pending' && <span className="text-slate-300 text-[8px] font-black">CONCLUÍDO</span>}
                     </td>
                   </tr>
                 ))}
