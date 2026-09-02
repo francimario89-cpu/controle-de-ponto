@@ -57,22 +57,24 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
         md:static md:translate-x-0 md:shadow-none md:border-r md:w-64 md:shrink-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="flex flex-col items-center pt-12 pb-10 px-6 bg-slate-50">
-           <div className="w-20 h-20 rounded-[30px] border-4 border-white shadow-xl bg-slate-100 overflow-hidden mb-4">
+        <div className="flex flex-col items-center pt-12 pb-10 px-6 bg-slate-50 border-b border-slate-100">
+           <div className="w-20 h-20 rounded-[28px] border-4 border-white shadow-xl bg-white overflow-hidden mb-4 p-2 flex items-center justify-center">
               <img 
-                src={isMaster ? `https://ui-avatars.com/api/?name=MASTER&background=0057ff&color=fff` : (isAdmin ? (company?.logoUrl || `https://ui-avatars.com/api/?name=${company?.name}&background=f97316&color=fff`) : (user.photo || `https://ui-avatars.com/api/?name=${user.name}&background=f97316&color=fff`))} 
-                className="w-full h-full object-cover" 
+                src={isMaster ? `https://ui-avatars.com/api/?name=MASTER&background=0057ff&color=fff` : (isAdmin ? (company?.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(company?.name || 'Empresa')}&background=0057ff&color=fff`) : (user.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'Usuario')}&background=f97316&color=fff`))} 
+                alt="Avatar / Logo"
+                className="max-w-full max-h-full object-contain" 
+                referrerPolicy="no-referrer"
               />
            </div>
            <h2 className="text-slate-900 font-black text-sm text-center leading-tight uppercase truncate w-full tracking-tighter">
-             {isMaster ? 'SUPER MASTER' : (isAdmin ? company?.name : user.name)}
+             {isMaster ? 'SUPER MASTER' : (isAdmin ? (company?.name || 'EMPRESA') : user.name)}
            </h2>
-           <p className="text-orange-600 text-[9px] font-black uppercase tracking-[0.3em] mt-2">
+           <p className="text-blue-600 text-[9px] font-black uppercase tracking-[0.3em] mt-2">
              {isMaster ? 'GESTÃO GLOBAL' : (isAdmin ? 'Administrador' : (user.roleFunction || 'Colaborador'))}
            </p>
            {isAdmin && !isMaster && company?.accessCode && (
-             <div className="mt-3 bg-orange-100 px-4 py-1.5 rounded-full border border-orange-200">
-               <p className="text-[8px] font-black text-orange-600 uppercase tracking-widest">CÓDIGO: {company.accessCode}</p>
+             <div className="mt-3 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
+               <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">CÓDIGO: {company.accessCode}</p>
              </div>
            )}
         </div>
