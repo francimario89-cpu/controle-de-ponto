@@ -9,7 +9,7 @@ const Requests: React.FC = () => {
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [type, setType] = useState<'inclusão' | 'atestado' | 'licenca_maternidade'>('inclusão');
+  const [type, setType] = useState<'inclusão' | 'atestado' | 'licenca_maternidade' | 'folga_compensatoria' | 'folga_abonada'>('inclusão');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [daysCount, setDaysCount] = useState(1);
@@ -47,10 +47,12 @@ const Requests: React.FC = () => {
     return diff > 0 ? diff : 1;
   };
 
-  // Ajusta automaticamente endDate quando altera date ou daysCount em atestado ou licença maternidade
+  // Ajusta automaticamente endDate quando altera date ou daysCount em atestado, licença ou folgas
+  const isPeriodType = (t: string) => ['atestado', 'licenca_maternidade', 'folga_compensatoria', 'folga_abonada'].includes(t);
+
   const handleStartDateChange = (newStart: string) => {
     setDate(newStart);
-    if (type === 'atestado' || type === 'licenca_maternidade') {
+    if (isPeriodType(type)) {
       const calculatedEnd = calculateEndDateFromDays(newStart, daysCount);
       setEndDate(calculatedEnd);
     } else {
@@ -71,7 +73,7 @@ const Requests: React.FC = () => {
   };
 
   // Predefinições ao trocar de tipo
-  const handleTypeSelect = (selectedType: 'inclusão' | 'atestado' | 'licenca_maternidade') => {
+  const handleTypeSelect = (selectedType: 'inclusão' | 'atestado' | 'licenca_maternidade' | 'folga_compensatoria' | 'folga_abonada') => {
     setType(selectedType);
     if (selectedType === 'licenca_maternidade') {
       setDaysCount(120);
@@ -81,6 +83,16 @@ const Requests: React.FC = () => {
     } else if (selectedType === 'atestado') {
       setDaysCount(1);
       setReason('Atestado Médico / Afastamento por Saúde');
+      const calculatedEnd = calculateEndDateFromDays(date, 1);
+      setEndDate(calculatedEnd);
+    } else if (selectedType === 'folga_compensatoria') {
+      setDaysCount(1);
+      setReason('Folga Compensatória (Desconto no Banco de Horas)');
+      const calculatedEnd = calculateEndDateFromDays(date, 1);
+      setEndDate(calculatedEnd);
+    } else if (selectedType === 'folga_abonada') {
+      setDaysCount(1);
+      setReason('Folga Programada Abonada');
       const calculatedEnd = calculateEndDateFromDays(date, 1);
       setEndDate(calculatedEnd);
     } else {
@@ -150,6 +162,12 @@ const Requests: React.FC = () => {
       } else if (type === 'licenca_maternidade') {
         finalReason = `Licença Maternidade (${daysCount} dias)`;
         if (customDetail.trim()) finalReason += ` - ${customDetail.trim()}`;
+      } else if (type === 'folga_compensatoria') {
+        finalReason = `Folga Compensatória - Débito no Banco de Horas (${daysCount} dia(s))`;
+        if (customDetail.trim()) finalReason += ` - ${customDetail.trim()}`;
+      } else if (type === 'folga_abonada') {
+        finalReason = `Folga Abonada pela Empresa (${daysCount} dia(s))`;
+        if (customDetail.trim()) finalReason += ` - ${customDetail.trim()}`;
       } else {
         finalReason = customDetail.trim() ? `${reason} - ${customDetail.trim()}` : reason;
       }
@@ -161,8 +179,8 @@ const Requests: React.FC = () => {
         type: type,
         reason: finalReason,
         date: date,
-        endDate: (type === 'atestado' || type === 'licenca_maternidade') ? endDate : date,
-        daysCount: (type === 'atestado' || type === 'licenca_maternidade') ? daysCount : 1,
+        endDate: isPeriodType(type) ? endDate : date,
+        daysCount: isPeriodType(type) ? daysCount : 1,
         cid: cid ? cid.toUpperCase() : '',
         status: 'pending',
         attachment: attachmentData || "",
@@ -200,42 +218,88 @@ const Requests: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5 no-scrollbar pb-32">
           {/* Tipos de Solicitação */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <button 
               type="button"
               onClick={() => handleTypeSelect('inclusão')} 
-              className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
-                type === 'inclusão' ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 shadow-sm' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+              className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
+                type === 'inclusão' ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
               }`}
             >
-              <span className="text-2xl block mb-1">📝</span>
-              <span className="text-[8px] font-black uppercase tracking-tight">Esquecimento de Ponto</span>
+              <span className="text-xl block mb-1">📝</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Esquecimento Ponto</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => handleTypeSelect('folga_compensatoria')} 
+              className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
+                type === 'folga_compensatoria' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+              }`}
+            >
+              <span className="text-xl block mb-1">🏖️</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Folga Compensatória</span>
+              <span className="text-[6.5px] opacity-80 uppercase mt-0.5">(Banco de Horas)</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => handleTypeSelect('folga_abonada')} 
+              className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
+                type === 'folga_abonada' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+              }`}
+            >
+              <span className="text-xl block mb-1">🎁</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Folga Abonada</span>
+              <span className="text-[6.5px] opacity-80 uppercase mt-0.5">(Sem Débito)</span>
             </button>
 
             <button 
               type="button"
               onClick={() => handleTypeSelect('atestado')} 
-              className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
-                type === 'atestado' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 shadow-sm' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+              className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
+                type === 'atestado' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
               }`}
             >
-              <span className="text-2xl block mb-1">🏥</span>
-              <span className="text-[8px] font-black uppercase tracking-tight">Atestado Médico</span>
+              <span className="text-xl block mb-1">🏥</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Atestado Médico</span>
             </button>
 
             <button 
               type="button"
               onClick={() => handleTypeSelect('licenca_maternidade')} 
-              className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
-                type === 'licenca_maternidade' ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 shadow-sm' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+              className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
+                type === 'licenca_maternidade' ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
               }`}
             >
-              <span className="text-2xl block mb-1">🤱</span>
-              <span className="text-[8px] font-black uppercase tracking-tight">Licença Maternidade</span>
+              <span className="text-xl block mb-1">🤱</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Licença Maternidade</span>
             </button>
           </div>
 
-          {/* Banner Informativo */}
+          {/* Banner Informativo Dinâmico */}
+          {type === 'folga_compensatoria' && (
+            <div className="bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 p-4 rounded-2xl space-y-1 text-amber-900 dark:text-amber-200 text-[9px] font-bold">
+              <div className="flex items-center gap-2 font-black uppercase text-amber-700 dark:text-amber-300">
+                <span>🏖️</span> Folga Compensatória (CLT Art. 59 § 2º):
+              </div>
+              <p className="leading-relaxed">
+                Utilize suas horas extras acumuladas no <strong>Banco de Horas</strong> para tirar um dia de folga. Ao ser aprovada pelo RH, as horas da jornada normal serão debitadas do seu banco de horas sem qualquer desconto em seu salário!
+              </p>
+            </div>
+          )}
+
+          {type === 'folga_abonada' && (
+            <div className="bg-emerald-50/90 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 p-4 rounded-2xl space-y-1 text-emerald-900 dark:text-emerald-200 text-[9px] font-bold">
+              <div className="flex items-center gap-2 font-black uppercase text-emerald-700 dark:text-emerald-300">
+                <span>🎁</span> Folga Abonada / Programada:
+              </div>
+              <p className="leading-relaxed">
+                Folga concedida por acordo com a gerência, premiação ou data especial (ex: aniversário). <strong>Não haverá débito</strong> no seu banco de horas e o dia será abonado integralmente sem necessidade de bater o ponto.
+              </p>
+            </div>
+          )}
+
           {type === 'atestado' && (
             <div className="bg-blue-50/90 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 p-4 rounded-2xl space-y-1 text-blue-900 dark:text-blue-200 text-[9px] font-bold">
               <div className="flex items-center gap-2 font-black uppercase text-blue-700 dark:text-blue-300">
@@ -255,6 +319,76 @@ const Requests: React.FC = () => {
               <p className="leading-relaxed">
                 Período oficial de 120 dias (ou 180 dias se Empresa Cidadã). As horas de trabalho ficam totalmente abonadas durante todo o período.
               </p>
+            </div>
+          )}
+
+          {/* Seleção de Período para Folgas (Compensatória ou Abonada) */}
+          {(type === 'folga_compensatoria' || type === 'folga_abonada') && (
+            <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-[28px] border dark:border-slate-700 space-y-4">
+              <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                {type === 'folga_compensatoria' ? 'Data da Folga Compensatória' : 'Data da Folga Abonada'}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data da Folga (ou Início)
+                  </label>
+                  <input 
+                    type="date" 
+                    value={date} 
+                    onChange={e => handleStartDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data de Término
+                  </label>
+                  <input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={e => handleEndDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
+                </div>
+              </div>
+
+              {/* Botões Rápidos de Quantidade de Dias de Folga */}
+              <div>
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                  Quantidade de dias de folga:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 5].map(d => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handleDaysChange(d)}
+                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+                        daysCount === d 
+                          ? type === 'folga_compensatoria' ? 'bg-amber-600 text-white shadow-md scale-105' : 'bg-emerald-600 text-white shadow-md scale-105'
+                          : 'bg-white dark:bg-slate-900 border dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {d} {d === 1 ? 'Dia' : 'Dias'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Resumo do Período */}
+              <div className={`p-3 rounded-2xl border flex items-center justify-between text-[9px] font-black uppercase ${
+                type === 'folga_compensatoria' 
+                  ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300'
+                  : 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300'
+              }`}>
+                <span>Período da Folga:</span>
+                <span>
+                  {daysCount} {daysCount === 1 ? 'dia' : 'dias'} ({new Date(date + 'T12:00:00').toLocaleDateString('pt-BR')}{daysCount > 1 ? ` até ${new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''})
+                </span>
+              </div>
             </div>
           )}
 
@@ -557,6 +691,8 @@ const Requests: React.FC = () => {
         {filteredRequests.map((req) => {
           const isAtestado = req.type === 'atestado' || req.type === 'abono';
           const isMaternidade = req.type === 'licenca_maternidade';
+          const isFolgaComp = req.type === 'folga_compensatoria';
+          const isFolgaAbonada = req.type === 'folga_abonada';
 
           return (
             <div key={req.id} className="bg-white dark:bg-slate-800 p-6 rounded-[35px] border border-slate-100 dark:border-slate-700 shadow-sm animate-in fade-in space-y-3">
@@ -565,15 +701,19 @@ const Requests: React.FC = () => {
                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl ${
                      isMaternidade 
                        ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/30' 
-                       : isAtestado 
-                         ? 'bg-blue-50 text-blue-500 dark:bg-blue-950/30' 
-                         : 'bg-orange-50 text-orange-500 dark:bg-orange-950/30'
+                       : isFolgaComp
+                         ? 'bg-amber-50 text-amber-500 dark:bg-amber-950/30'
+                         : isFolgaAbonada
+                           ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-950/30'
+                           : isAtestado 
+                             ? 'bg-blue-50 text-blue-500 dark:bg-blue-950/30' 
+                             : 'bg-orange-50 text-orange-500 dark:bg-orange-950/30'
                    }`}>
-                      {isMaternidade ? '🤱' : isAtestado ? '🏥' : '📝'}
+                      {isMaternidade ? '🤱' : isFolgaComp ? '🏖️' : isFolgaAbonada ? '🎁' : isAtestado ? '🏥' : '📝'}
                    </div>
                    <div>
                       <p className="text-[10px] font-black uppercase leading-none">
-                        {isMaternidade ? 'Licença Maternidade' : isAtestado ? 'Atestado Médico' : 'Esquecimento de Ponto'}
+                        {isMaternidade ? 'Licença Maternidade' : isFolgaComp ? 'Folga Compensatória (Banco)' : isFolgaAbonada ? 'Folga Abonada' : isAtestado ? 'Atestado Médico' : 'Esquecimento de Ponto'}
                       </p>
                       <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">
                         {req.endDate && req.endDate !== req.date ? (

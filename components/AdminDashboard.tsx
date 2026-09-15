@@ -78,10 +78,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [adminVacationNote, setAdminVacationNote] = useState('');
   const [vacationFilterMatricula, setVacationFilterMatricula] = useState('todos');
 
-  // Estados para Gestão de Afastamentos / Atestados / Licença Maternidade pelo Admin
+  // Estados para Gestão de Afastamentos / Folgas / Atestados / Licença Maternidade pelo Admin
   const [showAdminLeaveModal, setShowAdminLeaveModal] = useState(false);
   const [adminLeaveMatricula, setAdminLeaveMatricula] = useState('');
-  const [adminLeaveType, setAdminLeaveType] = useState<'atestado' | 'licenca_maternidade' | 'afastamento_saude'>('atestado');
+  const [adminLeaveType, setAdminLeaveType] = useState<'atestado' | 'licenca_maternidade' | 'afastamento_saude' | 'folga_compensatoria' | 'folga_abonada'>('folga_compensatoria');
   const [adminLeaveStartDate, setAdminLeaveStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [adminLeaveEndDate, setAdminLeaveEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [adminLeaveDaysCount, setAdminLeaveDaysCount] = useState(1);
@@ -347,6 +347,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       if (!finalReason) {
         if (adminLeaveType === 'licenca_maternidade') {
           finalReason = `Licença Maternidade (${adminLeaveDaysCount} dias) - Conforme Art. 392 da CLT`;
+        } else if (adminLeaveType === 'folga_compensatoria') {
+          finalReason = `Folga Compensatória (${adminLeaveDaysCount} dia(s)) - Compensação e Débito no Banco de Horas (Art. 59 CLT)`;
+        } else if (adminLeaveType === 'folga_abonada') {
+          finalReason = `Folga Programada Abonada (${adminLeaveDaysCount} dia(s)) - Liberalidade / Sem Débito no Banco`;
         } else {
           finalReason = `Afastamento por Saúde / Atestado Médico (${adminLeaveDaysCount} dias)${adminLeaveCid ? ' - CID: ' + adminLeaveCid.toUpperCase() : ''}`;
         }
@@ -368,18 +372,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         createdAt: new Date()
       });
 
-      alert(`AFASTAMENTO/LICENÇA REGISTRADO COM SUCESSO PARA ${emp.name}!`);
+      const labelMsg = adminLeaveType === 'folga_compensatoria' ? 'FOLGA COMPENSATÓRIA COM DÉBITO NO BANCO' : adminLeaveType === 'folga_abonada' ? 'FOLGA ABONADA' : 'AFASTAMENTO / LICENÇA';
+      alert(`${labelMsg} REGISTRADO COM SUCESSO PARA ${emp.name}!`);
       setShowAdminLeaveModal(false);
       setAdminLeaveMatricula('');
       setAdminLeaveReason('');
       setAdminLeaveCid('');
       setAdminLeaveDaysCount(1);
     } catch (err) {
-      alert("Erro ao lançar afastamento/licença.");
+      alert("Erro ao lançar registro no sistema.");
     }
   };
 
-  // Helper para verificar se um colaborador possui afastamento legal aprovado em uma data
+  // Helper para verificar se um colaborador possui afastamento ou folga programada legal aprovada em uma data
   const getAbsenceForEmployeeAndDate = (
     emp: Employee,
     dateStr: string
@@ -416,7 +421,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       };
     }
 
-    // 3. Atestado Médico / Afastamento por Saúde aprovado
+    // 3. Folga Compensatória (Compensação e Débito no Banco de Horas)
+    const folgaComp = requests.find(r => 
+      r.matricula === emp.matricula &&
+      r.status === 'approved' &&
+      r.type === 'folga_compensatoria' &&
+      dateStr >= r.date &&
+      dateStr <= (r.endDate || r.date)
+    );
+    if (folgaComp) {
+      return {
+        type: 'folga_compensatoria',
+        e1: 'FOLGA',
+        s1: 'COMPENS.',
+        rubrica: 'FOLGA COMPENSATÓRIA (DÉBITO BANCO DE HORAS)'
+      };
+    }
+
+    // 4. Folga Programada Abonada (Liberalidade da Empresa / Sem Débito)
+    const folgaAbono = requests.find(r => 
+      r.matricula === emp.matricula &&
+      r.status === 'approved' &&
+      r.type === 'folga_abonada' &&
+      dateStr >= r.date &&
+      dateStr <= (r.endDate || r.date)
+    );
+    if (folgaAbono) {
+      return {
+        type: 'folga_abonada',
+        e1: 'FOLGA',
+        s1: 'ABONADA',
+        rubrica: 'FOLGA ABONADA (LIBERALIDADE EMPRESA)'
+      };
+    }
+
+    // 5. Atestado Médico / Afastamento por Saúde aprovado
     const atestado = requests.find(r => 
       r.matricula === emp.matricula &&
       r.status === 'approved' &&
@@ -490,12 +529,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             extraMin = workedMin > 480 ? (workedMin - 480) : 0;
           }
 
-          // Se for feriado, domingo ou ausência abonada, meta esperada é 0 (pois não há desconto)
-          const dayTarget = (holiday || absence) ? 0 : (dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480));
+          // Se for feriado, domingo ou ausência abonada (sem compensação), meta esperada é 0 (pois não há desconto)
+          const isCompensatory = absence?.type === 'folga_compensatoria';
+          const dayTarget = (holiday || (absence && !isCompensatory)) ? 0 : (dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480));
           empExpectedMin += dayTarget;
           empWorkedMin += workedMin;
           empExtraMin += extraMin;
           empDaysCount++;
+        } else if (absence?.type === 'folga_compensatoria') {
+          // FOLGA COMPENSATÓRIA: o colaborador folgou em dia útil para queimar horas do banco de horas.
+          // Como trabalhou 0 min, adicionamos a meta diária (480 min Seg-Sex ou 240 min Sáb) na expectativa.
+          // Desta forma, o saldo (workedMin 0 - expectedMin 480) debita automaticamente 8 horas do saldo do banco de horas!
+          const dayTarget = dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480);
+          empExpectedMin += dayTarget;
         }
       }
 
@@ -669,6 +715,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           e2 = '-';
           s2 = '-';
           rubrica = absence.rubrica;
+
+          // Se for Folga Compensatória (Banco de Horas): debita as horas da jornada normal do dia
+          if (absence.type === 'folga_compensatoria') {
+            const dayTargetMinutes = dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480);
+            totalExpectedMinutes += dayTargetMinutes;
+          }
         } else if (holiday) {
           if (workedMinutes > 0) {
             // Feriado trabalhado: 100% de horas extras
@@ -1751,14 +1803,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
             <div>
-              <h3 className="text-sm font-black uppercase text-slate-900">Solicitações, Atestados e Licenças</h3>
-              <p className="text-[10px] text-slate-500 font-medium">Gerencie atestados médicos, licenças maternidade e ajustes de ponto da equipe.</p>
+              <h3 className="text-sm font-black uppercase text-slate-900">Solicitações, Folgas e Afastamentos</h3>
+              <p className="text-[10px] text-slate-500 font-medium">Gerencie folgas compensatórias (banco de horas), abonos, atestados médicos e licenças da equipe.</p>
             </div>
             <button 
               onClick={() => setShowAdminLeaveModal(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-purple-600/20 transition-all"
+              className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-amber-600/20 transition-all"
             >
-              <span>🏥</span> + Lançar Atestado / Licença (RH)
+              <span>🏖️</span> + Lançar Folga / Afastamento (RH)
             </button>
           </div>
 
@@ -1780,7 +1832,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 {requests.map(req => {
                   const reqTimes: string[] = (req as any).times || (req as any).suggestedTimes || [];
                   const isMaternidade = req.type === 'licenca_maternidade';
+                  const isFolgaComp = req.type === 'folga_compensatoria';
+                  const isFolgaAbono = req.type === 'folga_abonada';
                   const isAtestado = req.type === 'atestado' || req.type === 'afastamento_saude' || req.type === 'abono';
+                  const isSpecialAbsence = isMaternidade || isAtestado || isFolgaComp || isFolgaAbono;
                   const formattedStartDate = req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
                   const formattedEndDate = req.endDate ? new Date(req.endDate.includes('T') ? req.endDate : req.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : formattedStartDate;
 
@@ -1798,6 +1853,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                           <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-pink-100 text-pink-700 border border-pink-200">
                             🤱 LIC. MATERNIDADE
                           </span>
+                        ) : isFolgaComp ? (
+                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                            🏖️ FOLGA COMPENSATÓRIA
+                          </span>
+                        ) : isFolgaAbono ? (
+                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            🎁 FOLGA ABONADA
+                          </span>
                         ) : isAtestado ? (
                           <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">
                             🏥 ATESTADO MÉDICO
@@ -1809,13 +1872,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                         )}
                       </td>
                       <td className="p-5 font-mono text-slate-700">
-                        {isMaternidade || isAtestado ? (
+                        {isSpecialAbsence ? (
                           <div>
                             <p className="font-black text-slate-800 text-[10px]">
                               {formattedStartDate} até {formattedEndDate}
                             </p>
-                            <span className="text-[8px] font-sans font-black text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-md inline-block mt-0.5">
-                              {req.daysCount ? `${req.daysCount} DIA(S) DE AFASTAMENTO` : '1 DIA'}
+                            <span className={`text-[8px] font-sans font-black px-2 py-0.5 rounded-md inline-block mt-0.5 border ${
+                              isFolgaComp 
+                                ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                                : isFolgaAbono 
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-purple-50 text-purple-700 border-purple-100'
+                            }`}>
+                              {req.daysCount ? `${req.daysCount} DIA(S) DE DISPENSA` : '1 DIA'}
                             </span>
                           </div>
                         ) : (
@@ -1838,6 +1907,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                               </span>
                             ))}
                           </div>
+                        ) : isFolgaComp ? (
+                          <span className="text-amber-800 text-[8px] font-black bg-amber-50 border border-amber-200 px-2 py-1 rounded-md">
+                            Débito no Banco de Horas
+                          </span>
+                        ) : isFolgaAbono ? (
+                          <span className="text-emerald-800 text-[8px] font-black bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md">
+                            Abono s/ Débito (100%)
+                          </span>
                         ) : isMaternidade || isAtestado ? (
                           <span className="text-emerald-700 text-[8px] font-black bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-md">
                             Abono Legal Integral
@@ -2901,12 +2978,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
           <div className="bg-white rounded-[44px] w-full max-w-lg p-6 sm:p-8 shadow-2xl space-y-5 animate-in zoom-in max-h-[95vh] overflow-y-auto no-scrollbar">
             <div className="text-center space-y-1">
-              <span className="text-2xl">🏥</span>
-              <h2 className="text-sm font-black uppercase tracking-wider text-purple-900">
-                Lançar Afastamento Legal / Atestado
+              <span className="text-2xl">⚖️</span>
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                Lançar Folga Programada ou Afastamento
               </h2>
               <p className="text-[10px] text-slate-500 font-medium">
-                Registre atestado médico ou licença maternidade e defina os dias de afastamento do colaborador.
+                Defina se a ausência será compensada com débito no banco de horas, abonada por liberalidade ou justificada por atestado médico/licença.
               </p>
             </div>
 
@@ -2918,7 +2995,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <select
                   value={adminLeaveMatricula}
                   onChange={e => setAdminLeaveMatricula(e.target.value)}
-                  className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-bold outline-none border focus:border-purple-500"
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-bold outline-none border focus:border-amber-500"
                 >
                   <option value="">-- Escolha um colaborador --</option>
                   {employees.filter(e => e.status !== 'inactive').map(emp => (
@@ -2931,24 +3008,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
               <div>
                 <label className="text-[9px] font-black uppercase text-slate-500 ml-2 block mb-1">
-                  Tipo de Afastamento *
+                  Tipo de Lançamento / Ausência Programada *
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      setAdminLeaveType('atestado');
-                      if (adminLeaveDaysCount === 120) {
-                        handleAdminLeaveDaysChange(1);
-                      }
+                      setAdminLeaveType('folga_compensatoria');
+                      if (adminLeaveDaysCount === 120) handleAdminLeaveDaysChange(1);
                     }}
-                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center ${
-                      adminLeaveType === 'atestado' 
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-md' 
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center flex flex-col items-center justify-center gap-1 ${
+                      adminLeaveType === 'folga_compensatoria' 
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-[1.02]' 
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    🏥 Atestado Médico / Saúde
+                    <span className="text-base">🏖️</span>
+                    <span>Folga Compensatória</span>
+                    <span className="text-[7px] font-normal opacity-90">(Débito Banco de Horas)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminLeaveType('folga_abonada');
+                      if (adminLeaveDaysCount === 120) handleAdminLeaveDaysChange(1);
+                    }}
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center flex flex-col items-center justify-center gap-1 ${
+                      adminLeaveType === 'folga_abonada' 
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md scale-[1.02]' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-base">🎁</span>
+                    <span>Folga Abonada</span>
+                    <span className="text-[7px] font-normal opacity-90">(Sem Débito no Banco)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminLeaveType('atestado');
+                      if (adminLeaveDaysCount === 120) handleAdminLeaveDaysChange(1);
+                    }}
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center flex flex-col items-center justify-center gap-1 ${
+                      adminLeaveType === 'atestado' 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-[1.02]' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-base">🏥</span>
+                    <span>Atestado Médico</span>
+                    <span className="text-[7px] font-normal opacity-90">(Abono por Saúde)</span>
                   </button>
 
                   <button
@@ -2957,16 +3068,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                       setAdminLeaveType('licenca_maternidade');
                       handleAdminLeaveDaysChange(120);
                     }}
-                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center ${
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center flex flex-col items-center justify-center gap-1 ${
                       adminLeaveType === 'licenca_maternidade' 
-                        ? 'bg-pink-600 text-white border-pink-600 shadow-md' 
+                        ? 'bg-pink-600 text-white border-pink-600 shadow-md scale-[1.02]' 
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    🤱 Licença Maternidade (120d)
+                    <span className="text-base">🤱</span>
+                    <span>Licença Maternidade</span>
+                    <span className="text-[7px] font-normal opacity-90">(120 Dias CLT)</span>
                   </button>
                 </div>
               </div>
+
+              {/* Box explicativo dinâmico conforme seleção */}
+              {adminLeaveType === 'folga_compensatoria' && (
+                <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-[8.5px] font-bold text-amber-900 leading-relaxed">
+                  ⚖️ <strong>Como funciona o Banco de Horas (CLT Art. 59 § 2º):</strong> O dia será apontado oficialmente como <em>FOLGA COMPENSATÓRIA</em> no livro de ponto. A jornada diária padrão (ex: 8 horas) será <strong>automaticamente debitada</strong> do saldo acumulado de horas extras do colaborador, garantindo seu salário integral sem gerar falta.
+                </div>
+              )}
+
+              {adminLeaveType === 'folga_abonada' && (
+                <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-[8.5px] font-bold text-emerald-900 leading-relaxed">
+                  🎁 <strong>Como funciona a Folga Abonada:</strong> O dia será apontado como <em>FOLGA ABONADA</em>. <strong>NÃO haverá nenhum débito</strong> no saldo de horas do colaborador e nenhum desconto em seu salário (abono concedido por liberalidade, premiação ou acordo coletivo).
+                </div>
+              )}
+
+              {adminLeaveType === 'atestado' && (
+                <div className="p-3.5 bg-indigo-50 rounded-2xl border border-indigo-200 text-[8.5px] font-bold text-indigo-900 leading-relaxed">
+                  🏥 <strong>Como funciona o Atestado Médico:</strong> O período selecionado será apontado como <em>ATESTADO MÉDICO</em>. As horas são abonadas legalmente conforme determinação médica, sem desconto de salário ou banco.
+                </div>
+              )}
+
+              {adminLeaveType === 'licenca_maternidade' && (
+                <div className="p-3.5 bg-pink-50 rounded-2xl border border-pink-200 text-[8.5px] font-bold text-pink-900 leading-relaxed">
+                  🤱 <strong>Licença Maternidade (CLT Art. 392):</strong> Afastamento legal de 120 dias garantido pela legislação com abono integral da jornada de trabalho.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -2977,13 +3115,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     type="date"
                     value={adminLeaveStartDate}
                     onChange={e => handleAdminLeaveStartChange(e.target.value)}
-                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-purple-500"
+                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-amber-500"
                   />
                 </div>
 
                 <div>
                   <label className="text-[8px] font-black uppercase text-slate-500 ml-2 block mb-1">
-                    Dias de Afastamento *
+                    Dias de Dispensa *
                   </label>
                   <input
                     type="number"
@@ -2991,7 +3129,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     max="365"
                     value={adminLeaveDaysCount}
                     onChange={e => handleAdminLeaveDaysChange(parseInt(e.target.value) || 1)}
-                    className="w-full p-3.5 bg-purple-50 text-purple-900 border border-purple-200 rounded-2xl text-[11px] font-mono font-black outline-none text-center focus:border-purple-500"
+                    className="w-full p-3.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-2xl text-[11px] font-mono font-black outline-none text-center focus:border-amber-500"
                   />
                 </div>
 
@@ -3003,13 +3141,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     type="date"
                     value={adminLeaveEndDate}
                     onChange={e => handleAdminLeaveEndChange(e.target.value)}
-                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-purple-500"
+                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-amber-500"
                   />
                 </div>
               </div>
 
+              {/* Botões Rápidos de dias para folga ou atestado */}
+              {adminLeaveType !== 'licenca_maternidade' && (
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-400 ml-2 block mb-1">
+                    Duração Rápida:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 2, 3, 5, 7, 10, 15, 30].map(d => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => handleAdminLeaveDaysChange(d)}
+                        className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase border transition-all ${
+                          adminLeaveDaysCount === d 
+                            ? 'bg-slate-900 text-white border-slate-900' 
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {d} {d === 1 ? 'Dia' : 'Dias'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="p-3 bg-slate-50 rounded-2xl border text-[9px] text-slate-600 font-medium">
-                🗓️ <strong>Período Selecionado:</strong> de{' '}
+                🗓️ <strong>Período Definido:</strong> de{' '}
                 <span className="font-bold text-slate-900">
                   {new Date(adminLeaveStartDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                 </span>{' '}
@@ -3017,39 +3180,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <span className="font-bold text-slate-900">
                   {new Date(adminLeaveEndDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                 </span>{' '}
-                (Total: <strong>{adminLeaveDaysCount} dia(s)</strong> corridos de abono).
+                (Total: <strong>{adminLeaveDaysCount} dia(s)</strong> de ausência programada).
               </div>
 
-              {adminLeaveType !== 'licenca_maternidade' && (
+              {adminLeaveType === 'atestado' && (
                 <div>
                   <label className="text-[9px] font-black uppercase text-slate-500 ml-2 block mb-1">
-                    Código CID (Opcional)
+                    Código CID do Atestado (Opcional)
                   </label>
                   <input
                     type="text"
                     placeholder="Ex: J06, M54.5, Z76.2"
                     value={adminLeaveCid}
                     onChange={e => setAdminLeaveCid(e.target.value.toUpperCase())}
-                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-purple-500 uppercase"
+                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-amber-500 uppercase"
                   />
                 </div>
               )}
 
               <div>
                 <label className="text-[9px] font-black uppercase text-slate-500 ml-2 block mb-1">
-                  Observações / Justificativa
+                  Observações / Justificativa Interna
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="Ex: Apresentou atestado da UPA Dr. José Silva, emitido pelo CRM 12345..."
+                  placeholder="Ex: Folga combinada para compensar plantão de sábado / folga de aniversário / atestado médico..."
                   value={adminLeaveReason}
                   onChange={e => setAdminLeaveReason(e.target.value)}
-                  className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-medium outline-none border focus:border-purple-500 resize-none"
+                  className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-medium outline-none border focus:border-amber-500 resize-none"
                 />
-              </div>
-
-              <div className="p-3 bg-purple-50 rounded-2xl border border-purple-100 text-[8px] font-bold text-purple-800 leading-relaxed uppercase">
-                ⚖️ <strong>Efeito Legal:</strong> Os dias informados serão automaticamente abonados no livro de ponto oficial do colaborador, dispensando o registro de batidas sem penalização de faltas ou horas negativas.
               </div>
             </div>
 
@@ -3064,9 +3223,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <button
                 type="button"
                 onClick={handleCreateAdminLeave}
-                className="flex-[2] py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl shadow-purple-600/20"
+                className="flex-[2] py-4 bg-slate-900 hover:bg-black text-white rounded-2xl text-[10px] font-black uppercase shadow-xl"
               >
-                Registrar Afastamento
+                Salvar Lançamento
               </button>
             </div>
           </div>

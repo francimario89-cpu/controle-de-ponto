@@ -96,12 +96,13 @@ export interface AttendanceRequest {
   companyCode: string;
   matricula: string;
   userName: string;
-  type: 'ajuste' | 'atestado' | 'abono' | 'inclusão' | 'licenca_maternidade' | 'afastamento_saude';
+  type: 'ajuste' | 'atestado' | 'abono' | 'inclusão' | 'licenca_maternidade' | 'afastamento_saude' | 'folga_compensatoria' | 'folga_abonada';
   status: 'pending' | 'approved' | 'rejected';
   date: string; // Data início
-  endDate?: string; // Data fim (para atestados de múltiplos dias ou licença maternidade)
+  endDate?: string; // Data fim (para atestados de múltiplos dias, licença maternidade ou folgas)
   daysCount?: number; // Total de dias de afastamento
   cid?: string; // Código CID (opcional para atestado)
+  hoursDeducted?: number; // Horas deduzidas do banco de horas no caso de folga compensatória
   reason: string;
   createdAt: Date;
   attachment?: string;
