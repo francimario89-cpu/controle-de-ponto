@@ -28,7 +28,16 @@ const App: React.FC = () => {
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<PointRecord[]>([]);
-  const [activeView, setActiveView] = useState('dashboard');
+  const [activeView, setActiveView] = useState(() => {
+    const saved = localStorage.getItem('fortime_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.role === 'master') return 'companies';
+      } catch (e) {}
+    }
+    return 'dashboard';
+  });
   const [showPunchCamera, setShowPunchCamera] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

@@ -111,8 +111,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
         if (emp.password === password) {
           onLogin({
-            name: emp.name, companyCode: realCompanyId, companyName, role: 'employee', 
-            matricula, photo: emp.photo || '', hasFacialRecord: emp.hasFacialRecord === true
+            name: emp.name, 
+            companyCode: realCompanyId, 
+            companyName, 
+            role: 'employee', 
+            matricula, 
+            photo: emp.photo || '', 
+            hasFacialRecord: emp.hasFacialRecord === true,
+            roleFunction: emp.roleFunction || '',
+            workShift: emp.workShift || '',
+            isExemptPointControl: !!emp.isExemptPointControl,
+            exemptReason: emp.exemptReason || ''
           });
         } else setError('SENHA DE ACESSO ERRADA');
       } else setError('COLABORADOR NÃO CADASTRADO');

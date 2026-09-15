@@ -62,8 +62,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-36 overflow-y-auto no-scrollbar">
       <div className="space-y-2">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, {user.name.split(' ')[0]} 👋</p>
-        <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Ponto</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Ponto</h2>
+          {user.isExemptPointControl && (
+            <span className="bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 px-2.5 py-1 rounded-xl text-[8px] font-black uppercase tracking-wider flex items-center gap-1">
+              👑 Cargo de Gerência
+            </span>
+          )}
+        </div>
       </div>
+
+      {user.isExemptPointControl && (
+        <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 p-4 rounded-3xl flex items-start gap-3 text-purple-900 dark:text-purple-200 animate-in fade-in">
+          <span className="text-2xl">👑</span>
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-black uppercase tracking-wider text-purple-800 dark:text-purple-300">
+              Dispensado de Controle de Jornada (Art. 62, II da CLT)
+            </p>
+            <p className="text-[9px] font-bold opacity-80 leading-relaxed">
+              Você ocupa cargo de gerência/confiança. O registro de horários é facultativo e não há desconto de banco de horas ou faltas.
+            </p>
+          </div>
+        </div>
+      )}
 
       {alerts.length > 0 && (
         <div className="space-y-2">

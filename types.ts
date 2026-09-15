@@ -52,6 +52,8 @@ export interface Employee {
   city?: string;
   state?: string;
   zip?: string;
+  isExemptPointControl?: boolean; // Dispensado de controle de jornada (Art. 62, II CLT - Gerência / Confiança)
+  exemptReason?: string;
 }
 
 export interface User {
@@ -69,6 +71,8 @@ export interface User {
   hasFacialRecord?: boolean;
   roleFunction?: string;
   workShift?: string;
+  isExemptPointControl?: boolean;
+  exemptReason?: string;
 }
 
 export interface PointRecord {
@@ -92,13 +96,36 @@ export interface AttendanceRequest {
   companyCode: string;
   matricula: string;
   userName: string;
-  type: 'ajuste' | 'atestado' | 'abono' | 'inclusão';
+  type: 'ajuste' | 'atestado' | 'abono' | 'inclusão' | 'licenca_maternidade' | 'afastamento_saude';
   status: 'pending' | 'approved' | 'rejected';
-  date: string;
+  date: string; // Data início
+  endDate?: string; // Data fim (para atestados de múltiplos dias ou licença maternidade)
+  daysCount?: number; // Total de dias de afastamento
+  cid?: string; // Código CID (opcional para atestado)
   reason: string;
   createdAt: Date;
   attachment?: string;
   attachmentName?: string;
+  suggestedTimes?: string[];
+}
+
+export interface MedicalLeave {
+  id: string;
+  companyCode: string;
+  matricula: string;
+  userName: string;
+  type: 'atestado' | 'licenca_maternidade' | 'afastamento_saude' | 'afastamento_inss';
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  daysCount: number;
+  reason: string;
+  cid?: string;
+  attachment?: string;
+  attachmentName?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
 }
 
 // Interface para mensagens do Chat do Assistente

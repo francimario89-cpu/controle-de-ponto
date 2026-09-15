@@ -77,6 +77,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [adminVacationStatus, setAdminVacationStatus] = useState<'approved' | 'pending'>('approved');
   const [adminVacationNote, setAdminVacationNote] = useState('');
   const [vacationFilterMatricula, setVacationFilterMatricula] = useState('todos');
+
+  // Estados para Gestão de Afastamentos / Atestados / Licença Maternidade pelo Admin
+  const [showAdminLeaveModal, setShowAdminLeaveModal] = useState(false);
+  const [adminLeaveMatricula, setAdminLeaveMatricula] = useState('');
+  const [adminLeaveType, setAdminLeaveType] = useState<'atestado' | 'licenca_maternidade' | 'afastamento_saude'>('atestado');
+  const [adminLeaveStartDate, setAdminLeaveStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [adminLeaveEndDate, setAdminLeaveEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [adminLeaveDaysCount, setAdminLeaveDaysCount] = useState(1);
+  const [adminLeaveCid, setAdminLeaveCid] = useState('');
+  const [adminLeaveReason, setAdminLeaveReason] = useState('');
   
   const [newEmp, setNewEmp] = useState({ 
     name: '', 
@@ -89,7 +99,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     status: 'active' as 'active' | 'inactive',
     password: '',
     ctpsNumber: '',
-    ctpsSeries: ''
+    ctpsSeries: '',
+    isExemptPointControl: false,
+    exemptReason: 'Art. 62, II da CLT - Cargo de Confiança / Gerência'
   });
 
   const now = new Date();
@@ -280,6 +292,152 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
 
+  // Helpers para cálculo e sincronização de datas e dias de atestado / licença
+  const calculateEndDateHelper = (startStr: string, days: number): string => {
+    if (!startStr || isNaN(days) || days < 1) return startStr;
+    const [y, m, d] = startStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    dateObj.setDate(dateObj.getDate() + (days - 1));
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const calculateDaysHelper = (startStr: string, endStr: string): number => {
+    if (!startStr || !endStr) return 1;
+    const s = new Date(startStr);
+    const e = new Date(endStr);
+    const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return diff > 0 ? diff : 1;
+  };
+
+  const handleAdminLeaveStartChange = (newStart: string) => {
+    setAdminLeaveStartDate(newStart);
+    const newEnd = calculateEndDateHelper(newStart, adminLeaveDaysCount);
+    setAdminLeaveEndDate(newEnd);
+  };
+
+  const handleAdminLeaveDaysChange = (days: number) => {
+    const validDays = Math.max(1, days);
+    setAdminLeaveDaysCount(validDays);
+    const newEnd = calculateEndDateHelper(adminLeaveStartDate, validDays);
+    setAdminLeaveEndDate(newEnd);
+  };
+
+  const handleAdminLeaveEndChange = (newEnd: string) => {
+    setAdminLeaveEndDate(newEnd);
+    const days = calculateDaysHelper(adminLeaveStartDate, newEnd);
+    setAdminLeaveDaysCount(days);
+  };
+
+  const handleCreateAdminLeave = async () => {
+    if (!adminLeaveMatricula || !adminLeaveStartDate || !adminLeaveEndDate) {
+      alert("Por favor, selecione o colaborador e informe o período.");
+      return;
+    }
+    const emp = employees.find(e => e.matricula === adminLeaveMatricula);
+    if (!emp) {
+      alert("Colaborador não encontrado.");
+      return;
+    }
+
+    try {
+      let finalReason = adminLeaveReason.trim();
+      if (!finalReason) {
+        if (adminLeaveType === 'licenca_maternidade') {
+          finalReason = `Licença Maternidade (${adminLeaveDaysCount} dias) - Conforme Art. 392 da CLT`;
+        } else {
+          finalReason = `Afastamento por Saúde / Atestado Médico (${adminLeaveDaysCount} dias)${adminLeaveCid ? ' - CID: ' + adminLeaveCid.toUpperCase() : ''}`;
+        }
+      }
+
+      await addDoc(collection(db, "requests"), {
+        companyCode: company?.id,
+        matricula: emp.matricula,
+        userName: emp.name,
+        type: adminLeaveType,
+        date: adminLeaveStartDate,
+        endDate: adminLeaveEndDate,
+        daysCount: adminLeaveDaysCount,
+        cid: adminLeaveCid ? adminLeaveCid.toUpperCase() : '',
+        reason: finalReason,
+        status: 'approved',
+        attachment: '',
+        attachmentName: '',
+        createdAt: new Date()
+      });
+
+      alert(`AFASTAMENTO/LICENÇA REGISTRADO COM SUCESSO PARA ${emp.name}!`);
+      setShowAdminLeaveModal(false);
+      setAdminLeaveMatricula('');
+      setAdminLeaveReason('');
+      setAdminLeaveCid('');
+      setAdminLeaveDaysCount(1);
+    } catch (err) {
+      alert("Erro ao lançar afastamento/licença.");
+    }
+  };
+
+  // Helper para verificar se um colaborador possui afastamento legal aprovado em uma data
+  const getAbsenceForEmployeeAndDate = (
+    emp: Employee,
+    dateStr: string
+  ): { type: string; e1: string; s1?: string; rubrica: string } | null => {
+    // 1. Férias aprovadas
+    const vacation = vacationRequests.find(v => 
+      v.userId === emp.matricula && 
+      v.status === 'approved' && 
+      dateStr >= v.startDate && 
+      dateStr <= v.endDate
+    );
+    if (vacation) {
+      return {
+        type: 'ferias',
+        e1: 'FÉRIAS',
+        rubrica: 'FÉRIAS REGULAMENTARES'
+      };
+    }
+
+    // 2. Licença Maternidade aprovada
+    const maternidade = requests.find(r => 
+      r.matricula === emp.matricula &&
+      r.status === 'approved' &&
+      r.type === 'licenca_maternidade' &&
+      dateStr >= r.date &&
+      dateStr <= (r.endDate || r.date)
+    );
+    if (maternidade) {
+      return {
+        type: 'licenca_maternidade',
+        e1: 'LICENÇA',
+        s1: 'MATERN.',
+        rubrica: 'LICENÇA MATERNIDADE (CLT ART. 392)'
+      };
+    }
+
+    // 3. Atestado Médico / Afastamento por Saúde aprovado
+    const atestado = requests.find(r => 
+      r.matricula === emp.matricula &&
+      r.status === 'approved' &&
+      (r.type === 'atestado' || r.type === 'abono' || r.type === 'afastamento_saude') &&
+      dateStr >= r.date &&
+      dateStr <= (r.endDate || r.date)
+    );
+    if (atestado) {
+      const daysInfo = atestado.daysCount ? ` (${atestado.daysCount}D)` : '';
+      const cidInfo = atestado.cid ? ` - CID: ${atestado.cid}` : '';
+      return {
+        type: 'atestado',
+        e1: 'ATESTADO',
+        s1: 'MÉDICO',
+        rubrica: `ATESTADO MÉDICO${daysInfo}${cidInfo}`
+      };
+    }
+
+    return null;
+  };
+
   const monthlyReportStats = useMemo(() => {
     const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
     const targetEmployees = reportFilter.matricula === 'todos' 
@@ -291,13 +449,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       let empExtraMin = 0;
       let empDaysCount = 0;
       let empExpectedMin = 0;
-      const weeklyHours = emp.weeklyHours || company?.config?.weeklyHours || 44;
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(reportFilter.year, reportFilter.month, day);
         const dayOfWeek = dateObj.getDay();
         const dateStr = `${reportFilter.year}-${String(reportFilter.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const holiday = getHolidayForDate(dateStr, customHolidays);
+        const absence = getAbsenceForEmployeeAndDate(emp, dateStr);
 
         const dayRecs = filteredRecords.filter(r => {
           const rd = new Date(r.timestamp);
@@ -326,15 +484,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             extraMin = workedMin;
           } else if (dayOfWeek === 6) {
             // Sábado: Na jornada CLT de 44h semanais, 4h são normais (240 min).
-            // Apenas o que exceder 4h no sábado é hora extra!
             extraMin = workedMin > 240 ? (workedMin - 240) : 0;
           } else {
             // Segunda a Sexta: 8h normais (480 min). O que exceder é hora extra.
             extraMin = workedMin > 480 ? (workedMin - 480) : 0;
           }
 
-          // Se for feriado ou domingo, a meta esperada é 0 (pois tudo é extra). Nos demais, aplica a meta.
-          const dayTarget = holiday ? 0 : (dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480));
+          // Se for feriado, domingo ou ausência abonada, meta esperada é 0 (pois não há desconto)
+          const dayTarget = (holiday || absence) ? 0 : (dayOfWeek === 6 ? 240 : (dayOfWeek === 0 ? 0 : 480));
           empExpectedMin += dayTarget;
           empWorkedMin += workedMin;
           empExtraMin += extraMin;
@@ -342,7 +499,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         }
       }
 
-      const balanceMin = empWorkedMin - empExpectedMin;
+      // Se o colaborador for dispensado de controle de jornada (Art. 62, II da CLT - Cargo de Gerência),
+      // o saldo nunca é punitivo / negativo por ausência de batidas.
+      let balanceMin = empWorkedMin - empExpectedMin;
+      if (emp.isExemptPointControl && balanceMin < 0) {
+        balanceMin = 0;
+      }
 
       return {
         employee: emp,
@@ -363,7 +525,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       totalExtraMin,
       totalDays
     };
-  }, [filteredRecords, reportFilter, employees, company, customHolidays]);
+  }, [filteredRecords, reportFilter, employees, company, customHolidays, requests, vacationRequests]);
 
   const handleExportPDF = () => {
     const records = filteredRecords;
@@ -424,14 +586,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       doc.text(`CPF: ${emp.cpf || 'NÃO INFORMADO'}`, margin + 2, 52);
       doc.text(`CTPS: ${emp.ctpsNumber || '---'} / Série: ${emp.ctpsSeries || '---'}`, pageWidth / 2 + 15, 52);
       doc.text(`Cargo / Função: ${emp.roleFunction || 'COLABORADOR'}`, margin + 2, 56);
-      doc.text(`Jornada: ${emp.workShift || '08:00 - 12:00 / 14:00 - 18:00'} (${emp.weeklyHours || 44}h semanais)`, pageWidth / 2 + 15, 56);
-      doc.text(`Horário Contratado: Entrada: 08:00 | Saída Intervalo: 12:00 | Retorno: 13:00/14:00 | Saída: 18:00`, margin + 2, 61);
+      if (emp.isExemptPointControl) {
+        doc.text(`Jornada: DISPENSADO DE PONTO (ART. 62, II CLT)`, pageWidth / 2 + 15, 56);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(109, 40, 217);
+        doc.text(`REGIME LEGAL: ART. 62, INCISO II DA CLT (CARGO DE GERÊNCIA / CONFIANÇA - SEM CONTROLE DE HORÁRIO)`, margin + 2, 61);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.text(`Jornada: ${emp.workShift || '08:00 - 12:00 / 14:00 - 18:00'} (${emp.weeklyHours || 44}h semanais)`, pageWidth / 2 + 15, 56);
+        doc.text(`Horário Contratado: Entrada: 08:00 | Saída Intervalo: 12:00 | Retorno: 13:00/14:00 | Saída: 18:00`, margin + 2, 61);
+      }
 
       // TABELA DE PONTO
       const daysInMonth = new Date(reportFilter.year, reportFilter.month + 1, 0).getDate();
       const body: any[] = [];
-
-      const weeklyHours = emp.weeklyHours || company?.config?.weeklyHours || 44;
 
       let totalWorkedMinutes = 0;
       let totalExtraMinutes = 0;
@@ -489,11 +658,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
         const dateStr = `${reportFilter.year}-${String(reportFilter.month + 1).padStart(2, '0')}-${dayStr}`;
         const holiday = getHolidayForDate(dateStr, customHolidays);
+        const absence = getAbsenceForEmployeeAndDate(emp, dateStr);
 
         let extraMinutes = 0;
         let rubrica = '';
 
-        if (holiday) {
+        if (absence) {
+          e1 = absence.e1;
+          s1 = absence.s1 || '-';
+          e2 = '-';
+          s2 = '-';
+          rubrica = absence.rubrica;
+        } else if (holiday) {
           if (workedMinutes > 0) {
             // Feriado trabalhado: 100% de horas extras
             extraMinutes = workedMinutes;
@@ -517,7 +693,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             rubrica = 'DSR';
           } else if (dayOfWeek === 6) {
             // Sábado: Na jornada CLT de 44h semanais, 4h são normais (240 min).
-            // Apenas o que exceder 4h no sábado é hora extra!
             extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : 0;
           } else {
             // Segunda a Sexta: 8h normais (480 min). O que exceder é hora extra.
@@ -531,6 +706,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           daysWorkedCount++;
         } else if (dayOfWeek === 0) {
           rubrica = 'DSR';
+        } else if (emp.isExemptPointControl && dayOfWeek >= 1 && dayOfWeek <= 5) {
+          // Colaborador em Cargo de Gerência Dispensado de Controle de Ponto (Art. 62, II da CLT)
+          e1 = 'DISPENSADO';
+          s1 = 'ART. 62';
+          e2 = '-';
+          s2 = '-';
+          rubrica = 'CARGO DE GERÊNCIA (ART. 62, II CLT)';
         }
 
         const workedStr = workedMinutes > 0 ? formatMinutesToHours(workedMinutes) : '';
@@ -1186,7 +1368,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                           <p className="text-[9px] text-slate-400 font-mono font-medium">{emp.cpf || 'Sem CPF'}</p>
                         </td>
                         <td className="p-5">
-                          <p className="text-slate-800">{emp.roleFunction || 'Geral'}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-slate-800">{emp.roleFunction || 'Geral'}</p>
+                            {emp.isExemptPointControl && (
+                              <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-wider" title="Dispensado de Controle de Ponto (Art. 62, II da CLT - Cargo de Gerência)">
+                                👑 CLT ART. 62
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[9px] text-slate-400 font-medium lowercase">{emp.workShift || '08:00 - 18:00'} ({emp.weeklyHours || 44}h/sem)</p>
                         </td>
                         <td className="p-5 text-center">
@@ -1560,16 +1749,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
       {activeTab === 'aprovacoes' && (
         <div className="space-y-6">
-          <h3 className="text-sm font-black uppercase px-2">Solicitações de Ajuste e Abono</h3>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
+            <div>
+              <h3 className="text-sm font-black uppercase text-slate-900">Solicitações, Atestados e Licenças</h3>
+              <p className="text-[10px] text-slate-500 font-medium">Gerencie atestados médicos, licenças maternidade e ajustes de ponto da equipe.</p>
+            </div>
+            <button 
+              onClick={() => setShowAdminLeaveModal(true)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-purple-600/20 transition-all"
+            >
+              <span>🏥</span> + Lançar Atestado / Licença (RH)
+            </button>
+          </div>
+
           <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-left min-w-[850px]">
+            <table className="w-full text-left min-w-[950px]">
               <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
                 <tr>
                   <th className="p-5">Data Pedido</th>
                   <th className="p-5">Colaborador</th>
                   <th className="p-5">Tipo</th>
-                  <th className="p-5">Data Ref.</th>
-                  <th className="p-5">Horários Solicitados</th>
+                  <th className="p-5">Período / Data</th>
+                  <th className="p-5">Horários / CID</th>
                   <th className="p-5">Motivo/Justificativa</th>
                   <th className="p-5">Status</th>
                   <th className="p-5 text-center">Ações</th>
@@ -1578,22 +1779,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <tbody className="text-[11px] font-bold uppercase">
                 {requests.map(req => {
                   const reqTimes: string[] = (req as any).times || (req as any).suggestedTimes || [];
+                  const isMaternidade = req.type === 'licenca_maternidade';
+                  const isAtestado = req.type === 'atestado' || req.type === 'afastamento_saude' || req.type === 'abono';
+                  const formattedStartDate = req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+                  const formattedEndDate = req.endDate ? new Date(req.endDate.includes('T') ? req.endDate : req.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : formattedStartDate;
 
                   return (
                     <tr key={req.id} className="border-b hover:bg-slate-50/50 transition-colors">
                       <td className="p-5 text-slate-400">{req.createdAt.toLocaleDateString('pt-BR')}</td>
-                      <td className="p-5 font-black text-slate-800">{req.userName}</td>
+                      <td className="p-5 font-black text-slate-800">
+                        <div>
+                          <p>{req.userName}</p>
+                          <span className="text-[8px] text-slate-400 font-mono">MAT: {req.matricula}</span>
+                        </div>
+                      </td>
                       <td className="p-5">
-                        <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase ${
-                          req.type === 'atestado' ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-50 text-blue-600'
-                        }`}>
-                          {req.type === 'atestado' ? 'ATESTADO' : 'INCLUSÃO'}
-                        </span>
+                        {isMaternidade ? (
+                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-pink-100 text-pink-700 border border-pink-200">
+                            🤱 LIC. MATERNIDADE
+                          </span>
+                        ) : isAtestado ? (
+                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            🏥 ATESTADO MÉDICO
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-blue-100 text-blue-700 border border-blue-200">
+                            📝 INCLUSÃO PONTO
+                          </span>
+                        )}
                       </td>
                       <td className="p-5 font-mono text-slate-700">
-                        {req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                        {isMaternidade || isAtestado ? (
+                          <div>
+                            <p className="font-black text-slate-800 text-[10px]">
+                              {formattedStartDate} até {formattedEndDate}
+                            </p>
+                            <span className="text-[8px] font-sans font-black text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-md inline-block mt-0.5">
+                              {req.daysCount ? `${req.daysCount} DIA(S) DE AFASTAMENTO` : '1 DIA'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px]">{formattedStartDate}</span>
+                        )}
                       </td>
                       <td className="p-5">
+                        {req.cid && (
+                          <div className="mb-1">
+                            <span className="bg-slate-800 text-white font-mono text-[8px] font-black px-2 py-0.5 rounded">
+                              CID: {req.cid}
+                            </span>
+                          </div>
+                        )}
                         {reqTimes.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {reqTimes.map((tm: string, idx: number) => (
@@ -1602,9 +1838,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                               </span>
                             ))}
                           </div>
-                        ) : req.type === 'atestado' ? (
-                          <span className="text-indigo-600 text-[8px] font-black bg-indigo-50 px-2 py-1 rounded-md">
-                            Abono do Dia
+                        ) : isMaternidade || isAtestado ? (
+                          <span className="text-emerald-700 text-[8px] font-black bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-md">
+                            Abono Legal Integral
                           </span>
                         ) : (
                           <span className="text-slate-400 text-[8px] font-semibold">
@@ -1614,34 +1850,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                       </td>
                       <td className="p-5 text-[9px] text-slate-500 max-w-[200px]">
                         <div className="flex flex-col gap-1">
-                          <span className="truncate font-semibold">{req.reason}</span>
+                          <span className="font-semibold text-slate-800">{req.reason}</span>
                           {req.attachment && (
                             <button 
                               onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
-                              className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase mt-0.5"
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[8px] font-black uppercase mt-0.5 bg-blue-50 px-2 py-1 rounded border border-blue-100 w-fit"
                             >
-                              <Camera size={10} /> Ver Anexo
+                              <Camera size={10} /> Ver Documento / Atestado
                             </button>
                           )}
                         </div>
                       </td>
                       <td className="p-5">
                         <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
-                          req.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 
-                          req.status === 'rejected' ? 'bg-red-50 text-red-600' : 
-                          'bg-amber-50 text-amber-600'
+                          req.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 
+                          req.status === 'rejected' ? 'bg-red-50 text-red-600 border border-red-200' : 
+                          'bg-amber-50 text-amber-600 border border-amber-200'
                         }`}>
                           {req.status === 'pending' ? 'PENDENTE' : req.status === 'approved' ? 'APROVADO' : 'RECUSADO'}
                         </span>
                       </td>
-                      <td className="p-5 text-center flex justify-center gap-2">
-                        {req.status === 'pending' && (
-                          <>
+                      <td className="p-5 text-center">
+                        {req.status === 'pending' ? (
+                          <div className="flex justify-center gap-2">
                             <button onClick={() => handleRequestStatus(req.id, 'approved')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Aprovar</button>
                             <button onClick={() => handleRequestStatus(req.id, 'rejected')} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Recusar</button>
-                          </>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-[8px] font-black">CONCLUÍDO</span>
                         )}
-                        {req.status !== 'pending' && <span className="text-slate-300 text-[8px] font-black">CONCLUÍDO</span>}
                       </td>
                     </tr>
                   );
@@ -2243,6 +2480,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                   <option value="inactive">⚪ INATIVO (Acesso Bloqueado)</option>
                 </select>
               </div>
+
+              {/* Opção Cargo de Gerência / Art. 62, II da CLT */}
+              <div className="p-4 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!!newEmp.isExemptPointControl}
+                    onChange={e => setNewEmp({
+                      ...newEmp,
+                      isExemptPointControl: e.target.checked,
+                      exemptReason: e.target.checked ? (newEmp.exemptReason || 'Art. 62, II da CLT - Cargo de Confiança / Gerência') : ''
+                    })}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-purple-300"
+                  />
+                  <div>
+                    <span className="text-[10px] font-black text-purple-900 uppercase">Cargo de Gerência (Art. 62, II CLT)</span>
+                    <p className="text-[8px] text-purple-700 font-medium">Dispensado legalmente do controle de jornada e batidas de ponto.</p>
+                  </div>
+                </label>
+              </div>
+
               <div className="relative w-full">
                 <input 
                   type={showNewEmpPass ? "text" : "password"} 
@@ -2354,6 +2612,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                   <option value="active">🟢 ATIVO (Acesso Liberado)</option>
                   <option value="inactive">⚪ INATIVO (Acesso Bloqueado)</option>
                 </select>
+              </div>
+
+              {/* Opção Cargo de Gerência / Art. 62, II da CLT */}
+              <div className="p-4 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!!editEmpData.isExemptPointControl}
+                    onChange={e => setEditEmpData({
+                      ...editEmpData,
+                      isExemptPointControl: e.target.checked,
+                      exemptReason: e.target.checked ? (editEmpData.exemptReason || 'Art. 62, II da CLT - Cargo de Confiança / Gerência') : ''
+                    })}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-purple-300"
+                  />
+                  <div>
+                    <span className="text-[10px] font-black text-purple-900 uppercase">Cargo de Gerência (Art. 62, II CLT)</span>
+                    <p className="text-[8px] text-purple-700 font-medium">Dispensado legalmente do controle de jornada e batidas de ponto.</p>
+                  </div>
+                </label>
               </div>
             </div>
             
@@ -2614,6 +2892,183 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL RH: LANÇAR ATESTADO MÉDICO / LICENÇA MATERNIDADE / AFASTAMENTO */}
+      {showAdminLeaveModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-[44px] w-full max-w-lg p-6 sm:p-8 shadow-2xl space-y-5 animate-in zoom-in max-h-[95vh] overflow-y-auto no-scrollbar">
+            <div className="text-center space-y-1">
+              <span className="text-2xl">🏥</span>
+              <h2 className="text-sm font-black uppercase tracking-wider text-purple-900">
+                Lançar Afastamento Legal / Atestado
+              </h2>
+              <p className="text-[10px] text-slate-500 font-medium">
+                Registre atestado médico ou licença maternidade e defina os dias de afastamento do colaborador.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-500 ml-2 block mb-1">
+                  Selecione o Colaborador *
+                </label>
+                <select
+                  value={adminLeaveMatricula}
+                  onChange={e => setAdminLeaveMatricula(e.target.value)}
+                  className="w-full p-4 bg-slate-50 rounded-2xl text-[11px] font-bold outline-none border focus:border-purple-500"
+                >
+                  <option value="">-- Escolha um colaborador --</option>
+                  {employees.filter(e => e.status !== 'inactive').map(emp => (
+                    <option key={emp.id} value={emp.matricula}>
+                      {emp.name} (Matrícula: {emp.matricula} - {emp.roleFunction || 'Geral'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-500 ml-2 block mb-1">
+                  Tipo de Afastamento *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminLeaveType('atestado');
+                      if (adminLeaveDaysCount === 120) {
+                        handleAdminLeaveDaysChange(1);
+                      }
+                    }}
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center ${
+                      adminLeaveType === 'atestado' 
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-md' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🏥 Atestado Médico / Saúde
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminLeaveType('licenca_maternidade');
+                      handleAdminLeaveDaysChange(120);
+                    }}
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase border transition-all text-center ${
+                      adminLeaveType === 'licenca_maternidade' 
+                        ? 'bg-pink-600 text-white border-pink-600 shadow-md' 
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🤱 Licença Maternidade (120d)
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-500 ml-2 block mb-1">
+                    Data Início *
+                  </label>
+                  <input
+                    type="date"
+                    value={adminLeaveStartDate}
+                    onChange={e => handleAdminLeaveStartChange(e.target.value)}
+                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-500 ml-2 block mb-1">
+                    Dias de Afastamento *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={adminLeaveDaysCount}
+                    onChange={e => handleAdminLeaveDaysChange(parseInt(e.target.value) || 1)}
+                    className="w-full p-3.5 bg-purple-50 text-purple-900 border border-purple-200 rounded-2xl text-[11px] font-mono font-black outline-none text-center focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-500 ml-2 block mb-1">
+                    Data Término *
+                  </label>
+                  <input
+                    type="date"
+                    value={adminLeaveEndDate}
+                    onChange={e => handleAdminLeaveEndChange(e.target.value)}
+                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border text-[9px] text-slate-600 font-medium">
+                🗓️ <strong>Período Selecionado:</strong> de{' '}
+                <span className="font-bold text-slate-900">
+                  {new Date(adminLeaveStartDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>{' '}
+                até{' '}
+                <span className="font-bold text-slate-900">
+                  {new Date(adminLeaveEndDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>{' '}
+                (Total: <strong>{adminLeaveDaysCount} dia(s)</strong> corridos de abono).
+              </div>
+
+              {adminLeaveType !== 'licenca_maternidade' && (
+                <div>
+                  <label className="text-[9px] font-black uppercase text-slate-500 ml-2 block mb-1">
+                    Código CID (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: J06, M54.5, Z76.2"
+                    value={adminLeaveCid}
+                    onChange={e => setAdminLeaveCid(e.target.value.toUpperCase())}
+                    className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-mono font-bold outline-none border focus:border-purple-500 uppercase"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-500 ml-2 block mb-1">
+                  Observações / Justificativa
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ex: Apresentou atestado da UPA Dr. José Silva, emitido pelo CRM 12345..."
+                  value={adminLeaveReason}
+                  onChange={e => setAdminLeaveReason(e.target.value)}
+                  className="w-full p-3.5 bg-slate-50 rounded-2xl text-[10px] font-medium outline-none border focus:border-purple-500 resize-none"
+                />
+              </div>
+
+              <div className="p-3 bg-purple-50 rounded-2xl border border-purple-100 text-[8px] font-bold text-purple-800 leading-relaxed uppercase">
+                ⚖️ <strong>Efeito Legal:</strong> Os dias informados serão automaticamente abonados no livro de ponto oficial do colaborador, dispensando o registro de batidas sem penalização de faltas ou horas negativas.
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAdminLeaveModal(false)}
+                className="flex-1 py-4 border rounded-2xl text-[10px] font-black uppercase text-slate-400 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateAdminLeave}
+                className="flex-[2] py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-[10px] font-black uppercase shadow-xl shadow-purple-600/20"
+              >
+                Registrar Afastamento
+              </button>
+            </div>
           </div>
         </div>
       )}
