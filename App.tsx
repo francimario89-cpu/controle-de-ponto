@@ -148,7 +148,7 @@ const App: React.FC = () => {
 
   const isMaster = user?.role === 'master';
   const isAdmin = user?.role === 'admin' || isMaster;
-  const isAdminView = isAdmin && ['companies', 'dashboard', 'colaboradores', 'aprovacoes', 'feriados', 'saldos', 'audit', 'company_profile', 'ferias', 'correcao', 'pontos_individuais'].includes(activeView);
+  const isAdminView = isAdmin && ['companies', 'dashboard', 'colaboradores', 'aprovacoes', 'feriados', 'saldos', 'company_profile', 'ferias', 'correcao', 'pontos_individuais'].includes(activeView);
 
   if (!user) return <Login onLogin={handleLogin} />;
 

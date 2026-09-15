@@ -1,11 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck, LayoutDashboard, Users, CheckSquare, Edit3, Palmtree, FileSpreadsheet, UserCheck, Scale } from 'lucide-react';
+import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck, LayoutDashboard, Users, CheckSquare, Edit3, Palmtree, FileSpreadsheet, UserCheck } from 'lucide-react';
 import { PointRecord, Company, Employee, AttendanceRequest, Holiday } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getAllHolidaysForYear, getAllHolidaysWithStatus, getHolidayForDate } from '../utils/holidays';
-import ComplianceAudit from './ComplianceAudit';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -24,7 +23,7 @@ interface AdminDashboardProps {
   onDeleteEmployee: (id: string) => void;
   onUpdateEmployee: (id: string, data: any) => void;
   onUpdateIP: (ip: string) => void;
-  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'audit' | 'pontos_individuais' | 'correcao' | 'ferias' | 'feriados';
+  initialTab?: 'dashboard' | 'colaboradores' | 'aprovacoes' | 'saldos' | 'pontos_individuais' | 'correcao' | 'ferias' | 'feriados';
   onNavigate: (v: string) => void;
 }
 
@@ -1238,8 +1237,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             { id: 'ferias', label: 'Férias', icon: Palmtree },
             { id: 'feriados', label: 'Feriados', icon: Calendar },
             { id: 'saldos', label: 'Folhas PDF', icon: FileSpreadsheet },
-            { id: 'pontos_individuais', label: 'Individuais', icon: UserCheck },
-            { id: 'audit', label: 'IA Audit', icon: Scale }
+            { id: 'pontos_individuais', label: 'Individuais', icon: UserCheck }
           ].map(tab => {
             const Icon = tab.icon;
             const isTabActive = activeTab === tab.id;
@@ -1843,8 +1841,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </div>
         </div>
       )}
-
-      {activeTab === 'audit' && <ComplianceAudit records={latestRecords} employees={employees} />}
 
       {activeTab === 'aprovacoes' && (
         <div className="space-y-6">
