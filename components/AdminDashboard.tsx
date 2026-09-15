@@ -577,34 +577,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     };
   }, [filteredRecords, reportFilter, employees, company, customHolidays, requests, vacationRequests]);
 
-  const handleExportPDF = () => {
-    const records = filteredRecords;
-    const doc = new jsPDF() as jsPDFWithPlugin;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 10;
-    const contentWidth = pageWidth - (margin * 2);
+  const handleExportPDF = (targetMatricula?: string) => {
+    try {
+      const selectedMatricula = targetMatricula || reportFilter.matricula;
+      const employeesToExport = selectedMatricula === 'todos' 
+        ? employees 
+        : employees.filter(e => e.matricula === selectedMatricula);
 
-    const employeesToExport = reportFilter.matricula === 'todos' 
-      ? employees 
-      : employees.filter(e => e.matricula === reportFilter.matricula);
+      if (employeesToExport.length === 0) {
+        alert("Nenhum colaborador encontrado para o filtro selecionado.");
+        return;
+      }
 
-    if (employeesToExport.length === 0) {
-      alert("Nenhum colaborador encontrado para o filtro selecionado.");
-      return;
-    }
+      const doc = new jsPDF() as jsPDFWithPlugin;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 10;
+      const contentWidth = pageWidth - (margin * 2);
 
-    employeesToExport.forEach((emp, index) => {
-      if (index > 0) doc.addPage();
+      // Obter registros de todos os colaboradores para o mês/ano selecionado
+      const monthRecords = latestRecords.filter(r => {
+        const date = new Date(r.timestamp);
+        return date.getMonth() === reportFilter.month &&
+               date.getFullYear() === reportFilter.year;
+      });
 
-      // TITULO
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(15, 23, 42);
-      const monthLabel = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-      doc.text(`FOLHA DE PONTO / ESPELHO DE PONTO ELETRÔNICO`, pageWidth / 2, 10, { align: 'center' });
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.text(`MÊS/ANO: ${monthLabel} / ${reportFilter.year}  |  Portaria MTP nº 671/2021`, pageWidth / 2, 14, { align: 'center' });
+      employeesToExport.forEach((emp, index) => {
+        if (index > 0) doc.addPage();
+        const weeklyHours = emp.weeklyHours || 44;
+
+        // TITULO
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        const monthLabel = new Date(0, reportFilter.month).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+        doc.text(`FOLHA DE PONTO / ESPELHO DE PONTO ELETRÔNICO`, pageWidth / 2, 10, { align: 'center' });
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text(`MÊS/ANO: ${monthLabel} / ${reportFilter.year}  |  Portaria MTP nº 671/2021`, pageWidth / 2, 14, { align: 'center' });
 
       // BOX 1: DADOS DO EMPREGADOR
       doc.setFontSize(7.5);
@@ -668,12 +677,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           continue;
         }
 
-        const dayRecs = records.filter(r => {
+        const dayRecs = monthRecords.filter(r => {
           const rd = new Date(r.timestamp);
           return r.matricula === emp.matricula &&
-                 rd.getDate() === day &&
-                 rd.getMonth() === reportFilter.month &&
-                 rd.getFullYear() === reportFilter.year;
+                 rd.getDate() === day;
         }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
         let e1 = '';
@@ -911,8 +918,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       doc.text("Assinatura do Empregador / RH", pageWidth - margin - 42.5, signLineY + 3.2, { align: 'center' });
     });
 
-    doc.save(`FOLHA_PONTO_${company?.name || 'EMPRESA'}_${reportFilter.month + 1}_${reportFilter.year}.pdf`);
-  };
+    const cleanEmpName = employeesToExport.length === 1 
+      ? `_${employeesToExport[0].name.replace(/[^a-zA-Z0-9]/g, '_')}` 
+      : '';
+    const cleanCompName = (company?.name || 'EMPRESA').replace(/[^a-zA-Z0-9]/g, '_');
+    const fileName = `FOLHA_PONTO_${cleanCompName}${cleanEmpName}_${reportFilter.month + 1}_${reportFilter.year}.pdf`;
+
+    try {
+      doc.save(fileName);
+    } catch (saveErr) {
+      console.warn("doc.save falhou, acionando download alternativo via Blob:", saveErr);
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
+    }
+  } catch (err: any) {
+    console.error("Erro ao gerar folha de ponto em PDF:", err);
+    alert("Ocorreu um erro ao gerar o arquivo PDF. Verifique o console ou tente novamente.");
+  }
+};
 
   const handleExportCSV = () => {
     const headers = ['Data', 'Matricula', 'Nome', 'Tipo', 'Horário', 'Endereço', 'Status'];
@@ -1526,7 +1556,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <button onClick={handleExportCSV} className="bg-slate-100 text-slate-600 px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all">
                   📊 CSV
                 </button>
-                <button onClick={handleExportPDF} className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all">
+                <button onClick={() => handleExportPDF()} className="bg-orange-600 hover:bg-orange-700 active:scale-95 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all">
                   📥 Baixar Folha PDF A4
                 </button>
               </div>
@@ -1611,11 +1641,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     </td>
                     <td className="p-5 text-center">
                       <button 
-                        onClick={() => {
-                          setReportFilter(prev => ({ ...prev, matricula: stat.employee.matricula }));
-                          setTimeout(handleExportPDF, 100);
-                        }}
-                        className="bg-orange-50 text-orange-600 hover:bg-orange-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all"
+                        onClick={() => handleExportPDF(stat.employee.matricula)}
+                        className="bg-orange-50 text-orange-600 hover:bg-orange-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm active:scale-95"
                         title="Baixar folha individual deste colaborador"
                       >
                         PDF
