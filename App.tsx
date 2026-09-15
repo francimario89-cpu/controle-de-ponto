@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { User, Company, Employee, PointRecord } from './types';
@@ -41,6 +41,7 @@ const App: React.FC = () => {
   const [showPunchCamera, setShowPunchCamera] = useState(false);
   const [lastPunch, setLastPunch] = useState<PointRecord | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const mainRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('fortime_dark_mode');
     return saved === 'true';
@@ -54,6 +55,12 @@ const App: React.FC = () => {
     }
     localStorage.setItem('fortime_dark_mode', String(isDarkMode));
   }, [isDarkMode]);
+
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }, [activeView]);
 
   useEffect(() => {
     if (user?.companyCode) {
@@ -165,8 +172,8 @@ const App: React.FC = () => {
            <div className="w-10"></div>
         </header>
 
-        <main className="flex-1 overflow-y-auto no-scrollbar">
-          <div className={`mx-auto w-full h-full ${isAdminView ? 'p-6 md:p-10' : 'max-w-md p-4'}`}>
+        <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar">
+          <div className={`mx-auto w-full min-h-full ${isAdminView ? 'p-4 md:p-8 pt-2 md:pt-4' : 'max-w-md p-4'}`}>
             {activeView === 'companies' ? (
               <CompaniesView />
             ) : !isAdmin ? (

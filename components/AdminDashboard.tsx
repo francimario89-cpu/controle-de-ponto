@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck, LayoutDashboard, Users, CheckSquare, Edit3, Palmtree, FileSpreadsheet, UserCheck, Scale } from 'lucide-react';
 import { PointRecord, Company, Employee, AttendanceRequest, Holiday } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -112,7 +112,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   });
 
   useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
+    if (initialTab) {
+      setActiveTab(initialTab);
+      const mainEl = document.querySelector('main');
+      if (mainEl) mainEl.scrollTop = 0;
+    }
   }, [initialTab]);
 
   useEffect(() => {
@@ -1192,28 +1196,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   }
 
   return (
-    <div className="flex flex-col h-full space-y-8 animate-in fade-in">
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-        {[
-          { id: 'dashboard', label: 'Início', icon: '🏠' },
-          { id: 'colaboradores', label: 'Equipe', icon: '👥' },
-          { id: 'aprovacoes', label: 'Pedidos', icon: '✅' },
-          { id: 'correcao', label: 'Correção', icon: '✏️' },
-          { id: 'ferias', label: 'Férias', icon: '🏖️' },
-          { id: 'feriados', label: 'Feriados', icon: '📅' },
-          { id: 'saldos', label: 'Folhas PDF', icon: '📘' },
-          { id: 'pontos_individuais', label: 'Individuais', icon: '👤' },
-          { id: 'audit', label: 'IA Audit', icon: '⚖️' }
-        ].map(tab => (
-          <button 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`min-w-[100px] p-4 rounded-3xl flex flex-col items-center gap-1 transition-all border ${activeTab === tab.id ? 'bg-orange-600 text-white border-orange-600 shadow-lg' : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}
-          >
-            <span className="text-xl">{tab.icon}</span>
-            <span className="text-[8px] font-black uppercase tracking-widest">{tab.label}</span>
-          </button>
-        ))}
+    <div className="flex flex-col min-h-full space-y-6 animate-in fade-in">
+      {/* Barra de Navegação / Menus Superior Fixa */}
+      <div className="sticky top-0 z-30 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-md pt-1 pb-3 -mx-2 px-2 border-b border-slate-200/60 dark:border-slate-800/80">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+          {[
+            { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
+            { id: 'colaboradores', label: 'Equipe', icon: Users },
+            { id: 'aprovacoes', label: 'Pedidos & Folgas', icon: CheckSquare },
+            { id: 'correcao', label: 'Correção', icon: Edit3 },
+            { id: 'ferias', label: 'Férias', icon: Palmtree },
+            { id: 'feriados', label: 'Feriados', icon: Calendar },
+            { id: 'saldos', label: 'Folhas PDF', icon: FileSpreadsheet },
+            { id: 'pontos_individuais', label: 'Individuais', icon: UserCheck },
+            { id: 'audit', label: 'IA Audit', icon: Scale }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isTabActive = activeTab === tab.id;
+            return (
+              <button 
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  onNavigate(tab.id);
+                  const mainEl = document.querySelector('main');
+                  if (mainEl) mainEl.scrollTop = 0;
+                }}
+                className={`px-4 py-2.5 rounded-2xl flex items-center gap-2 transition-all border shrink-0 ${
+                  isTabActive 
+                    ? 'bg-orange-600 text-white border-orange-600 shadow-md font-black' 
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60 font-bold'
+                }`}
+              >
+                <Icon size={16} className={`shrink-0 ${isTabActive ? 'text-white' : 'text-orange-500'}`} />
+                <span className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {activeTab === 'dashboard' && (
