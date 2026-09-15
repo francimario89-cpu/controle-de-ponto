@@ -2283,7 +2283,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 onClick={() => setShowAddHolidayModal(true)} 
                 className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all shrink-0"
               >
-                <Plus size={14} /> Cadastrar Feriado / Folga Local
+                <Plus size={14} /> Cadastrar Feriado
               </button>
             </div>
 
@@ -2926,7 +2926,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               📅
             </div>
             <h2 className="text-[14px] font-black uppercase text-center mb-1 text-slate-900 tracking-widest">
-              Cadastrar Feriado / Folga
+              Cadastrar Feriado
             </h2>
             <p className="text-[9px] font-bold uppercase text-slate-400 text-center mb-6">
               Adicione feriados municipais, padroeiras ou recessos internos da sua empresa
@@ -2934,7 +2934,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
             <form onSubmit={handleAddHoliday} className="space-y-4">
               <div>
-                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data do Feriado / Folga</label>
+                <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data do Feriado</label>
                 <input 
                   type="date" 
                   required
