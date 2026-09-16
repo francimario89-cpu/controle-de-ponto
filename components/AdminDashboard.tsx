@@ -1307,8 +1307,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white p-8 rounded-[40px] border shadow-sm">
               <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Atividade (Últimos 7 dias)</h4>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-[250px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={chartData.activityByDay}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 900}} />
@@ -1325,26 +1325,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
             <div className="bg-white p-8 rounded-[40px] border shadow-sm">
               <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Distribuição de Registros</h4>
-              <div className="h-[250px] w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartData.typeData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {chartData.typeData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex flex-col gap-2 ml-4">
+              <div className="h-[250px] w-full flex items-center justify-between min-w-0">
+                <div className="flex-1 h-full min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                    <PieChart>
+                      <Pie
+                        data={chartData.typeData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {chartData.typeData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-col gap-2 ml-4 shrink-0">
                   {chartData.typeData.map((item, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full" style={{backgroundColor: item.color}}></div>
