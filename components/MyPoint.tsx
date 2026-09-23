@@ -86,7 +86,7 @@ const MyPoint: React.FC<MyPointProps> = ({ records }) => {
                         <div key={idx} className={`p-4 rounded-[24px] border flex justify-between items-center ${r.isAdjustment ? 'bg-orange-50 border-orange-100 dark:bg-orange-950/10' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
                            <div>
                               <p className={`text-[8px] font-black uppercase tracking-widest ${r.isAdjustment ? 'text-orange-600' : 'text-slate-400'}`}>
-                                {r.type} {r.isAdjustment ? '(AJUSTADO)' : ''}
+                                {r.type} {r.isAdjustment ? '(AJUSTADO)' : ''} {r.isOffline ? '• 📴 OFFLINE' : ''}
                               </p>
                               <p className={`text-sm font-black ${r.isAdjustment ? 'text-orange-600' : 'text-slate-900 dark:text-white'}`}>
                                 {new Date(r.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}

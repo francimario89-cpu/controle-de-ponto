@@ -1,6 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { Wifi, WifiOff, RefreshCw, Bell, Clock } from 'lucide-react';
 import { PointRecord, User } from '../types';
+import { getOfflineRecords, syncOfflineRecords, StoredOfflineRecord } from '../utils/offlineStorage';
+import { parseWorkSlots, checkAndTriggerPunchReminders, InAppPunchReminder } from '../utils/reminderService';
+import { db } from '../firebase';
 
 interface DashboardProps {
   onPunchClick: () => void;
@@ -12,11 +16,94 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records = [], onNavigate, user }) => {
   const [time, setTime] = useState(new Date());
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineRecords, setOfflineRecords] = useState<StoredOfflineRecord[]>(getOfflineRecords());
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [activeReminder, setActiveReminder] = useState<InAppPunchReminder | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Sincronização automática em segundo plano quando a conexão volta
+      handleAutoSync();
+    };
+    const handleOffline = () => setIsOnline(false);
+    const handleOfflineChange = () => setOfflineRecords(getOfflineRecords());
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('pontoexato_offline_change', handleOfflineChange);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('pontoexato_offline_change', handleOfflineChange);
+    };
+  }, []);
+
+  const handleAutoSync = async () => {
+    const queue = getOfflineRecords();
+    if (queue.length === 0) return;
+    setIsSyncing(true);
+    try {
+      const { syncedCount } = await syncOfflineRecords(db);
+      setOfflineRecords(getOfflineRecords());
+      if (syncedCount > 0) {
+        setSyncToast(`${syncedCount} ponto(s) offline sincronizado(s) automaticamente!`);
+        setTimeout(() => setSyncToast(null), 4000);
+      }
+    } catch (e) {
+      console.error("Erro na auto-sincronização:", e);
+    }
+    setIsSyncing(false);
+  };
+
+  const handleManualSync = async () => {
+    if (!navigator.onLine) {
+      alert("Você ainda está sem internet. Conecte-se a uma rede WiFi ou 4G/5G para sincronizar.");
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const { syncedCount } = await syncOfflineRecords(db);
+      setOfflineRecords(getOfflineRecords());
+      if (syncedCount > 0) {
+        setSyncToast(`Sucesso! ${syncedCount} marcação(ões) enviada(s) para a nuvem.`);
+        setTimeout(() => setSyncToast(null), 4000);
+      } else {
+        setSyncToast("Todas as marcações já estão sincronizadas.");
+        setTimeout(() => setSyncToast(null), 3000);
+      }
+    } catch (e) {
+      alert("Falha na sincronização.");
+    }
+    setIsSyncing(false);
+  };
+
+  // Monitorar lembretes de batida a cada 20 segundos
+  useEffect(() => {
+    if (!user || user.isExemptPointControl) return;
+
+    const checkReminders = () => {
+      const today = new Date().toDateString();
+      const todayRecords = records.filter(r => new Date(r.timestamp).toDateString() === today);
+      let foundReminder: InAppPunchReminder | null = null;
+      checkAndTriggerPunchReminders(user, todayRecords, (rem) => {
+        foundReminder = rem;
+      });
+      setActiveReminder(foundReminder);
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 20000);
+    return () => clearInterval(interval);
+  }, [user, records]);
 
   const timeline = useMemo(() => {
     const today = new Date().toDateString();
@@ -24,22 +111,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
       .filter(r => new Date(r.timestamp).toDateString() === today)
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
+    const scheduled = parseWorkSlots(user.workShift);
     const slots = [
-      { type: 'Entrada', time: '08:00', done: false, actual: '' },
-      { type: 'Intervalo', time: '12:00', done: false, actual: '' },
-      { type: 'Retorno', time: '14:00', done: false, actual: '' },
-      { type: 'Saída', time: '18:00', done: false, actual: '' },
+      { type: scheduled[0]?.label || 'Entrada', time: scheduled[0]?.time || '08:00', done: false, actual: '', isOffline: false },
+      { type: scheduled[1]?.label || 'Intervalo', time: scheduled[1]?.time || '12:00', done: false, actual: '', isOffline: false },
+      { type: scheduled[2]?.label || 'Retorno', time: scheduled[2]?.time || '13:00', done: false, actual: '', isOffline: false },
+      { type: scheduled[3]?.label || 'Saída', time: scheduled[3]?.time || '17:00', done: false, actual: '', isOffline: false },
     ];
 
     todayRecords.forEach((rec, idx) => {
       if (slots[idx]) {
         slots[idx].done = true;
         slots[idx].actual = new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        slots[idx].isOffline = Boolean(rec.isOffline);
       }
     });
 
     return slots;
-  }, [records]);
+  }, [records, user.workShift]);
 
   const alerts = useMemo(() => {
     const today = new Date().toDateString();
@@ -61,7 +150,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-36 overflow-y-auto no-scrollbar">
       <div className="space-y-2">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, {user.name.split(' ')[0]} 👋</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, {user.name.split(' ')[0]} 👋</p>
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
+            <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Ponto</h2>
           {user.isExemptPointControl && (
@@ -71,6 +169,92 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
           )}
         </div>
       </div>
+
+      {/* BANNER MODO OFFLINE */}
+      {!isOnline && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-4 rounded-3xl flex items-center justify-between animate-in slide-in-from-top-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-base shadow-sm">
+              <WifiOff size={18} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                Modo Ponto Offline Ativo
+              </p>
+              <p className="text-[9px] font-bold text-amber-700/80 dark:text-amber-400/80">
+                Você pode registrar seu ponto normalmente. As marcações serão gravadas no aparelho e sincronizadas automaticamente assim que o sinal voltar.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER BATIDAS OFFLINE PENDENTES DE SINCRONIZAÇÃO */}
+      {offlineRecords.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/40 p-4 rounded-3xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Clock size={18} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-800 dark:text-white">
+                {offlineRecords.length} marcação(ões) pendente(s) de envio
+              </p>
+              <p className="text-[8px] font-bold text-slate-400 uppercase">
+                {isOnline ? 'Conexão disponível para envio imediato' : 'Aguardando conexão com a internet'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncing || !isOnline}
+            className={`px-4 py-2.5 rounded-2xl font-black text-[9px] uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all ${isOnline ? 'bg-orange-600 text-white active:scale-95' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}
+          >
+            <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+            {isSyncing ? 'Enviando...' : 'Sincronizar'}
+          </button>
+        </div>
+      )}
+
+      {/* TOAST DE SINCRONIZAÇÃO */}
+      {syncToast && (
+        <div className="p-4 bg-emerald-500 text-white rounded-3xl shadow-lg flex items-center justify-between text-[10px] font-black uppercase tracking-wider animate-in fade-in">
+          <span>✅ {syncToast}</span>
+          <button onClick={() => setSyncToast(null)} className="opacity-70 hover:opacity-100">✕</button>
+        </div>
+      )}
+
+      {/* LEMBRETE INTELIGENTE DE PONTO */}
+      {activeReminder && (
+        <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-5 rounded-[32px] shadow-xl shadow-orange-500/20 flex items-center justify-between animate-in slide-in-from-top-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl text-white shadow-inner">
+              <Bell size={22} className="animate-bounce" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-white/25 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider">
+                  Lembrete de Horário
+                </span>
+                <span className="text-[10px] font-black opacity-90">{activeReminder.scheduledTime}</span>
+              </div>
+              <p className="text-xs font-black uppercase tracking-tight mt-0.5">
+                {activeReminder.slotLabel}: {activeReminder.minutesLeft === 0 ? 'Horário atingido agora!' : `Faltam ${activeReminder.minutesLeft} minuto(s)`}
+              </p>
+              <p className="text-[9px] font-bold text-white/80">
+                Evite atrasos registrando sua marcação no horário correto.
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onPunchClick}
+            className="bg-white text-orange-600 px-4 py-2.5 rounded-2xl font-black text-[9px] uppercase tracking-wider shadow-lg active:scale-95 transition-all whitespace-nowrap"
+          >
+            Registrar Já
+          </button>
+        </div>
+      )}
 
       {user.isExemptPointControl && (
         <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 p-4 rounded-3xl flex items-start gap-3 text-purple-900 dark:text-purple-200 animate-in fade-in">
@@ -113,8 +297,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
         >
           <div className="w-full h-full rounded-full border-4 border-white/20 flex flex-col items-center justify-center text-white space-y-1">
             <span className="text-4xl">☝️</span>
-            <span className="text-[11px] font-black uppercase tracking-widest">Registrar</span>
-            <span className="text-[10px] font-bold opacity-60 uppercase">Ponto Agora</span>
+            <span className="text-[11px] font-black uppercase tracking-widest">
+              {!isOnline ? 'Registrar Ponto' : 'Registrar'}
+            </span>
+            <span className="text-[10px] font-bold opacity-60 uppercase">
+              {!isOnline ? 'Modo Offline' : 'Ponto Agora'}
+            </span>
           </div>
           <div className="absolute inset-0 rounded-full bg-orange-500 animate-ping opacity-20 -z-10"></div>
         </button>
@@ -159,6 +347,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
                 <p className={`text-[10px] font-bold ${rec.done ? 'text-orange-600' : 'text-slate-400'}`}>
                   {rec.done ? rec.actual : rec.time}
                 </p>
+                {rec.isOffline && (
+                  <span className="text-[7px] font-black text-amber-500 uppercase block">Offline</span>
+                )}
               </div>
             </div>
           ))}
@@ -169,3 +360,4 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 };
 
 export default Dashboard;
+

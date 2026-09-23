@@ -19,6 +19,7 @@ import BottomNav from './components/BottomNav';
 import VacationView from './components/VacationView';
 import SettingsView from './components/SettingsView';
 import CompaniesView from './components/CompaniesView';
+import { saveOfflineRecord, getOfflineRecords, syncOfflineRecords } from './utils/offlineStorage';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -87,15 +88,41 @@ const App: React.FC = () => {
             timestamp: timestamp
           } as PointRecord);
         });
-        setRecords(recs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+
+        // Mesclar registros offline pendentes no dispositivo
+        const offlineQueue = getOfflineRecords().map(o => ({
+          ...o,
+          timestamp: new Date(o.timestamp),
+          status: 'pending' as const
+        }));
+
+        const allRecords = [...offlineQueue, ...recs.filter(r => !offlineQueue.some(o => o.id === r.id))];
+        setRecords(allRecords.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
       }, (err) => {
         console.error("Erro ao sincronizar Livro de Ponto:", err);
       });
+
+      // Auto-sincronizar quando a conexão estiver ativa
+      const handleOnlineSync = async () => {
+        if (navigator.onLine) {
+          try {
+            await syncOfflineRecords(db);
+          } catch (e) {
+            console.error("Falha ao auto-sincronizar fila offline:", e);
+          }
+        }
+      };
+
+      window.addEventListener('online', handleOnlineSync);
+      window.addEventListener('pontoexato_offline_change', handleOnlineSync);
+      handleOnlineSync();
 
       return () => {
         unsubCompany();
         unsubEmployees();
         unsubRecords();
+        window.removeEventListener('online', handleOnlineSync);
+        window.removeEventListener('pontoexato_offline_change', handleOnlineSync);
       };
     }
   }, [user?.companyCode]);
@@ -121,7 +148,14 @@ const App: React.FC = () => {
   const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => {
     if (!user) return;
     const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}`;
-    const newRecordData = {
+    
+    // Determinar o tipo da batida automaticamente de acordo com as batidas de hoje
+    const todayStr = new Date().toDateString();
+    const todayUserRecords = records.filter(r => r.matricula === user.matricula && new Date(r.timestamp).toDateString() === todayStr);
+    const punchTypes: ('entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida')[] = ['entrada', 'inicio_intervalo', 'fim_intervalo', 'saida'];
+    const currentType = punchTypes[Math.min(todayUserRecords.length, 3)] || 'entrada';
+
+    const baseRecordData = {
       userName: user.name,
       matricula: user.matricula || 'N/A',
       timestamp: new Date(),
@@ -131,18 +165,31 @@ const App: React.FC = () => {
       photo: photo,
       status: 'synchronized' as const,
       digitalSignature: signature,
-      type: 'entrada' as const,
-      companyCode: user.companyCode,
+      type: currentType,
+      companyCode: user.companyCode || '',
       mood: mood
     };
 
+    // Caso o dispositivo esteja offline, salva localmente
+    if (!navigator.onLine) {
+      const offlineRecord = saveOfflineRecord(baseRecordData);
+      setLastPunch(offlineRecord);
+      setRecords(prev => [offlineRecord, ...prev]);
+      setShowPunchCamera(false);
+      return;
+    }
+
     try {
-      const docRef = await addDoc(collection(db, "records"), newRecordData);
-      const recordWithId = { ...newRecordData, id: docRef.id } as PointRecord;
+      const docRef = await addDoc(collection(db, "records"), baseRecordData);
+      const recordWithId = { ...baseRecordData, id: docRef.id } as PointRecord;
       setLastPunch(recordWithId);
       setShowPunchCamera(false);
     } catch (err) {
-      alert("Falha ao salvar o ponto. Verifique sua conexão.");
+      console.warn("Falha de rede ao contatar o Firebase. Salvando no modo offline local:", err);
+      const offlineRecord = saveOfflineRecord(baseRecordData);
+      setLastPunch(offlineRecord);
+      setRecords(prev => [offlineRecord, ...prev]);
+      setShowPunchCamera(false);
     }
   };
 

@@ -89,6 +89,9 @@ export interface PointRecord {
   type: 'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo';
   mood?: string;
   isAdjustment?: boolean;
+  isOffline?: boolean;
+  offlineSavedAt?: string;
+  companyCode?: string;
 }
 
 export interface AttendanceRequest {

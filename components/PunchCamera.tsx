@@ -15,6 +15,18 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
   const [error, setError] = useState<string | null>(null);
   const [livenessStage, setLivenessStage] = useState(0); 
   const [selectedMood, setSelectedMood] = useState('feliz');
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOfflineMode(false);
+    const handleOffline = () => setIsOfflineMode(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const moods = [
     { id: 'triste', emoji: '😔', label: 'Triste' },
@@ -41,15 +53,31 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
     return R * c;
   };
 
+  const proceedWithCapture = (coords: { lat: number; lng: number; address: string }) => {
+    // 3. Prova de Vida (Liveness)
+    setTimeout(() => setLivenessStage(1), 1000);
+    setTimeout(() => setLivenessStage(2), 2500);
+    setTimeout(() => {
+      if (videoRef.current) {
+        const canvas = document.createElement('canvas');
+        canvas.width = videoRef.current.videoWidth || 640;
+        canvas.height = videoRef.current.videoHeight || 480;
+        canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
+        const data = canvas.toDataURL('image/jpeg', 0.8);
+        onCapture(data, coords, selectedMood);
+      }
+    }, 4000);
+  };
+
   const startValidation = async () => {
     setLoading(true);
     setError(null);
 
-    // 1. Validar IP (WiFi da Empresa)
-    if (authorizedIP) {
+    // 1. Validar IP (WiFi da Empresa) apenas se estiver online
+    if (authorizedIP && navigator.onLine) {
       try {
         setLivenessStage(-1); // Estágio de Verificação de Rede
-        const response = await fetch('https://api.ipify.org?format=json');
+        const response = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(4000) });
         const data = await response.json();
         const userIP = data.ip;
 
@@ -59,43 +87,54 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
           return;
         }
       } catch (e) {
-        setError("ERRO DE REDE: Não foi possível validar sua conexão com o servidor de IP.");
-        setLoading(false);
-        return;
+        // Se a verificação de IP falhar mas usuário estiver offline, permite continuar com aviso
+        console.warn("Não foi possível verificar IP público; prosseguindo em modo offline:", e);
       }
     }
 
     // 2. Validar Geofence (GPS)
-    navigator.geolocation.getCurrentPosition(async (p) => {
-      const { latitude, longitude } = p.coords;
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (p) => {
+          const { latitude, longitude } = p.coords;
 
-      if (geofenceConfig?.enabled) {
-        const dist = calculateDistance(latitude, longitude, geofenceConfig.lat, geofenceConfig.lng);
-        if (dist > geofenceConfig.radius) {
-          setError(`LOCALIZAÇÃO BLOQUEADA: Você está fora da área da empresa (${Math.round(dist)}m de distância).`);
-          setLoading(false);
-          return;
-        }
-      }
+          if (geofenceConfig?.enabled) {
+            const dist = calculateDistance(latitude, longitude, geofenceConfig.lat, geofenceConfig.lng);
+            if (dist > geofenceConfig.radius) {
+              setError(`LOCALIZAÇÃO BLOQUEADA: Você está fora da área da empresa (${Math.round(dist)}m de distância).`);
+              setLoading(false);
+              return;
+            }
+          }
 
-      // 3. Prova de Vida (Liveness)
-      setTimeout(() => setLivenessStage(1), 1000);
-      setTimeout(() => setLivenessStage(2), 2500);
-      setTimeout(() => {
-        if (videoRef.current) {
-          const canvas = document.createElement('canvas');
-          canvas.width = videoRef.current.videoWidth;
-          canvas.height = videoRef.current.videoHeight;
-          canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
-          const data = canvas.toDataURL('image/jpeg', 0.8);
-          onCapture(data, { lat: latitude, lng: longitude, address: isFirstAccess ? "Cadastro Facial" : "Ponto Autorizado via Rede & GPS" }, selectedMood);
-        }
-      }, 4000);
-
-    }, (err) => {
-      setError("ERRO DE GPS: O registro de ponto exige a localização ativa.");
-      setLoading(false);
-    }, { enableHighAccuracy: true });
+          proceedWithCapture({
+            lat: latitude,
+            lng: longitude,
+            address: isFirstAccess ? "Cadastro Facial" : (!navigator.onLine ? "Ponto Offline (GPS Validado)" : "Ponto Autorizado via Rede & GPS")
+          });
+        },
+        (err) => {
+          // Se estiver offline e o GPS falhar por falta de sinal interno, não bloqueia o trabalhador
+          if (!navigator.onLine) {
+            proceedWithCapture({
+              lat: 0,
+              lng: 0,
+              address: "Ponto Offline (Salvo no Dispositivo)"
+            });
+          } else {
+            setError("ERRO DE GPS: O registro de ponto exige a localização ativa. Verifique seu sinal.");
+            setLoading(false);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
+      );
+    } else {
+      proceedWithCapture({
+        lat: 0,
+        lng: 0,
+        address: "Ponto Autorizado (Sem Módulo GPS)"
+      });
+    }
   };
 
   return (
@@ -103,9 +142,9 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
       <div className="w-full flex justify-between items-center text-white">
         <button onClick={onCancel} className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl text-[10px] font-black uppercase">Cancelar</button>
         <div className="flex items-center gap-2">
-           <span className={`w-2 h-2 rounded-full animate-pulse ${isFirstAccess ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span>
-           <p className="text-[10px] font-black tracking-widest uppercase opacity-60">
-             {isFirstAccess ? 'Gravação de Identidade' : 'Validação Facial'}
+           <span className={`w-2 h-2 rounded-full animate-pulse ${isFirstAccess ? 'bg-indigo-500' : isOfflineMode ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+           <p className="text-[10px] font-black tracking-widest uppercase opacity-80 flex items-center gap-1.5">
+             {isFirstAccess ? 'Gravação de Identidade' : isOfflineMode ? '📴 Modo Offline Ativo' : 'Validação Facial'}
            </p>
         </div>
         <div className="w-10"></div>
