@@ -29,9 +29,11 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
   }, []);
 
   const moods = [
-    { id: 'triste', emoji: '😔', label: 'Triste' },
-    { id: 'serio', emoji: '😐', label: 'Sério' },
-    { id: 'feliz', emoji: '😃', label: 'Feliz' },
+    { id: 'triste', emoji: '😢', label: 'Triste', color: 'from-rose-500 to-red-600' },
+    { id: 'serio', emoji: '🙁', label: 'Sério', color: 'from-amber-600 to-orange-600' },
+    { id: 'neutro', emoji: '😐', label: 'Neutro', color: 'from-slate-500 to-slate-600' },
+    { id: 'feliz', emoji: '🙂', label: 'Feliz', color: 'from-emerald-500 to-teal-600' },
+    { id: 'muito_feliz', emoji: '🤩', label: 'Muito Feliz', color: 'from-orange-500 to-amber-500' },
   ];
 
   useEffect(() => {
@@ -165,18 +167,35 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
         </div>
 
         {!loading && (
-          <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-4 px-6">
-            <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Como você está hoje?</p>
-            <div className="flex gap-4">
-              {moods.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setSelectedMood(m.id)}
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all ${selectedMood === m.id ? 'bg-orange-500 scale-110 shadow-lg shadow-orange-500/40' : 'bg-black/40 grayscale opacity-40 hover:opacity-100 hover:grayscale-0'}`}
-                >
-                  {m.emoji}
-                </button>
-              ))}
+          <div className="absolute inset-x-0 bottom-4 flex flex-col items-center gap-2 px-3">
+            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+              <span className="text-[9px] font-black text-white uppercase tracking-wider">Termômetro de Humor:</span>
+              <span className="text-[9px] font-bold text-orange-400">
+                {moods.find(m => m.id === selectedMood)?.label}
+              </span>
+            </div>
+            <div className="flex items-center justify-between w-full max-w-[320px] bg-black/50 backdrop-blur-lg p-1.5 rounded-2xl border border-white/10">
+              {moods.map((m) => {
+                const isSelected = selectedMood === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setSelectedMood(m.id)}
+                    type="button"
+                    className={`flex-1 py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-b from-orange-500 to-amber-500 text-white scale-105 shadow-md shadow-orange-500/50'
+                        : 'opacity-40 hover:opacity-90 active:scale-95'
+                    }`}
+                    title={m.label}
+                  >
+                    <span className="text-xl leading-none">{m.emoji}</span>
+                    <span className={`text-[7px] font-black uppercase mt-0.5 tracking-tighter truncate ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                      {m.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

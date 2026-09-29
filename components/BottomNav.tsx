@@ -11,7 +11,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeView, onNavigate }) => {
     { id: 'dashboard', label: 'Início', icon: '🏠' },
     { id: 'mypoint', label: 'Histórico', icon: '📊' },
     { id: 'requests', label: 'JUSTIFICAR', icon: '📝', isCenter: true },
-    { id: 'card', label: 'Cartão', icon: '📇' },
+    { id: 'card', label: 'Espelho', icon: '📋' },
     { id: 'profile', label: 'Perfil', icon: '👤' },
   ];
 

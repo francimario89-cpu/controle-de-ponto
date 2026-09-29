@@ -5,12 +5,21 @@ import { AttendanceRequest } from '../types';
 
 const Requests: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
-  const [showCreateMode, setShowCreateMode] = useState(false);
+  const [showCreateMode, setShowCreateMode] = useState(() => {
+    return Boolean(localStorage.getItem('pontoexato_adjust_date'));
+  });
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [type, setType] = useState<'inclusão' | 'atestado' | 'licenca_maternidade' | 'folga_compensatoria' | 'folga_abonada'>('inclusão');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => {
+    const prefill = localStorage.getItem('pontoexato_adjust_date');
+    if (prefill) {
+      localStorage.removeItem('pontoexato_adjust_date');
+      return prefill;
+    }
+    return new Date().toISOString().split('T')[0];
+  });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [daysCount, setDaysCount] = useState(1);
   const [cid, setCid] = useState('');

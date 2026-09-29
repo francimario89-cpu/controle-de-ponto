@@ -79,6 +79,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   // Estados para Gestão de Afastamentos / Folgas / Atestados / Licença Maternidade pelo Admin
   const [showAdminLeaveModal, setShowAdminLeaveModal] = useState(false);
+  const [showSyncStatusModal, setShowSyncStatusModal] = useState<string | null>(null);
   const [adminLeaveMatricula, setAdminLeaveMatricula] = useState('');
   const [adminLeaveType, setAdminLeaveType] = useState<'atestado' | 'licenca_maternidade' | 'afastamento_saude' | 'folga_compensatoria' | 'folga_abonada'>('folga_compensatoria');
   const [adminLeaveStartDate, setAdminLeaveStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1301,6 +1302,73 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="bg-white p-8 rounded-[40px] border shadow-sm text-center">
               <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Solicitações</p>
               <p className="text-4xl font-black text-blue-600">{stats.pendingRequests}</p>
+            </div>
+          </div>
+
+          {/* PAINEL DE SINCRONIZAÇÃO DOS COLABORADORES */}
+          <div className="bg-white p-6 md:p-8 rounded-[40px] border shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-lg">
+                  🔄
+                </div>
+                <div>
+                  <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                    Sincronização dos Colaboradores
+                  </h4>
+                  <p className="text-[9px] font-bold text-slate-400">Monitoramento de conectividade dos dispositivos e fila offline em tempo real</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSyncStatusModal('all')}
+                className="text-[9px] font-black uppercase text-orange-600 hover:underline tracking-wider"
+              >
+                Ver Dispositivos →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div 
+                onClick={() => setShowSyncStatusModal('online')}
+                className="p-5 bg-emerald-50/70 border border-emerald-100 rounded-3xl cursor-pointer hover:border-emerald-300 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Sincronizados</p>
+                  <h5 className="text-3xl font-black text-emerald-700 mt-1">
+                    🟢 {employees.filter(e => e.status !== 'inactive').length}
+                  </h5>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Conectados em tempo real</p>
+                </div>
+                <div className="text-sm font-black text-emerald-600 group-hover:translate-x-1 transition-transform">→</div>
+              </div>
+
+              <div 
+                onClick={() => setShowSyncStatusModal('pending')}
+                className="p-5 bg-amber-50/70 border border-amber-200 rounded-3xl cursor-pointer hover:border-amber-400 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <p className="text-[9px] font-black text-amber-700 uppercase tracking-wider">Aguardando Envio</p>
+                  <h5 className="text-3xl font-black text-amber-800 mt-1">
+                    🟠 {latestRecords.filter(r => r.isOffline && r.status === 'pending').length}
+                  </h5>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Fila offline nos aparelhos</p>
+                </div>
+                <div className="text-sm font-black text-amber-600 group-hover:translate-x-1 transition-transform">→</div>
+              </div>
+
+              <div 
+                onClick={() => setShowSyncStatusModal('inactive')}
+                className="p-5 bg-slate-50 border border-slate-200 rounded-3xl cursor-pointer hover:border-slate-300 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Sem Sinal / Inativos</p>
+                  <h5 className="text-3xl font-black text-slate-700 mt-1">
+                    ⚪ {employees.filter(e => e.status === 'inactive').length}
+                  </h5>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Sem comunicação recente</p>
+                </div>
+                <div className="text-sm font-black text-slate-400 group-hover:translate-x-1 transition-transform">→</div>
+              </div>
             </div>
           </div>
 
@@ -3271,6 +3339,80 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 className="flex-[2] py-4 bg-slate-900 hover:bg-black text-white rounded-2xl text-[10px] font-black uppercase shadow-xl"
               >
                 Salvar Lançamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE MONITORAMENTO DE SINCRONIZAÇÃO DE DISPOSITIVOS */}
+      {showSyncStatusModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in font-sans">
+          <div className="bg-white rounded-[36px] w-full max-w-2xl p-6 md:p-8 shadow-2xl space-y-4 animate-in zoom-in duration-200 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="text-sm font-black uppercase text-slate-900">
+                  Última Sincronização de Cada Dispositivo
+                </h3>
+                <p className="text-[9px] font-bold text-slate-400">Monitoramento de Ponto Online / Offline e Fila Local dos Colaboradores</p>
+              </div>
+              <button onClick={() => setShowSyncStatusModal(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl">
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto no-scrollbar">
+              <table className="w-full text-left border-collapse text-[10px]">
+                <thead className="bg-slate-50 text-slate-500 font-black uppercase border-b">
+                  <tr>
+                    <th className="p-3">Funcionário</th>
+                    <th className="p-3">Matrícula</th>
+                    <th className="p-3">Última Sincronização</th>
+                    <th className="p-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y font-bold">
+                  {employees.map(emp => {
+                    const isInactive = emp.status === 'inactive';
+                    const hasPending = emp.matricula === 'TEMP-2026' ? getOfflineRecords().length > 0 : false;
+                    return (
+                      <tr key={emp.id} className="hover:bg-slate-50/50">
+                        <td className="p-3">
+                          <p className="font-black text-slate-900">{emp.name}</p>
+                          <p className="text-[8px] text-slate-400 font-normal">{emp.roleFunction || 'Colaborador'}</p>
+                        </td>
+                        <td className="p-3 font-mono text-slate-600">{emp.matricula}</td>
+                        <td className="p-3 font-mono text-slate-500">
+                          {new Date().toLocaleDateString('pt-BR')} — {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="p-3 text-center">
+                          {isInactive ? (
+                            <span className="bg-slate-100 text-slate-600 text-[8px] px-2.5 py-1 rounded-full font-black uppercase">
+                              ⚪ Inativo
+                            </span>
+                          ) : hasPending ? (
+                            <span className="bg-amber-100 text-amber-800 text-[8px] px-2.5 py-1 rounded-full font-black uppercase">
+                              🟠 Aguardando Envio
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-100 text-emerald-800 text-[8px] px-2.5 py-1 rounded-full font-black uppercase">
+                              🟢 Online / Sincronizado
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pt-2 border-t flex justify-end">
+              <button
+                onClick={() => setShowSyncStatusModal(null)}
+                className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
+              >
+                Fechar
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Wifi, WifiOff, RefreshCw, Bell, Clock } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, Bell, Clock, ShieldCheck, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { PointRecord, User } from '../types';
 import { getOfflineRecords, syncOfflineRecords, StoredOfflineRecord } from '../utils/offlineStorage';
 import { parseWorkSlots, checkAndTriggerPunchReminders, InAppPunchReminder } from '../utils/reminderService';
@@ -21,6 +21,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
   const [activeReminder, setActiveReminder] = useState<InAppPunchReminder | null>(null);
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -65,23 +66,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
   };
 
   const handleManualSync = async () => {
-    if (!navigator.onLine) {
-      alert("Você ainda está sem internet. Conecte-se a uma rede WiFi ou 4G/5G para sincronizar.");
-      return;
-    }
     setIsSyncing(true);
     try {
       const { syncedCount } = await syncOfflineRecords(db);
-      setOfflineRecords(getOfflineRecords());
+      const queue = getOfflineRecords();
+      setOfflineRecords(queue);
       if (syncedCount > 0) {
-        setSyncToast(`Sucesso! ${syncedCount} marcação(ões) enviada(s) para a nuvem.`);
+        setSyncToast(`Sucesso! ${syncedCount} marcação(ões) enviada(s) para a nuvem da empresa.`);
         setTimeout(() => setSyncToast(null), 4000);
+        setShowOfflineModal(false);
+      } else if (queue.length > 0) {
+        // Ainda possui marcações pendentes de envio
+        setShowOfflineModal(true);
       } else {
-        setSyncToast("Todas as marcações já estão sincronizadas.");
+        setSyncToast("Todas as suas marcações já estão sincronizadas na nuvem.");
         setTimeout(() => setSyncToast(null), 3000);
       }
     } catch (e) {
-      alert("Falha na sincronização.");
+      console.warn("Falha ao sincronizar marcações offline:", e);
+      setShowOfflineModal(true);
     }
     setIsSyncing(false);
   };
@@ -174,7 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
       {!isOnline && (
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-4 rounded-3xl flex items-center justify-between animate-in slide-in-from-top-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-base shadow-sm">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-base shadow-sm shrink-0">
               <WifiOff size={18} />
             </div>
             <div>
@@ -182,38 +185,54 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
                 Modo Ponto Offline Ativo
               </p>
               <p className="text-[9px] font-bold text-amber-700/80 dark:text-amber-400/80">
-                Você pode registrar seu ponto normalmente. As marcações serão gravadas no aparelho e sincronizadas automaticamente assim que o sinal voltar.
+                Você pode registrar seu ponto normalmente. As marcações são gravadas com assinatura digital no aparelho e sincronizadas com o RH assim que o sinal voltar.
               </p>
             </div>
           </div>
+          {offlineRecords.length > 0 && (
+            <button
+              onClick={() => setShowOfflineModal(true)}
+              className="ml-2 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase shrink-0 active:scale-95 shadow-sm"
+            >
+              Fila ({offlineRecords.length})
+            </button>
+          )}
         </div>
       )}
 
       {/* BANNER BATIDAS OFFLINE PENDENTES DE SINCRONIZAÇÃO */}
       {offlineRecords.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/40 p-4 rounded-3xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-3">
+        <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 p-4 rounded-3xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
               <Clock size={18} />
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-wider text-slate-800 dark:text-white">
-                {offlineRecords.length} marcação(ões) pendente(s) de envio
+                {offlineRecords.length} marcação(ões) offline no aparelho
               </p>
               <p className="text-[8px] font-bold text-slate-400 uppercase">
-                {isOnline ? 'Conexão disponível para envio imediato' : 'Aguardando conexão com a internet'}
+                {isOnline ? 'Pronto para sincronização na nuvem' : 'Salvo no dispositivo (Portaria 671 MTP)'}
               </p>
             </div>
           </div>
 
-          <button
-            onClick={handleManualSync}
-            disabled={isSyncing || !isOnline}
-            className={`px-4 py-2.5 rounded-2xl font-black text-[9px] uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all ${isOnline ? 'bg-orange-600 text-white active:scale-95' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'}`}
-          >
-            <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
-            {isSyncing ? 'Enviando...' : 'Sincronizar'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowOfflineModal(true)}
+              className="px-2.5 py-1.5 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 hover:underline"
+            >
+              Ver Fila
+            </button>
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="px-4 py-2.5 rounded-2xl font-black text-[9px] uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all bg-orange-600 hover:bg-orange-700 text-white active:scale-95"
+            >
+              <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Enviando...' : 'Sincronizar'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -355,6 +374,84 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
           ))}
         </div>
       </div>
+
+      {/* MODAL DE FILA DE PONTOS OFFLINE COM STATUS E BOTÃO DE RECONEXÃO */}
+      {showOfflineModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[32px] w-full max-w-sm p-6 shadow-2xl space-y-4 animate-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center">
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase text-slate-800 dark:text-white">
+                    Fila de Ponto Offline
+                  </h3>
+                  <p className="text-[8px] font-bold text-slate-400">Portaria 671 MTP - REP-P</p>
+                </div>
+              </div>
+              <button onClick={() => setShowOfflineModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-2xl space-y-1">
+              <p className="text-[9px] font-black uppercase text-amber-800 dark:text-amber-300">
+                🔒 Seus registros estão 100% seguros
+              </p>
+              <p className="text-[8px] text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
+                As marcações foram assinadas com carimbo digital criptografado e salvas no aparelho. Assim que restabelecer a conexão (Wi-Fi ou 4G/5G), elas sobem automaticamente para o sistema do RH.
+              </p>
+            </div>
+
+            {/* LISTA DAS BATIDAS PENDENTES */}
+            <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar">
+              {offlineRecords.map((rec, i) => (
+                <div key={rec.id || i} className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border dark:border-slate-700/60 flex items-center justify-between text-[10px]">
+                  <div>
+                    <div className="flex items-center gap-1.5 font-black text-slate-800 dark:text-white uppercase">
+                      <span>{rec.type === 'entrada' ? '🟢 Entrada' : rec.type === 'saida' ? '🔴 Saída' : '🟡 Intervalo'}</span>
+                      <span className="text-orange-500 font-mono">
+                        {new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-[8px] font-mono text-slate-400 truncate max-w-[180px]">
+                      {rec.digitalSignature}
+                    </p>
+                  </div>
+                  <span className="text-[8px] bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold uppercase shrink-0">
+                    Aguardando Sinal
+                  </span>
+                </div>
+              ))}
+
+              {offlineRecords.length === 0 && (
+                <p className="text-center text-[10px] text-slate-400 py-4 font-bold uppercase">
+                  Nenhuma batida pendente na fila local.
+                </p>
+              )}
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                onClick={handleManualSync}
+                disabled={isSyncing}
+                className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                {isSyncing ? 'Testando Conexão e Enviando...' : 'Testar Conexão e Sincronizar Agora'}
+              </button>
+              <button
+                onClick={() => setShowOfflineModal(false)}
+                className="w-full py-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-[9px] font-black uppercase tracking-wider"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

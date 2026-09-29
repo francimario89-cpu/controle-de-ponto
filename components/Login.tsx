@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Sparkles, UserCheck } from 'lucide-react';
 import { User, Company } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc, collection, query, where, getDocs, limit, setDoc, updateDoc } from "firebase/firestore";
+import { setupTestTemporaryUser, TEST_TEMPORARY_USER, TEST_DEMO_COMPANY } from '../utils/testUserHelper';
 
 interface LoginProps {
   onLogin: (user: User, company?: Company) => void;
@@ -29,6 +30,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [matricula, setMatricula] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
+
+  const handleSimulateTemporary = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { user: testUser, company: testComp } = await setupTestTemporaryUser(db);
+      onLogin(testUser, testComp);
+    } catch {
+      onLogin(TEST_TEMPORARY_USER, TEST_DEMO_COMPANY);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFillTemporaryData = () => {
+    setCompanyCode('DEMO');
+    setMatricula('TEMP-2026');
+    setPassword('123456');
+    setError('');
+  };
 
   const handleAdminAuth = async () => {
     setLoading(true); setError(''); setSuccessMessage('');
@@ -84,10 +105,31 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleEmployeeLogin = async () => {
     setLoading(true); setError('');
     try {
-      const qComp = query(collection(db, "companies"), where("accessCode", "==", companyCode), limit(1));
+      const cleanCompany = companyCode.trim().toUpperCase();
+      const cleanMatricula = matricula.trim().toUpperCase();
+
+      // Suporte direto para Colaborador Temporário de Teste / Simulação
+      if (cleanCompany === 'DEMO' && cleanMatricula === 'TEMP-2026') {
+        if (password === '123456' || password === '') {
+          try {
+            const { user: testUser, company: testComp } = await setupTestTemporaryUser(db);
+            onLogin(testUser, testComp);
+          } catch {
+            onLogin(TEST_TEMPORARY_USER, TEST_DEMO_COMPANY);
+          }
+          setLoading(false);
+          return;
+        } else {
+          setError('SENHA DE TESTE INCORRETA (PADRÃO: 123456)');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const qComp = query(collection(db, "companies"), where("accessCode", "==", cleanCompany), limit(1));
       const compSnap = await getDocs(qComp);
       
-      let realCompanyId = companyCode;
+      let realCompanyId = cleanCompany;
       let companyName = '';
 
       if (!compSnap.empty) {
@@ -95,12 +137,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         realCompanyId = companyDoc.id;
         companyName = companyDoc.data().name;
       } else {
-        const compDoc = await getDoc(doc(db, "companies", companyCode));
+        const compDoc = await getDoc(doc(db, "companies", cleanCompany));
         if (!compDoc.exists()) throw new Error('CÓDIGO DA EMPRESA INVÁLIDO');
         companyName = compDoc.data().name;
       }
 
-      const q = query(collection(db, "employees"), where("companyCode", "==", realCompanyId), where("matricula", "==", matricula));
+      const q = query(collection(db, "employees"), where("companyCode", "==", realCompanyId), where("matricula", "==", cleanMatricula));
       const snap = await getDocs(q);
       if (!snap.empty) {
         const emp = snap.docs[0].data();
@@ -115,13 +157,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             companyCode: realCompanyId, 
             companyName, 
             role: 'employee', 
-            matricula, 
+            matricula: cleanMatricula, 
             photo: emp.photo || '', 
             hasFacialRecord: emp.hasFacialRecord === true,
             roleFunction: emp.roleFunction || '',
             workShift: emp.workShift || '',
             isExemptPointControl: !!emp.isExemptPointControl,
-            exemptReason: emp.exemptReason || ''
+            exemptReason: emp.exemptReason || '',
+            contractType: emp.contractType || '',
+            contractEndDate: emp.contractEndDate || '',
+            isTemporary: emp.isTemporary || false
           });
         } else setError('SENHA DE ACESSO ERRADA');
       } else setError('COLABORADOR NÃO CADASTRADO');
@@ -163,6 +208,30 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                  <p className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">Terminal na Empresa</p>
               </div>
             </button>
+
+            {/* Atalho Rápido de Teste / Simulação do Colaborador Temporário */}
+            <div className="pt-2">
+              <button 
+                type="button"
+                onClick={handleSimulateTemporary}
+                disabled={loading}
+                className="w-full p-4 bg-gradient-to-r from-orange-500/10 via-amber-500/15 to-orange-500/10 dark:from-orange-950/40 dark:via-amber-950/40 dark:to-orange-950/40 border-2 border-dashed border-orange-400 dark:border-orange-500/50 rounded-3xl flex items-center justify-between hover:bg-orange-50 dark:hover:bg-slate-800 transition-all text-left group shadow-sm active:scale-95"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500 text-white flex items-center justify-center font-black text-lg shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+                    🧪
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-black text-orange-600 dark:text-orange-400 text-[10px] uppercase tracking-wider">Simular Colaborador Temporário</p>
+                      <span className="text-[7px] bg-orange-600 text-white font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider">Teste</span>
+                    </div>
+                    <p className="text-[8px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-0.5">Matrícula: TEMP-2026 • 1 Clique para Entrar</p>
+                  </div>
+                </div>
+                <span className="text-orange-500 font-black text-xs group-hover:translate-x-1 transition-transform">➔</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4 animate-in slide-in-from-bottom-4">
@@ -249,7 +318,36 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+
+                {/* Bloco de ajuda para teste */}
+                <div className="p-3 bg-orange-50/80 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-2xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase flex items-center gap-1">
+                      🧪 Simular Colaborador Temporário:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleFillTemporaryData}
+                      className="text-[9px] font-black text-orange-700 dark:text-orange-300 underline uppercase hover:text-orange-900"
+                    >
+                      Preencher Campos
+                    </button>
+                  </div>
+                  <p className="text-[8px] text-slate-500 dark:text-slate-400 font-bold uppercase">
+                    Empresa: <span className="font-mono text-slate-800 dark:text-white">DEMO</span> • Matrícula: <span className="font-mono text-slate-800 dark:text-white">TEMP-2026</span> • Senha: <span className="font-mono text-slate-800 dark:text-white">123456</span>
+                  </p>
+                </div>
+
                 <button onClick={handleEmployeeLogin} className="w-full bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">{loading ? 'VALIDANDO...' : 'ENTRAR NO SISTEMA'}</button>
+                
+                <button 
+                  type="button"
+                  onClick={handleSimulateTemporary}
+                  disabled={loading}
+                  className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-black uppercase text-[10px] tracking-wider transition-all"
+                >
+                  ⚡ Entrar Direto com Temporário (1 Clique)
+                </button>
               </>
             ) : (
               <>

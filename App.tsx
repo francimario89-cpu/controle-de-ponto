@@ -19,7 +19,9 @@ import BottomNav from './components/BottomNav';
 import VacationView from './components/VacationView';
 import SettingsView from './components/SettingsView';
 import CompaniesView from './components/CompaniesView';
-import { saveOfflineRecord, getOfflineRecords, syncOfflineRecords } from './utils/offlineStorage';
+import { SyncCenterModal } from './components/SyncCenterModal';
+import { saveOfflineRecord, getOfflineRecords, syncOfflineRecords, generatePunchId, getLastSyncTime } from './utils/offlineStorage';
+import { TEST_DEMO_COMPANY, seedSampleRecords } from './utils/testUserHelper';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -29,6 +31,14 @@ const App: React.FC = () => {
   const [company, setCompany] = useState<Company | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<PointRecord[]>([]);
+  const [showSyncCenterModal, setShowSyncCenterModal] = useState(false);
+  const [syncStatusBanner, setSyncStatusBanner] = useState<{
+    title: string;
+    subtitle: string;
+    isProgress?: boolean;
+    progress?: number;
+    statusType?: 'success' | 'offline' | 'restoring';
+  } | null>(null);
   const [activeView, setActiveView] = useState(() => {
     const saved = localStorage.getItem('fortime_user');
     if (saved) {
@@ -64,9 +74,23 @@ const App: React.FC = () => {
   }, [activeView]);
 
   useEffect(() => {
+    const handleUserUpdate = (e: any) => {
+      if (e.detail) {
+        setUser(prev => prev ? ({ ...prev, ...e.detail }) : prev);
+      }
+    };
+    window.addEventListener('pontoexato_user_updated', handleUserUpdate);
+    return () => window.removeEventListener('pontoexato_user_updated', handleUserUpdate);
+  }, []);
+
+  useEffect(() => {
     if (user?.companyCode) {
       const unsubCompany = onSnapshot(doc(db, "companies", user.companyCode), (snapshot) => {
-        if (snapshot.exists()) setCompany({ id: snapshot.id, ...snapshot.data() } as Company);
+        if (snapshot.exists()) {
+          setCompany({ id: snapshot.id, ...snapshot.data() } as Company);
+        } else if (user.companyCode === 'DEMO') {
+          setCompany(TEST_DEMO_COMPANY);
+        }
       });
 
       const qEmp = query(collection(db, "employees"), where("companyCode", "==", user.companyCode));
@@ -105,10 +129,38 @@ const App: React.FC = () => {
       // Auto-sincronizar quando a conexão estiver ativa
       const handleOnlineSync = async () => {
         if (navigator.onLine) {
-          try {
-            await syncOfflineRecords(db);
-          } catch (e) {
-            console.error("Falha ao auto-sincronizar fila offline:", e);
+          const queue = getOfflineRecords();
+          if (queue.length > 0) {
+            setSyncStatusBanner({
+              title: '📡 Conexão restaurada',
+              subtitle: `🔄 Sincronizando ${queue.length} ponto(s) aguardando envio...`,
+              isProgress: true,
+              progress: 25,
+              statusType: 'restoring'
+            });
+
+            try {
+              const { syncedCount } = await syncOfflineRecords(db, (pct, current, total) => {
+                setSyncStatusBanner(prev => prev ? {
+                  ...prev,
+                  subtitle: `🔄 Sincronizando ${current} de ${total} ponto(s)...`,
+                  progress: pct
+                } : null);
+              });
+
+              if (syncedCount > 0) {
+                setSyncStatusBanner({
+                  title: `✅ ${syncedCount} ponto(s) sincronizado(s)!`,
+                  subtitle: 'Status: 🟢 Sincronizado com o servidor',
+                  isProgress: false,
+                  progress: 100,
+                  statusType: 'success'
+                });
+                setTimeout(() => setSyncStatusBanner(null), 4500);
+              }
+            } catch (e) {
+              console.error("Falha ao auto-sincronizar fila offline:", e);
+            }
           }
         }
       };
@@ -147,18 +199,23 @@ const App: React.FC = () => {
 
   const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => {
     if (!user) return;
-    const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}`;
+    const punchDate = new Date();
+    const timeFormatted = punchDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const uniqueId = generatePunchId(punchDate);
+    const signature = `PX-${user.matricula || 'N/A'}-${uniqueId}`;
     
     // Determinar o tipo da batida automaticamente de acordo com as batidas de hoje
-    const todayStr = new Date().toDateString();
+    const todayStr = punchDate.toDateString();
     const todayUserRecords = records.filter(r => r.matricula === user.matricula && new Date(r.timestamp).toDateString() === todayStr);
     const punchTypes: ('entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida')[] = ['entrada', 'inicio_intervalo', 'fim_intervalo', 'saida'];
     const currentType = punchTypes[Math.min(todayUserRecords.length, 3)] || 'entrada';
+    const typeLabel = currentType === 'entrada' ? 'Entrada' : currentType === 'saida' ? 'Saída' : currentType === 'inicio_intervalo' ? 'Início do Intervalo' : 'Retorno do Intervalo';
 
     const baseRecordData = {
+      uniqueId,
       userName: user.name,
       matricula: user.matricula || 'N/A',
-      timestamp: new Date(),
+      timestamp: punchDate,
       address: location.address,
       latitude: location.lat,
       longitude: location.lng,
@@ -176,6 +233,12 @@ const App: React.FC = () => {
       setLastPunch(offlineRecord);
       setRecords(prev => [offlineRecord, ...prev]);
       setShowPunchCamera(false);
+      setSyncStatusBanner({
+        title: '⚠️ Sem conexão com a internet',
+        subtitle: `Seu ponto (${timeFormatted} — ${typeLabel}) foi salvo no dispositivo (${uniqueId}) e será sincronizado automaticamente quando a conexão retornar.`,
+        statusType: 'offline'
+      });
+      setTimeout(() => setSyncStatusBanner(null), 6000);
       return;
     }
 
@@ -184,12 +247,24 @@ const App: React.FC = () => {
       const recordWithId = { ...baseRecordData, id: docRef.id } as PointRecord;
       setLastPunch(recordWithId);
       setShowPunchCamera(false);
+      setSyncStatusBanner({
+        title: '✅ Ponto registrado com sucesso',
+        subtitle: `${timeFormatted} — ${typeLabel} • Registro sincronizado com o servidor em tempo real (${uniqueId})`,
+        statusType: 'success'
+      });
+      setTimeout(() => setSyncStatusBanner(null), 4500);
     } catch (err) {
       console.warn("Falha de rede ao contatar o Firebase. Salvando no modo offline local:", err);
       const offlineRecord = saveOfflineRecord(baseRecordData);
       setLastPunch(offlineRecord);
       setRecords(prev => [offlineRecord, ...prev]);
       setShowPunchCamera(false);
+      setSyncStatusBanner({
+        title: '⚠️ Sem conexão com a internet',
+        subtitle: `Seu ponto (${timeFormatted} — ${typeLabel}) foi salvo no dispositivo (${uniqueId}) e será sincronizado quando a conexão retornar.`,
+        statusType: 'offline'
+      });
+      setTimeout(() => setSyncStatusBanner(null), 6000);
     }
   };
 
@@ -206,17 +281,88 @@ const App: React.FC = () => {
         company={company} 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
-        onNavigate={(v) => { if (v === 'logout') handleLogout(); else setActiveView(v); }}
+        onNavigate={(v) => { 
+          if (v === 'logout') handleLogout(); 
+          else if (v === 'sync') setShowSyncCenterModal(true);
+          else setActiveView(v); 
+        }}
         activeView={activeView}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <header className="md:hidden p-4 flex justify-between items-center bg-white dark:bg-slate-900 z-30">
+        {/* Banner de Status de Sincronização em Tempo Real */}
+        {syncStatusBanner && (
+          <div className={`px-4 py-2.5 text-white flex items-center justify-between text-[11px] font-bold z-50 shrink-0 shadow-md animate-in slide-in-from-top-2 ${
+            syncStatusBanner.statusType === 'offline' 
+              ? 'bg-amber-600' 
+              : syncStatusBanner.statusType === 'restoring'
+              ? 'bg-blue-600'
+              : 'bg-emerald-600'
+          }`}>
+            <div className="flex items-center gap-2.5 flex-1 pr-2">
+              <span className="text-base">
+                {syncStatusBanner.statusType === 'offline' ? '⚠️' : syncStatusBanner.statusType === 'restoring' ? '🔄' : '✅'}
+              </span>
+              <div>
+                <p className="font-black uppercase text-[10px] tracking-wider">{syncStatusBanner.title}</p>
+                <p className="text-[9px] opacity-90">{syncStatusBanner.subtitle}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSyncCenterModal(true)}
+                className="px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-[9px] font-black uppercase tracking-wider"
+              >
+                Ver Fila
+              </button>
+              <button onClick={() => setSyncStatusBanner(null)} className="opacity-70 hover:opacity-100 text-xs">
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Barra de Simulação do Colaborador Temporário */}
+        {(user.isTemporary || user.matricula === 'TEMP-2026') && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-wider z-40 shadow-sm shrink-0">
+            <div className="flex items-center gap-2 truncate">
+              <span className="bg-black/20 px-2 py-0.5 rounded-full text-[8px] font-bold">🧪 SIMULAÇÃO</span>
+              <span className="truncate">Colaborador Temporário (TEMP-2026)</span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <button 
+                onClick={async () => {
+                  if (window.confirm("Deseja regerar as batidas de teste?")) {
+                    await seedSampleRecords(db);
+                    alert("Batidas de teste regeradas com sucesso!");
+                  }
+                }} 
+                className="underline hover:text-white/80 text-[9px] lowercase font-semibold"
+              >
+                regerar batidas
+              </button>
+              <button 
+                onClick={handleLogout} 
+                className="bg-white text-orange-600 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-orange-50 active:scale-95 transition-all shadow-sm"
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+        )}
+
+        <header className="md:hidden p-4 flex justify-between items-center bg-white dark:bg-slate-900 z-30 border-b dark:border-slate-800">
            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
            </button>
            <h1 className="text-sm font-black tracking-tighter uppercase dark:text-white">Ponto<span className="text-orange-600">Exato</span></h1>
-           <div className="w-10"></div>
+           <button 
+             onClick={() => setShowSyncCenterModal(true)} 
+             className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+             title="Status da Sincronização"
+           >
+             {navigator.onLine ? '🟢 Online' : '🔴 Offline'}
+           </button>
         </header>
 
         <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar">
@@ -226,7 +372,7 @@ const App: React.FC = () => {
             ) : !isAdmin ? (
               <>
                 {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} records={records.filter(r => r.matricula === user.matricula)} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
-                {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} />}
+                {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} user={user} company={company} onNavigate={setActiveView} />}
                 {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
                 {activeView === 'requests' && <Requests />}
                 {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
@@ -279,6 +425,12 @@ const App: React.FC = () => {
           />
         )}
         {!isAdmin && lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
+
+        {/* Modal de Sincronização / Fila Local */}
+        <SyncCenterModal 
+          isOpen={showSyncCenterModal} 
+          onClose={() => setShowSyncCenterModal(false)} 
+        />
       </div>
     </div>
   );

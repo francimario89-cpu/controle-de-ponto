@@ -54,6 +54,9 @@ export interface Employee {
   zip?: string;
   isExemptPointControl?: boolean; // Dispensado de controle de jornada (Art. 62, II CLT - Gerência / Confiança)
   exemptReason?: string;
+  contractType?: string; // e.g. "Contrato de Trabalho Temporário (Lei 6.019/74)"
+  contractEndDate?: string;
+  isTemporary?: boolean;
 }
 
 export interface User {
@@ -73,10 +76,14 @@ export interface User {
   workShift?: string;
   isExemptPointControl?: boolean;
   exemptReason?: string;
+  contractType?: string;
+  contractEndDate?: string;
+  isTemporary?: boolean;
 }
 
 export interface PointRecord {
   id: string;
+  uniqueId?: string; // ID único anti-duplicidade (ex: PONTO-20260929-0802-8F72A)
   userName: string;
   timestamp: Date;
   address: string;
@@ -91,7 +98,20 @@ export interface PointRecord {
   isAdjustment?: boolean;
   isOffline?: boolean;
   offlineSavedAt?: string;
+  syncedAt?: string | Date;
   companyCode?: string;
+}
+
+export interface DeviceSyncStatus {
+  id?: string;
+  userName: string;
+  matricula: string;
+  companyCode: string;
+  lastSyncAt: string;
+  pendingCount: number;
+  deviceInfo?: string;
+  isOnline: boolean;
+  status: 'online' | 'pending' | 'error';
 }
 
 export interface AttendanceRequest {
