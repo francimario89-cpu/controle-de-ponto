@@ -211,17 +211,20 @@ const App: React.FC = () => {
     
     // Comparação ultra robusta para todos os colaboradores (matrícula ou nome completo)
     const isMatchingUser = (r: PointRecord) => {
+      if (!r) return false;
       const rMat = String(r.matricula || '').trim().toLowerCase();
       const uMat = String(user.matricula || '').trim().toLowerCase();
-      if (uMat && rMat && rMat !== 'n/a' && rMat === uMat) return true;
+      if (uMat && rMat && rMat !== 'n/a' && (rMat === uMat || rMat.padStart(4, '0') === uMat.padStart(4, '0'))) return true;
       const rName = String(r.userName || '').trim().toLowerCase();
       const uName = String(user.name || '').trim().toLowerCase();
-      if (rName && uName && rName === uName) return true;
+      if (rName && uName && (rName === uName || rName.includes(uName) || uName.includes(rName))) return true;
       return false;
     };
 
     const isSameLocalDate = (d1: any, d2: Date) => {
+      if (!d1) return false;
       const date1 = d1?.toDate ? d1.toDate() : (d1 instanceof Date ? d1 : new Date(d1));
+      if (!date1 || isNaN(date1.getTime())) return false;
       return (
         date1.getFullYear() === d2.getFullYear() &&
         date1.getMonth() === d2.getMonth() &&
@@ -245,18 +248,18 @@ const App: React.FC = () => {
 
     const baseRecordData = {
       uniqueId,
-      userName: user.name,
-      matricula: user.matricula || 'N/A',
+      userName: String(user.name || 'Colaborador'),
+      matricula: String(user.matricula || 'N/A'),
       timestamp: punchDate,
-      address: location.address,
-      latitude: location.lat,
-      longitude: location.lng,
-      photo: photo,
+      address: String(location?.address || 'Dispositivo Web'),
+      latitude: Number(location?.lat) || 0,
+      longitude: Number(location?.lng) || 0,
+      photo: photo || 'https://ui-avatars.com/api/?name=Colaborador&background=f97316&color=fff',
       status: 'synchronized' as const,
       digitalSignature: signature,
       type: currentType,
-      companyCode: user.companyCode || '',
-      mood: mood
+      companyCode: String(user.companyCode || '').trim(),
+      mood: String(mood || 'feliz')
     };
 
     // Caso o dispositivo esteja offline, salva localmente
@@ -299,6 +302,21 @@ const App: React.FC = () => {
       setTimeout(() => setSyncStatusBanner(null), 6000);
     }
   };
+
+  const userFilteredRecords = useMemo(() => {
+    if (!user) return [];
+    const isMatchingCurrentUser = (r: PointRecord) => {
+      if (!r) return false;
+      const rMat = String(r.matricula || '').trim().toLowerCase();
+      const uMat = String(user.matricula || '').trim().toLowerCase();
+      if (uMat && rMat && rMat !== 'n/a' && (rMat === uMat || rMat.padStart(4, '0') === uMat.padStart(4, '0'))) return true;
+      const rName = String(r.userName || '').trim().toLowerCase();
+      const uName = String(user.name || '').trim().toLowerCase();
+      if (rName && uName && (rName === uName || rName.includes(uName) || uName.includes(rName))) return true;
+      return false;
+    };
+    return records.filter(isMatchingCurrentUser);
+  }, [records, user]);
 
   const isMaster = user?.role === 'master';
   const isAdmin = user?.role === 'admin' || isMaster;
@@ -403,9 +421,9 @@ const App: React.FC = () => {
               <CompaniesView />
             ) : !isAdmin ? (
               <>
-                {activeView === 'dashboard' && <Dashboard user={user} lastPunch={records[0]} records={records.filter(r => r.matricula === user.matricula)} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
-                {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} user={user} company={company} onNavigate={setActiveView} />}
-                {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
+                {activeView === 'dashboard' && <Dashboard user={user} lastPunch={userFilteredRecords[0]} records={userFilteredRecords} onPunchClick={() => setShowPunchCamera(true)} onNavigate={setActiveView} />}
+                {activeView === 'mypoint' && <MyPoint records={userFilteredRecords} user={user} company={company} onNavigate={setActiveView} />}
+                {activeView === 'card' && <AttendanceCard records={userFilteredRecords} company={company} />}
                 {activeView === 'requests' && <Requests />}
                 {activeView === 'sync' && (
                   <div className="space-y-4 animate-in fade-in">
@@ -429,7 +447,7 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 )}
-                {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
+                {activeView === 'assistant' && <AiAssistant user={user} records={userFilteredRecords} />}
                 {activeView === 'profile' && <Profile user={user} company={company} onLogout={handleLogout} />}
                 {activeView === 'vacation' && <VacationView user={user} />}
                 {activeView === 'settings' && <SettingsView user={user} onBack={() => setActiveView('dashboard')} isDarkMode={isDarkMode} onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} />}
@@ -471,27 +489,32 @@ const App: React.FC = () => {
 
         {!isAdmin && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
         {!isAdmin && showPunchCamera && (() => {
-          const isMatchingUser = (r: PointRecord) => {
-            const rMat = String(r.matricula || '').trim().toLowerCase();
-            const uMat = String(user.matricula || '').trim().toLowerCase();
-            if (uMat && rMat && rMat !== 'n/a' && rMat === uMat) return true;
-            const rName = String(r.userName || '').trim().toLowerCase();
-            const uName = String(user.name || '').trim().toLowerCase();
-            if (rName && uName && rName === uName) return true;
-            return false;
-          };
-
           const now = new Date();
-          const todayUserRecords = records.filter(r => {
+          const todayUserRecords = userFilteredRecords.filter(r => {
             const d = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
-            return isMatchingUser(r) && 
+            return d && !isNaN(d.getTime()) && 
               d.getFullYear() === now.getFullYear() && 
               d.getMonth() === now.getMonth() && 
               d.getDate() === now.getDate();
+          }).sort((a, b) => {
+            const da = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+            const db = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+            return da - db;
           });
 
-          const punchTypes: ('entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida')[] = ['entrada', 'inicio_intervalo', 'fim_intervalo', 'saida'];
-          const suggestedType = punchTypes[Math.min(todayUserRecords.length, 3)] || 'entrada';
+          let suggestedType: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida' = 'entrada';
+          if (todayUserRecords.length === 0) {
+            suggestedType = 'entrada';
+          } else if (todayUserRecords.length === 1) {
+            suggestedType = 'inicio_intervalo';
+          } else if (todayUserRecords.length === 2) {
+            const hasInterval = todayUserRecords.some(r => r.type === 'inicio_intervalo');
+            suggestedType = hasInterval ? 'fim_intervalo' : 'saida';
+          } else if (todayUserRecords.length === 3) {
+            suggestedType = 'saida';
+          } else {
+            suggestedType = 'saida';
+          }
 
           return (
             <PunchCamera 
