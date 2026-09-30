@@ -2,36 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, query, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { AttendanceRequest } from '../types';
-import { Camera, Upload, CheckCircle2, XCircle, Clock, FileText, AlertCircle, ShieldCheck } from 'lucide-react';
 
 const Requests: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
-  const [showCreateMode, setShowCreateMode] = useState(() => {
-    return Boolean(localStorage.getItem('pontoexato_adjust_date'));
-  });
+  const [showCreateMode, setShowCreateMode] = useState(false);
   const [requests, setRequests] = useState<AttendanceRequest[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   
   const [type, setType] = useState<'inclusão' | 'atestado' | 'licenca_maternidade' | 'folga_compensatoria' | 'folga_abonada'>('inclusão');
-  
-  // Campos específicos de Ajuste de Ponto (Portaria 671 MTP)
-  const [adjustType, setAdjustType] = useState<'entrada' | 'saida_intervalo' | 'retorno_intervalo' | 'saida' | 'inclusao' | 'correcao'>('retorno_intervalo');
-  const [requestedTime, setRequestedTime] = useState('13:02');
-  const [originalTime, setOriginalTime] = useState('—');
-
-  const [date, setDate] = useState(() => {
-    const prefill = localStorage.getItem('pontoexato_adjust_date');
-    if (prefill) {
-      localStorage.removeItem('pontoexato_adjust_date');
-      return prefill;
-    }
-    return new Date().toISOString().split('T')[0];
-  });
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [daysCount, setDaysCount] = useState(1);
   const [cid, setCid] = useState('');
-  const [reason, setReason] = useState('Esqueci de registrar o retorno do intervalo.');
+  const [informTimes, setInformTimes] = useState(false);
+  const [times, setTimes] = useState<string[]>(['08:00', '12:00', '14:00', '18:00']);
+  const [reason, setReason] = useState('Esquecimento');
   const [customDetail, setCustomDetail] = useState('');
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
   const [attachmentData, setAttachmentData] = useState<string | null>(null);
@@ -53,6 +38,7 @@ const Requests: React.FC = () => {
     return `${year}-${month}-${day}`;
   };
 
+  // Função auxiliar para calcular dias entre duas datas
   const calculateDaysBetween = (startStr: string, endStr: string): number => {
     if (!startStr || !endStr) return 1;
     const s = new Date(startStr);
@@ -61,6 +47,7 @@ const Requests: React.FC = () => {
     return diff > 0 ? diff : 1;
   };
 
+  // Ajusta automaticamente endDate quando altera date ou daysCount em atestado, licença ou folgas
   const isPeriodType = (t: string) => ['atestado', 'licenca_maternidade', 'folga_compensatoria', 'folga_abonada'].includes(t);
 
   const handleStartDateChange = (newStart: string) => {
@@ -109,29 +96,8 @@ const Requests: React.FC = () => {
       const calculatedEnd = calculateEndDateFromDays(date, 1);
       setEndDate(calculatedEnd);
     } else {
-      setReason('Esqueci de registrar o retorno do intervalo.');
+      setReason('Esquecimento');
       setEndDate(date);
-    }
-  };
-
-  const handleAdjustTypeSelect = (adj: 'entrada' | 'saida_intervalo' | 'retorno_intervalo' | 'saida' | 'inclusao' | 'correcao') => {
-    setAdjustType(adj);
-    if (adj === 'entrada') {
-      setReason('Esqueci de bater a entrada.');
-      setRequestedTime('08:00');
-    } else if (adj === 'saida_intervalo') {
-      setReason('Esqueci de registrar a saída para o intervalo.');
-      setRequestedTime('12:00');
-    } else if (adj === 'retorno_intervalo') {
-      setReason('Esqueci de registrar o retorno do intervalo.');
-      setRequestedTime('13:00');
-    } else if (adj === 'saida') {
-      setReason('Esqueci de registrar a saída.');
-      setRequestedTime('18:00');
-    } else if (adj === 'correcao') {
-      setReason('Horário registrado incorretamente.');
-    } else {
-      setReason('Inclusão de marcação não realizada.');
     }
   };
 
@@ -144,36 +110,41 @@ const Requests: React.FC = () => {
       where("matricula", "==", user.matricula)
     );
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date()
-      })) as AttendanceRequest[];
-      
-      data.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      setRequests(data);
+    const unsub = onSnapshot(q, (snap) => {
+      const reqs: any[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        reqs.push({ 
+          id: d.id, 
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date())
+        });
+      });
+      setRequests(reqs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+    }, (err) => {
+      console.error("Erro ao carregar solicitações:", err);
     });
-
     return () => unsub();
   }, [user?.companyCode, user?.matricula]);
 
+  const filteredRequests = requests.filter(r => {
+    if (activeTab === 'pending') return r.status === 'pending';
+    if (activeTab === 'approved') return r.status === 'approved';
+    return r.status === 'rejected';
+  });
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 800 * 1024) {
-      alert("Arquivo muito grande. O tamanho máximo permitido é de 800KB.");
-      return;
+    if (file) {
+      if (file.size > 600 * 1024) { 
+        alert("Arquivo muito pesado! Por favor, reduza a qualidade da foto ou envie um arquivo de até 600KB.");
+        return;
+      }
+      setAttachmentName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => setAttachmentData(event.target?.result as string);
+      reader.readAsDataURL(file);
     }
-
-    setAttachmentName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAttachmentData(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
   const handleSubmit = async () => {
@@ -198,15 +169,8 @@ const Requests: React.FC = () => {
         finalReason = `Folga Abonada pela Empresa (${daysCount} dia(s))`;
         if (customDetail.trim()) finalReason += ` - ${customDetail.trim()}`;
       } else {
-        finalReason = customDetail.trim() ? customDetail.trim() : reason;
+        finalReason = customDetail.trim() ? `${reason} - ${customDetail.trim()}` : reason;
       }
-
-      const adjustLabel = adjustType === 'entrada' ? 'Entrada'
-        : adjustType === 'saida_intervalo' ? 'Saída Intervalo'
-        : adjustType === 'retorno_intervalo' ? 'Retorno Intervalo'
-        : adjustType === 'saida' ? 'Saída'
-        : adjustType === 'correcao' ? 'Correção de Horário'
-        : 'Inclusão de Marcação';
 
       const payload: any = {
         companyCode: user.companyCode,
@@ -221,13 +185,12 @@ const Requests: React.FC = () => {
         status: 'pending',
         attachment: attachmentData || "",
         attachmentName: attachmentName || "",
-        createdAt: serverTimestamp(),
-        // Campos de ajuste do espelho
-        adjustType: adjustType,
-        requestedTime: requestedTime,
-        originalTime: originalTime || '—',
-        auditLog: `${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}: ${user.name} solicitou ajuste de ${adjustLabel} para ${requestedTime}.`
+        createdAt: serverTimestamp()
       };
+
+      if (type === 'inclusão' && informTimes) {
+        payload.suggestedTimes = times.filter(t => !!t);
+      }
 
       await addDoc(collection(db, "requests"), payload);
       setShowCreateMode(false);
@@ -236,44 +199,25 @@ const Requests: React.FC = () => {
       setCustomDetail('');
       setCid('');
       setActiveTab('pending');
-      alert("Solicitação de ajuste enviada com sucesso para o RH!");
+      alert("Solicitação de aprovação enviada com sucesso para o RH!");
     } catch (e) {
-      alert("Erro ao enviar. Tente novamente.");
+      alert("Erro ao enviar. Tente novamente ou verifique se o arquivo não é muito grande.");
     }
     setLoading(false);
   };
 
-  const filteredRequests = requests.filter(r => r.status === activeTab);
-
-  const getAdjustLabel = (req: AttendanceRequest) => {
-    if (!req.adjustType) return 'Ajuste de Ponto';
-    switch (req.adjustType) {
-      case 'entrada': return 'Entrada';
-      case 'saida_intervalo': return 'Saída para Intervalo';
-      case 'retorno_intervalo': return 'Retorno do Intervalo';
-      case 'saida': return 'Saída';
-      case 'correcao': return 'Correção de Horário';
-      default: return 'Inclusão de Marcação';
-    }
-  };
-
   if (showCreateMode) {
     return (
-      <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in slide-in-from-right duration-300 font-sans">
-        <header className="px-4 py-4 flex items-center border-b dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
+      <div className="flex flex-col h-full bg-white dark:bg-slate-900 animate-in slide-in-from-right duration-300">
+        <header className="px-4 py-4 flex items-center border-b dark:border-slate-800">
           <button onClick={() => setShowCreateMode(false)} className="p-2 text-orange-600">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <div className="flex-1 text-center mr-8">
-            <h1 className="font-black text-slate-800 dark:text-white text-xs uppercase tracking-wider">
-              Solicitar Ajuste do Espelho de Ponto
-            </h1>
-            <p className="text-[8px] font-bold text-slate-400">Portaria 671 MTP - Transparência e Auditoria</p>
-          </div>
+          <h1 className="flex-1 text-center font-black text-slate-800 dark:text-white mr-10 text-sm uppercase">Pedir Aprovação ao RH</h1>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5 no-scrollbar pb-32">
-          {/* Tipos Principais */}
+          {/* Tipos de Solicitação */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <button 
               type="button"
@@ -282,8 +226,32 @@ const Requests: React.FC = () => {
                 type === 'inclusão' ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
               }`}
             >
-              <span className="text-xl block mb-1">✏️</span>
-              <span className="text-[8.5px] font-black uppercase tracking-tight">Ajuste de Ponto</span>
+              <span className="text-xl block mb-1">📝</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Esquecimento Ponto</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => handleTypeSelect('folga_compensatoria')} 
+              className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
+                type === 'folga_compensatoria' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+              }`}
+            >
+              <span className="text-xl block mb-1">🏖️</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Folga Compensatória</span>
+              <span className="text-[6.5px] opacity-80 uppercase mt-0.5">(Banco de Horas)</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => handleTypeSelect('folga_abonada')} 
+              className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
+                type === 'folga_abonada' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+              }`}
+            >
+              <span className="text-xl block mb-1">🎁</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Folga Abonada</span>
+              <span className="text-[6.5px] opacity-80 uppercase mt-0.5">(Sem Débito)</span>
             </button>
 
             <button 
@@ -299,177 +267,396 @@ const Requests: React.FC = () => {
 
             <button 
               type="button"
-              onClick={() => handleTypeSelect('folga_compensatoria')} 
+              onClick={() => handleTypeSelect('licenca_maternidade')} 
               className={`p-3.5 rounded-2xl border-2 flex flex-col items-center justify-center text-center transition-all ${
-                type === 'folga_compensatoria' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+                type === 'licenca_maternidade' ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 shadow-sm scale-[1.02]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
               }`}
             >
-              <span className="text-xl block mb-1">🏖️</span>
-              <span className="text-[8.5px] font-black uppercase tracking-tight">Folga Compensatória</span>
+              <span className="text-xl block mb-1">🤱</span>
+              <span className="text-[8.5px] font-black uppercase tracking-tight">Licença Maternidade</span>
             </button>
           </div>
 
-          {/* SELEÇÃO ESPECÍFICA PARA AJUSTE DE PONTO */}
-          {type === 'inclusão' && (
-            <div className="bg-slate-50 dark:bg-slate-800/60 p-5 rounded-[32px] border dark:border-slate-700/60 space-y-4">
-              {/* DATA */}
-              <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
-                  Data do Ponto
-                </label>
-                <input 
-                  type="date" 
-                  value={date} 
-                  onChange={e => handleStartDateChange(e.target.value)} 
-                  className="w-full p-3.5 bg-white dark:bg-slate-900 rounded-2xl text-xs font-black border dark:border-slate-700 outline-none" 
-                />
+          {/* Banner Informativo Dinâmico */}
+          {type === 'folga_compensatoria' && (
+            <div className="bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 p-4 rounded-2xl space-y-1 text-amber-900 dark:text-amber-200 text-[9px] font-bold">
+              <div className="flex items-center gap-2 font-black uppercase text-amber-700 dark:text-amber-300">
+                <span>🏖️</span> Folga Compensatória (CLT Art. 59 § 2º):
+              </div>
+              <p className="leading-relaxed">
+                Utilize suas horas extras acumuladas no <strong>Banco de Horas</strong> para tirar um dia de folga. Ao ser aprovada pelo RH, as horas da jornada normal serão debitadas do seu banco de horas sem qualquer desconto em seu salário!
+              </p>
+            </div>
+          )}
+
+          {type === 'folga_abonada' && (
+            <div className="bg-emerald-50/90 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 p-4 rounded-2xl space-y-1 text-emerald-900 dark:text-emerald-200 text-[9px] font-bold">
+              <div className="flex items-center gap-2 font-black uppercase text-emerald-700 dark:text-emerald-300">
+                <span>🎁</span> Folga Abonada / Programada:
+              </div>
+              <p className="leading-relaxed">
+                Folga concedida por acordo com a gerência, premiação ou data especial (ex: aniversário). <strong>Não haverá débito</strong> no seu banco de horas e o dia será abonado integralmente sem necessidade de bater o ponto.
+              </p>
+            </div>
+          )}
+
+          {type === 'atestado' && (
+            <div className="bg-blue-50/90 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 p-4 rounded-2xl space-y-1 text-blue-900 dark:text-blue-200 text-[9px] font-bold">
+              <div className="flex items-center gap-2 font-black uppercase text-blue-700 dark:text-blue-300">
+                <span>🏥</span> Afastamento por Saúde / Atestado Médico:
+              </div>
+              <p className="leading-relaxed">
+                Marque o dia inicial e a quantidade de dias do atestado. Todos os dias do período serão encaminhados ao RH para abono integral no seu espelho de ponto.
+              </p>
+            </div>
+          )}
+
+          {type === 'licenca_maternidade' && (
+            <div className="bg-rose-50/90 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 p-4 rounded-2xl space-y-1 text-rose-900 dark:text-rose-200 text-[9px] font-bold">
+              <div className="flex items-center gap-2 font-black uppercase text-rose-700 dark:text-rose-300">
+                <span>🤱</span> Licença Maternidade (CLT Art. 392):
+              </div>
+              <p className="leading-relaxed">
+                Período oficial de 120 dias (ou 180 dias se Empresa Cidadã). As horas de trabalho ficam totalmente abonadas durante todo o período.
+              </p>
+            </div>
+          )}
+
+          {/* Seleção de Período para Folgas (Compensatória ou Abonada) */}
+          {(type === 'folga_compensatoria' || type === 'folga_abonada') && (
+            <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-[28px] border dark:border-slate-700 space-y-4">
+              <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                {type === 'folga_compensatoria' ? 'Data da Folga Compensatória' : 'Data da Folga Abonada'}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data da Folga (ou Início)
+                  </label>
+                  <input 
+                    type="date" 
+                    value={date} 
+                    onChange={e => handleStartDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data de Término
+                  </label>
+                  <input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={e => handleEndDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
+                </div>
               </div>
 
-              {/* TIPO DE AJUSTE */}
+              {/* Botões Rápidos de Quantidade de Dias de Folga */}
               <div>
-                <label className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 block">
-                  Tipo de Ajuste Solicitado
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                  Quantidade de dias de folga:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'entrada', label: '⭕ Entrada' },
-                    { id: 'saida_intervalo', label: '⭕ Saída para Intervalo' },
-                    { id: 'retorno_intervalo', label: '⭕ Retorno do Intervalo' },
-                    { id: 'saida', label: '⭕ Saída' },
-                    { id: 'inclusao', label: '⭕ Inclusão de Marcação' },
-                    { id: 'correcao', label: '⭕ Correção de Horário' },
-                  ].map(item => (
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 5].map(d => (
                     <button
-                      key={item.id}
+                      key={d}
                       type="button"
-                      onClick={() => handleAdjustTypeSelect(item.id as any)}
-                      className={`p-3 rounded-2xl text-[9px] font-black uppercase text-left transition-all border ${
-                        adjustType === item.id 
-                          ? 'bg-orange-600 text-white border-orange-600 shadow-md scale-[1.02]' 
-                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-orange-300'
+                      onClick={() => handleDaysChange(d)}
+                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+                        daysCount === d 
+                          ? type === 'folga_compensatoria' ? 'bg-amber-600 text-white shadow-md scale-105' : 'bg-emerald-600 text-white shadow-md scale-105'
+                          : 'bg-white dark:bg-slate-900 border dark:border-slate-700 text-slate-600 dark:text-slate-300'
                       }`}
                     >
-                      {item.label}
+                      {d} {d === 1 ? 'Dia' : 'Dias'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* HORÁRIO SOLICITADO */}
-              <div>
-                <label className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 block">
-                  Horário Correto Solicitado
-                </label>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="time" 
-                    value={requestedTime} 
-                    onChange={e => setRequestedTime(e.target.value)} 
-                    className="flex-1 p-3.5 bg-white dark:bg-slate-900 rounded-2xl text-base font-black font-mono border dark:border-slate-700 outline-none" 
-                  />
-                  <span className="text-[10px] text-slate-400 font-bold uppercase px-2">
-                    Ex: 13:02
-                  </span>
-                </div>
-              </div>
-
-              {/* MOTIVO DA SOLICITAÇÃO */}
-              <div>
-                <label className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 block">
-                  Motivo da Solicitação
-                </label>
-                <textarea
-                  rows={2}
-                  value={reason}
-                  onChange={e => setReason(e.target.value)}
-                  placeholder="Ex: Esqueci de registrar o retorno do intervalo."
-                  className="w-full p-3.5 bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-2xl text-xs font-bold outline-none resize-none"
-                />
-
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {[
-                    'Esqueci de registrar o retorno do intervalo.',
-                    'Esqueci de bater a entrada.',
-                    'Esqueci de bater a saída.',
-                    'Problema no aplicativo/internet no momento da batida.',
-                    'Horário autorizado previamente pelo gestor.'
-                  ].map((sug, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setReason(sug)}
-                      className="px-2.5 py-1 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 text-[8px] font-bold rounded-lg border dark:border-slate-700 hover:border-orange-400"
-                    >
-                      {sug}
-                    </button>
-                  ))}
-                </div>
+              {/* Resumo do Período */}
+              <div className={`p-3 rounded-2xl border flex items-center justify-between text-[9px] font-black uppercase ${
+                type === 'folga_compensatoria' 
+                  ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300'
+                  : 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300'
+              }`}>
+                <span>Período da Folga:</span>
+                <span>
+                  {daysCount} {daysCount === 1 ? 'dia' : 'dias'} ({new Date(date + 'T12:00:00').toLocaleDateString('pt-BR')}{daysCount > 1 ? ` até ${new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''})
+                </span>
               </div>
             </div>
           )}
 
-          {/* DEMAIS CAMPOS PARA ATESTADO MÉDICO */}
+          {/* Seleção de Datas para Atestado Médico */}
           {type === 'atestado' && (
             <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-[28px] border dark:border-slate-700 space-y-4">
               <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                 Período do Atestado Médico
               </p>
-              <div className="grid grid-cols-2 gap-3">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[8px] font-black text-slate-400 uppercase mb-1 block">Data de Início</label>
-                  <input type="date" value={date} onChange={e => handleStartDateChange(e.target.value)} className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border" />
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data de Início do Atestado
+                  </label>
+                  <input 
+                    type="date" 
+                    value={date} 
+                    onChange={e => handleStartDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
                 </div>
+
                 <div>
-                  <label className="text-[8px] font-black text-slate-400 uppercase mb-1 block">Data de Término</label>
-                  <input type="date" value={endDate} onChange={e => handleEndDateChange(e.target.value)} className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border" />
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data de Término do Atestado
+                  </label>
+                  <input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={e => handleEndDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
                 </div>
               </div>
+
+              {/* Botões Rápidos de Quantidade de Dias */}
               <div>
-                <label className="text-[8px] font-black text-slate-400 uppercase mb-1 block">Código CID (Opcional)</label>
-                <input type="text" placeholder="Ex: J06.9" value={cid} onChange={e => setCid(e.target.value.toUpperCase())} className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-bold border uppercase" />
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                  Selecione os dias de atestado:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3, 5, 7, 10, 14, 15].map(d => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handleDaysChange(d)}
+                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${
+                        daysCount === d 
+                          ? 'bg-blue-600 text-white shadow-md scale-105' 
+                          : 'bg-white dark:bg-slate-900 border dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300'
+                      }`}
+                    >
+                      {d} {d === 1 ? 'Dia' : 'Dias'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Resumo do Período */}
+              <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-900/40 flex items-center justify-between text-[9px] font-black uppercase text-blue-700 dark:text-blue-300">
+                <span>Duração do Atestado:</span>
+                <span>
+                  {daysCount} {daysCount === 1 ? 'dia' : 'dias'} ({new Date(date + 'T12:00:00').toLocaleDateString('pt-BR')} até {new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR')})
+                </span>
+              </div>
+
+              {/* Campo CID */}
+              <div>
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                  Código CID do Atestado (Opcional)
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: J06.9, M54.5 (conforme atestado)"
+                  value={cid} 
+                  onChange={e => setCid(e.target.value.toUpperCase())}
+                  className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-bold border dark:border-slate-700 outline-none uppercase" 
+                />
               </div>
             </div>
           )}
 
-          {/* ANEXAR COMPROVANTE (TIRAR FOTO OU ESCOLHER ARQUIVO) */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-3xl border dark:border-slate-700/60 space-y-2">
-            <label className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
-              Anexar Documento / Comprovante (Opcional)
-            </label>
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="image/*,.pdf" />
-            <input type="file" ref={cameraInputRef} className="hidden" onChange={handleFileChange} accept="image/*" capture="environment" />
-
-            <div className="grid grid-cols-2 gap-2">
-              <button 
-                type="button"
-                onClick={() => cameraInputRef.current?.click()} 
-                className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase flex items-center justify-center gap-1.5 shadow-sm hover:border-orange-400"
-              >
-                <Camera size={14} className="text-orange-500" /> Tirar Foto
-              </button>
-              <button 
-                type="button"
-                onClick={() => fileInputRef.current?.click()} 
-                className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase flex items-center justify-center gap-1.5 shadow-sm hover:border-orange-400"
-              >
-                <Upload size={14} className="text-orange-500" /> Escolher Arquivo
-              </button>
-            </div>
-
-            {attachmentName && (
-              <p className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                <span>📎 Anexo: {attachmentName}</span>
-                <button type="button" onClick={() => { setAttachmentName(null); setAttachmentData(null); }} className="text-rose-500 font-black">✕</button>
+          {/* Seleção para Licença Maternidade */}
+          {type === 'licenca_maternidade' && (
+            <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-[28px] border dark:border-slate-700 space-y-4">
+              <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                Período da Licença Maternidade
               </p>
-            )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data de Início (Parto ou Atestado Pré-Parto)
+                  </label>
+                  <input 
+                    type="date" 
+                    value={date} 
+                    onChange={e => handleStartDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                    Data de Retorno Previsto
+                  </label>
+                  <input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={e => handleEndDateChange(e.target.value)} 
+                    className="w-full p-3 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none" 
+                  />
+                </div>
+              </div>
+
+              {/* Botões Rápidos de Licença Maternidade */}
+              <div>
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                  Duração da Licença:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDaysChange(120)}
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase text-left transition-all border ${
+                      daysCount === 120 
+                        ? 'bg-rose-500 text-white border-rose-600 shadow-md' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    <p className="font-black text-xs mb-0.5">120 Dias</p>
+                    <p className="text-[7.5px] opacity-80 uppercase">Padrão CLT (Art. 392)</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDaysChange(180)}
+                    className={`p-3 rounded-2xl text-[9px] font-black uppercase text-left transition-all border ${
+                      daysCount === 180 
+                        ? 'bg-rose-500 text-white border-rose-600 shadow-md' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    <p className="font-black text-xs mb-0.5">180 Dias</p>
+                    <p className="text-[7.5px] opacity-80 uppercase">Empresa Cidadã</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Resumo da Licença */}
+              <div className="bg-rose-50/60 dark:bg-rose-950/20 p-3 rounded-2xl border border-rose-100 dark:border-rose-900/40 flex items-center justify-between text-[9px] font-black uppercase text-rose-700 dark:text-rose-300">
+                <span>Período Total:</span>
+                <span>
+                  {daysCount} dias ({new Date(date + 'T12:00:00').toLocaleDateString('pt-BR')} até {new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR')})
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Seleção para Esquecimento de Ponto */}
+          {type === 'inclusão' && (
+            <>
+              <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-[28px] border dark:border-slate-700">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Data da Ocorrência / Esquecimento</p>
+                <input 
+                  type="date" 
+                  value={date} 
+                  onChange={e => setDate(e.target.value)} 
+                  className="bg-transparent border-none outline-none font-black text-slate-800 dark:text-white text-sm w-full" 
+                />
+              </div>
+
+              <div>
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1 block">Motivo Principal</label>
+                <select value={reason} onChange={e => setReason(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-2xl text-[11px] font-black outline-none">
+                  <option value="Esquecimento">Esquecimento de registro</option>
+                  <option value="Problemas Técnicos">Problemas Técnicos / Celular sem bateria</option>
+                  <option value="Trabalho Externo">Trabalho Externo / Viagem a serviço</option>
+                  <option value="Outros">Outros motivos</option>
+                </select>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-3xl border dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-300">
+                    Deseja sugerir os horários esquecidos?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setInformTimes(!informTimes)}
+                    className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all ${
+                      informTimes ? 'bg-orange-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {informTimes ? 'Sim (Informar)' : 'Não (Apenas Pedir)'}
+                  </button>
+                </div>
+
+                {informTimes && (
+                  <div className="space-y-2 pt-2 border-t dark:border-slate-700 animate-in fade-in duration-200">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">Horários sugeridos para inclusão:</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {['Entrada 1', 'Saída 1 (Almoço)', 'Entrada 2 (Retorno)', 'Saída 2'].map((label, idx) => (
+                        <div key={idx} className="space-y-1">
+                          <label className="text-[7px] font-black uppercase text-slate-400 block">{label}</label>
+                          <input
+                            type="time"
+                            value={times[idx] || ''}
+                            onChange={e => {
+                              const newTimes = [...times];
+                              newTimes[idx] = e.target.value;
+                              setTimes(newTimes);
+                            }}
+                            className="w-full p-2.5 bg-white dark:bg-slate-900 rounded-xl text-xs font-black border dark:border-slate-700 outline-none text-center"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Observação / Justificativa */}
+          <div>
+            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1 block">Observação / Justificativa (Opcional)</label>
+            <textarea
+              rows={3}
+              value={customDetail}
+              onChange={e => setCustomDetail(e.target.value)}
+              placeholder="Descreva brevemente a justificativa para o gestor..."
+              className="w-full p-4 bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-3xl text-[11px] font-bold outline-none resize-none"
+            />
           </div>
 
-          {/* BOTÕES DE ENVIO */}
-          <div className="flex gap-3 pt-2">
+          {/* Comprovante / Atestado */}
+          <div>
+            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1 block">
+              {type === 'atestado' 
+                ? 'Foto / Arquivo do Atestado Médico (Recomendado)' 
+                : type === 'licenca_maternidade' 
+                  ? 'Certidão ou Laudo Médico Pré-Parto' 
+                  : 'Comprovante / Declaração (Opcional)'}
+            </label>
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="image/*" />
+            <button 
+              type="button"
+              onClick={() => fileInputRef.current?.click()} 
+              className={`w-full p-5 rounded-3xl border-2 border-dashed transition-all ${
+                attachmentName 
+                  ? 'border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' 
+                  : 'border-slate-200 dark:border-slate-700 text-slate-400 hover:border-slate-300'
+              }`}
+            >
+              <span className="font-black text-[10px] uppercase">
+                {attachmentName ? `✓ ${attachmentName}` : '📁 Anexar Foto / Documento (Max 600KB)'}
+              </span>
+            </button>
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="flex gap-4 pt-2">
             <button 
               type="button"
               onClick={() => setShowCreateMode(false)} 
-              className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-2xl text-[10px] font-black uppercase text-slate-600 dark:text-slate-300"
+              className="flex-1 py-5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-[28px] text-[10px] font-black uppercase text-slate-600 dark:text-slate-300"
             >
               Cancelar
             </button>
@@ -477,9 +664,9 @@ const Requests: React.FC = () => {
               type="button"
               onClick={handleSubmit} 
               disabled={loading} 
-              className="flex-[2] py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-wider shadow-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              className="flex-[2] py-5 bg-orange-600 hover:bg-orange-700 text-white rounded-[28px] font-black uppercase shadow-xl disabled:opacity-50 transition-all"
             >
-              {loading ? 'Enviando...' : 'Enviar Solicitação'}
+              {loading ? 'Enviando...' : 'Pedir Aprovação'}
             </button>
           </div>
         </div>
@@ -488,129 +675,74 @@ const Requests: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 font-sans">
-      <header className="px-4 py-4 border-b dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col items-center">
-        <h1 className="font-black text-slate-800 dark:text-white text-xs uppercase tracking-wider">
-          Solicitações e Ajustes de Ponto
-        </h1>
-        <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Acompanhamento em Tempo Real</p>
-
-        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl w-full mt-3 border dark:border-slate-700">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
+      <header className="px-4 py-4 border-b dark:border-slate-800 flex flex-col items-center">
+        <h1 className="font-black text-slate-800 dark:text-white text-sm uppercase">Meus Pedidos RH</h1>
+        <div className="flex bg-white dark:bg-slate-800 p-1 rounded-2xl w-full mt-4 border dark:border-slate-700">
           {(['pending', 'approved', 'rejected'] as const).map(t => (
-            <button 
-              key={t} 
-              onClick={() => setActiveTab(t)} 
-              className={`flex-1 py-2.5 text-[9px] font-black uppercase rounded-xl transition-all ${
-                activeTab === t ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              {t === 'pending' ? '🟡 Pendentes' : t === 'approved' ? '🟢 Aprovadas' : '🔴 Recusadas'}
+            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-3 text-[9px] font-black uppercase rounded-xl transition-all ${activeTab === t ? 'bg-orange-500 text-white' : 'text-slate-400'}`}>
+              {t === 'pending' ? 'Em análise' : t === 'approved' ? 'Aprovadas' : 'Recusadas'}
             </button>
           ))}
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 no-scrollbar pb-32">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar pb-32">
         {filteredRequests.map((req) => {
-          const isAtestado = req.type === 'atestado';
-          const isAdjustment = req.type === 'inclusão' || req.type === 'ajuste';
-          const adjustLabel = getAdjustLabel(req);
+          const isAtestado = req.type === 'atestado' || req.type === 'abono';
+          const isMaternidade = req.type === 'licenca_maternidade';
+          const isFolgaComp = req.type === 'folga_compensatoria';
+          const isFolgaAbonada = req.type === 'folga_abonada';
 
           return (
-            <div 
-              key={req.id} 
-              className="bg-white dark:bg-slate-900 p-5 rounded-[28px] border dark:border-slate-800 shadow-sm space-y-3"
-            >
+            <div key={req.id} className="bg-white dark:bg-slate-800 p-6 rounded-[35px] border border-slate-100 dark:border-slate-700 shadow-sm animate-in fade-in space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg ${
-                    req.status === 'approved' 
-                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/40' 
-                      : req.status === 'rejected'
-                      ? 'bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/40'
-                      : 'bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/40'
-                  }`}>
-                    {req.status === 'approved' ? '🟢' : req.status === 'rejected' ? '🔴' : '🟡'}
-                  </div>
+                 <div className="flex items-center gap-3">
+                   <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl ${
+                     isMaternidade 
+                       ? 'bg-rose-50 text-rose-500 dark:bg-rose-950/30' 
+                       : isFolgaComp
+                         ? 'bg-amber-50 text-amber-500 dark:bg-amber-950/30'
+                         : isFolgaAbonada
+                           ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-950/30'
+                           : isAtestado 
+                             ? 'bg-blue-50 text-blue-500 dark:bg-blue-950/30' 
+                             : 'bg-orange-50 text-orange-500 dark:bg-orange-950/30'
+                   }`}>
+                      {isMaternidade ? '🤱' : isFolgaComp ? '🏖️' : isFolgaAbonada ? '🎁' : isAtestado ? '🏥' : '📝'}
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-black uppercase leading-none">
+                        {isMaternidade ? 'Licença Maternidade' : isFolgaComp ? 'Folga Compensatória (Banco)' : isFolgaAbonada ? 'Folga Abonada' : isAtestado ? 'Atestado Médico' : 'Esquecimento de Ponto'}
+                      </p>
+                      <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">
+                        {req.endDate && req.endDate !== req.date ? (
+                          `Período: ${new Date(req.date + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(req.endDate + 'T12:00:00').toLocaleDateString('pt-BR')} (${req.daysCount || calculateDaysBetween(req.date, req.endDate)} dias)`
+                        ) : (
+                          `Data: ${new Date(req.date + 'T12:00:00').toLocaleDateString('pt-BR')}`
+                        )}
+                      </p>
+                   </div>
+                 </div>
+                 <div className={`px-3 py-1 rounded-full text-[7px] font-black uppercase ${req.status === 'approved' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : req.status === 'rejected' ? 'bg-red-100 text-red-600 dark:bg-red-950/30 dark:text-red-400' : 'bg-orange-100 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400'}`}>
+                   {req.status === 'approved' ? 'Aprovado' : req.status === 'rejected' ? 'Recusado' : 'Em análise'}
+                 </div>
+              </div>
 
-                  <div>
-                    <h3 className="text-xs font-black uppercase text-slate-800 dark:text-white">
-                      {isAdjustment ? `${adjustLabel} → ${req.requestedTime || 'Horário'}` : isAtestado ? 'Atestado Médico' : req.type}
-                    </h3>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">
-                      Data: {new Date(req.date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
-                </div>
+              <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 italic">"{req.reason}"</p>
 
-                <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase ${
-                  req.status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' :
-                  req.status === 'rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' :
-                  'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                }`}>
-                  {req.status === 'approved' ? 'Aprovada' : req.status === 'rejected' ? 'Recusada' : 'Pendente'}
+              {req.cid && (
+                <span className="inline-block bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-100 dark:border-blue-900/30 px-2.5 py-1 rounded-xl text-[8px] font-mono font-bold">
+                  CID: {req.cid}
                 </span>
-              </div>
-
-              {/* MENSAGEM DO STATUS */}
-              {req.status === 'pending' && (
-                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl text-[9px] text-amber-800 dark:text-amber-300 space-y-0.5">
-                  <p className="font-black uppercase flex items-center gap-1">
-                    <Clock size={12} /> Aguardando análise do responsável
-                  </p>
-                  <p className="opacity-90">
-                    Solicitação enviada em {req.createdAt.toLocaleDateString('pt-BR')} às {req.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
-                  </p>
-                </div>
               )}
 
-              {req.status === 'approved' && (
-                <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl text-[9px] text-emerald-800 dark:text-emerald-300 space-y-0.5">
-                  <p className="font-black uppercase flex items-center gap-1">
-                    <CheckCircle2 size={12} /> Ajuste Aprovado pelo RH
-                  </p>
-                  <p className="opacity-90">
-                    O espelho de ponto passou a constar o registro e o banco de horas foi recalculado.
-                  </p>
-                  {req.approvedBy && (
-                    <p className="text-[8px] font-bold opacity-75">
-                      Aprovado por: {req.approvedBy}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {req.status === 'rejected' && (
-                <div className="p-3 bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-2xl text-[9px] text-rose-800 dark:text-rose-300 space-y-1">
-                  <p className="font-black uppercase flex items-center gap-1">
-                    <XCircle size={12} /> Solicitação Recusada
-                  </p>
-                  {req.rejectionReason && (
-                    <p className="font-medium bg-white/70 dark:bg-slate-900/70 p-2 rounded-xl border border-rose-100 dark:border-rose-900/40">
-                      <b>Motivo informado pelo responsável:</b> "{req.rejectionReason}"
-                    </p>
-                  )}
-                  {req.approvedBy && (
-                    <p className="text-[8px] font-bold opacity-75">
-                      Analisado por: {req.approvedBy}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* MOTIVO APRESENTADO */}
-              <div className="text-[10px] text-slate-600 dark:text-slate-300">
-                <p className="text-[8px] font-black uppercase text-slate-400">Motivo Informado:</p>
-                <p className="font-semibold italic">"{req.reason}"</p>
-              </div>
-
-              {/* ANEXO */}
               {req.attachment && (
                 <button
                   onClick={() => setSelectedPhotoModal(req.attachment!)}
-                  className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-[9px] font-black uppercase"
+                  className="inline-flex items-center gap-1.5 text-blue-500 hover:text-blue-700 text-[8px] font-black uppercase pt-1"
                 >
-                  <Camera size={12} /> Ver Comprovante Anexo
+                  📷 Ver Comprovante / Atestado Anexo
                 </button>
               )}
             </div>
@@ -618,27 +750,20 @@ const Requests: React.FC = () => {
         })}
 
         {filteredRequests.length === 0 && (
-          <div className="py-20 text-center opacity-40 flex flex-col items-center">
+          <div className="py-20 text-center opacity-30 flex flex-col items-center">
             <span className="text-4xl mb-2">📄</span>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Nenhuma solicitação nesta categoria
-            </p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nenhuma solicitação nesta aba</p>
           </div>
         )}
       </div>
 
-      {/* BOTÃO FLUTUANTE PARA NOVO PEDIDO */}
-      <button 
-        onClick={() => setShowCreateMode(true)} 
-        className="fixed bottom-28 right-6 w-14 h-14 bg-orange-600 hover:bg-orange-700 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 border-4 border-white dark:border-slate-900 transition-all z-20"
-        title="Nova Solicitação de Ajuste"
-      >
-        <span className="text-2xl font-light leading-none">+</span>
+      <button onClick={() => setShowCreateMode(true)} className="fixed bottom-28 right-6 w-16 h-16 bg-orange-600 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 border-4 border-white transition-all">
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M12 4v16m8-8H4" /></svg>
       </button>
 
-      {/* MODAL DE VISUALIZAÇÃO DO ANEXO */}
+      {/* Modal de visualização do anexo */}
       {selectedPhotoModal && (
-        <div className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[110] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-[36px] max-w-lg w-full p-6 shadow-2xl relative">
             <button 
               onClick={() => setSelectedPhotoModal(null)} 

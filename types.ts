@@ -83,7 +83,6 @@ export interface User {
 
 export interface PointRecord {
   id: string;
-  uniqueId?: string; // ID único anti-duplicidade (ex: PONTO-20260929-0802-8F72A)
   userName: string;
   timestamp: Date;
   address: string;
@@ -98,20 +97,7 @@ export interface PointRecord {
   isAdjustment?: boolean;
   isOffline?: boolean;
   offlineSavedAt?: string;
-  syncedAt?: string | Date;
   companyCode?: string;
-}
-
-export interface DeviceSyncStatus {
-  id?: string;
-  userName: string;
-  matricula: string;
-  companyCode: string;
-  lastSyncAt: string;
-  pendingCount: number;
-  deviceInfo?: string;
-  isOnline: boolean;
-  status: 'online' | 'pending' | 'error';
 }
 
 export interface AttendanceRequest {
@@ -131,14 +117,6 @@ export interface AttendanceRequest {
   attachment?: string;
   attachmentName?: string;
   suggestedTimes?: string[];
-  // Campos detalhados de Ajuste do Espelho de Ponto (Portaria 671 MTP)
-  adjustType?: 'entrada' | 'saida_intervalo' | 'retorno_intervalo' | 'saida' | 'inclusao' | 'correcao';
-  requestedTime?: string;
-  originalTime?: string;
-  rejectionReason?: string;
-  approvedBy?: string;
-  approvedAt?: Date | string;
-  auditLog?: string;
 }
 
 export interface MedicalLeave {

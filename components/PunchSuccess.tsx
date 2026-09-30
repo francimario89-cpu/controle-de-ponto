@@ -8,27 +8,14 @@ interface PunchSuccessProps {
 }
 
 const PunchSuccess: React.FC<PunchSuccessProps> = ({ record, onClose }) => {
-  const punchDate = record?.timestamp?.toDate 
-    ? record.timestamp.toDate() 
-    : (record?.timestamp instanceof Date ? record.timestamp : new Date(record?.timestamp || Date.now()));
-
-  const formattedTime = !isNaN(punchDate.getTime()) 
-    ? punchDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    : '--:--';
-
-  const formattedDate = !isNaN(punchDate.getTime())
-    ? punchDate.toLocaleDateString('pt-BR')
-    : new Date().toLocaleDateString('pt-BR');
-
   const handleDownloadReceipt = () => {
     let receipt = "COMPROVANTE DE REGISTRO DE PONTO DO TRABALHADOR\n";
     receipt += "================================================\n\n";
-    receipt += `COLABORADOR: ${record.userName}\n`;
-    receipt += `DATA: ${formattedDate}\n`;
-    receipt += `HORÁRIO: ${formattedTime}\n`;
+    receipt += `EMPRESA: ${record.userName}\n`;
+    receipt += `DATA: ${record.timestamp.toLocaleDateString('pt-BR')}\n`;
+    receipt += `HORÁRIO: ${record.timestamp.toLocaleTimeString('pt-BR')}\n`;
     receipt += `LOCAL: ${record.address}\n`;
     receipt += `MATRÍCULA: ${record.matricula}\n`;
-    receipt += `TIPO: ${record.type || 'Ponto'}\n`;
     receipt += `\n------------------------------------------------\n`;
     receipt += `ASSINATURA DIGITAL (HASH):\n${record.digitalSignature}\n`;
     receipt += `------------------------------------------------\n`;
@@ -38,7 +25,7 @@ const PunchSuccess: React.FC<PunchSuccessProps> = ({ record, onClose }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Comprovante_Ponto_${punchDate.getTime() || Date.now()}.txt`;
+    a.download = `Comprovante_Ponto_${record.timestamp.getTime()}.txt`;
     a.click();
   };
 
@@ -55,7 +42,7 @@ const PunchSuccess: React.FC<PunchSuccessProps> = ({ record, onClose }) => {
         <div className="p-8 text-center">
           <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.3em] mb-2">Sucesso!</p>
           <h2 className="text-3xl font-black text-slate-800 tracking-tighter mb-6">
-            {formattedTime}
+            {record.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </h2>
           
           <div className="bg-slate-50 rounded-3xl p-5 text-left border border-slate-100 space-y-3 mb-8">
