@@ -2,20 +2,41 @@
 import React, { useRef, useEffect, useState } from 'react';
 
 interface PunchCameraProps {
-  onCapture: (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => void;
+  onCapture: (
+    photo: string, 
+    location: { lat: number; lng: number; address: string }, 
+    mood: string,
+    punchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'
+  ) => void;
   onCancel: () => void;
   isFirstAccess?: boolean;
   geofenceConfig?: { enabled: boolean; lat: number; lng: number; radius: number };
   authorizedIP?: string;
+  defaultPunchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida';
+  todayPunchesCount?: number;
 }
 
-const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstAccess, geofenceConfig, authorizedIP }) => {
+const PunchCamera: React.FC<PunchCameraProps> = ({ 
+  onCapture, 
+  onCancel, 
+  isFirstAccess, 
+  geofenceConfig, 
+  authorizedIP,
+  defaultPunchType = 'entrada'
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [livenessStage, setLivenessStage] = useState(0); 
   const [selectedMood, setSelectedMood] = useState('feliz');
+  const [selectedPunchType, setSelectedPunchType] = useState<'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'>(defaultPunchType);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    if (defaultPunchType) {
+      setSelectedPunchType(defaultPunchType);
+    }
+  }, [defaultPunchType]);
 
   useEffect(() => {
     const handleOnline = () => setIsOfflineMode(false);
@@ -66,7 +87,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
         canvas.height = videoRef.current.videoHeight || 480;
         canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
         const data = canvas.toDataURL('image/jpeg', 0.8);
-        onCapture(data, coords, selectedMood);
+        onCapture(data, coords, selectedMood, selectedPunchType);
       }
     }, 4000);
   };
@@ -222,14 +243,80 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-8 w-full max-w-xs">
+      <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+        {/* Seletor do Tipo de Marcação com sugestão automática */}
+        {!isFirstAccess && (
+          <div className="w-full bg-slate-900/80 backdrop-blur-md p-2 rounded-[22px] border border-white/10 space-y-1.5 shadow-xl">
+            <div className="flex items-center justify-between px-2 text-[9px] font-black uppercase text-slate-400">
+              <span className="flex items-center gap-1.5 text-slate-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                Tipo da Marcação:
+              </span>
+              <span className="text-orange-400 font-bold lowercase text-[8px]">
+                {selectedPunchType === 'entrada' ? '🟢 Entrada' : selectedPunchType === 'inicio_intervalo' ? '☕ Início Intervalo' : selectedPunchType === 'fim_intervalo' ? '🔙 Retorno' : '🔴 Saída'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1">
+              <button
+                type="button"
+                onClick={() => setSelectedPunchType('entrada')}
+                className={`py-2 px-1 rounded-xl text-[9px] font-black uppercase transition-all flex flex-col items-center justify-center gap-0.5 ${
+                  selectedPunchType === 'entrada' 
+                    ? 'bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-400/50 scale-[1.02]' 
+                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="text-xs">🟢</span>
+                <span className="tracking-tighter">Entrada</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPunchType('inicio_intervalo')}
+                className={`py-2 px-1 rounded-xl text-[9px] font-black uppercase transition-all flex flex-col items-center justify-center gap-0.5 ${
+                  selectedPunchType === 'inicio_intervalo' 
+                    ? 'bg-amber-600 text-white shadow-lg ring-2 ring-amber-400/50 scale-[1.02]' 
+                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="text-xs">☕</span>
+                <span className="tracking-tighter truncate">Intervalo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPunchType('fim_intervalo')}
+                className={`py-2 px-1 rounded-xl text-[9px] font-black uppercase transition-all flex flex-col items-center justify-center gap-0.5 ${
+                  selectedPunchType === 'fim_intervalo' 
+                    ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-400/50 scale-[1.02]' 
+                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="text-xs">🔙</span>
+                <span className="tracking-tighter">Retorno</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedPunchType('saida')}
+                className={`py-2 px-1 rounded-xl text-[9px] font-black uppercase transition-all flex flex-col items-center justify-center gap-0.5 ${
+                  selectedPunchType === 'saida' 
+                    ? 'bg-rose-600 text-white shadow-lg ring-2 ring-rose-400/50 scale-[1.02]' 
+                    : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="text-xs">🔴</span>
+                <span className="tracking-tighter">Saída</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {!error && (
           <button 
             onClick={startValidation} 
             disabled={loading} 
-            className={`w-full py-6 rounded-[32px] font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl transition-all ${loading ? 'bg-slate-800 text-slate-500' : 'bg-white text-slate-900 active:scale-95'}`}
+            className={`w-full py-5 rounded-[28px] font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl transition-all ${loading ? 'bg-slate-800 text-slate-500' : 'bg-white text-slate-900 active:scale-95'}`}
           >
-            {loading ? 'Validando...' : (isFirstAccess ? 'Gravar Face Agora' : 'Confirmar e Registrar')}
+            {loading ? 'Validando...' : (isFirstAccess ? 'Gravar Face Agora' : `Confirmar e Registrar (${selectedPunchType === 'entrada' ? 'Entrada' : selectedPunchType === 'inicio_intervalo' ? 'Intervalo' : selectedPunchType === 'fim_intervalo' ? 'Retorno' : 'Saída'})`)}
           </button>
         )}
         <div className="flex flex-col items-center gap-1 opacity-20">

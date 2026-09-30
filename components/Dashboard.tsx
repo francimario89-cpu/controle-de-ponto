@@ -122,13 +122,39 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
       { type: scheduled[3]?.label || 'Saída', time: scheduled[3]?.time || '17:00', done: false, actual: '', isOffline: false },
     ];
 
-    todayRecords.forEach((rec, idx) => {
-      if (slots[idx]) {
-        slots[idx].done = true;
-        slots[idx].actual = new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        slots[idx].isOffline = Boolean(rec.isOffline);
-      }
-    });
+    const hasExplicitTypes = todayRecords.some(r => r.type === 'inicio_intervalo' || r.type === 'fim_intervalo' || r.type === 'saida');
+
+    if (hasExplicitTypes) {
+      todayRecords.forEach(rec => {
+        let targetSlotIndex = -1;
+        if (rec.type === 'entrada') targetSlotIndex = 0;
+        else if (rec.type === 'inicio_intervalo') targetSlotIndex = 1;
+        else if (rec.type === 'fim_intervalo') targetSlotIndex = 2;
+        else if (rec.type === 'saida') targetSlotIndex = 3;
+
+        if (targetSlotIndex >= 0 && slots[targetSlotIndex]) {
+          slots[targetSlotIndex].done = true;
+          slots[targetSlotIndex].actual = new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          slots[targetSlotIndex].isOffline = Boolean(rec.isOffline);
+        }
+      });
+    } else if (todayRecords.length === 2) {
+      slots[0].done = true;
+      slots[0].actual = new Date(todayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      slots[0].isOffline = Boolean(todayRecords[0].isOffline);
+
+      slots[3].done = true;
+      slots[3].actual = new Date(todayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      slots[3].isOffline = Boolean(todayRecords[1].isOffline);
+    } else {
+      todayRecords.forEach((rec, idx) => {
+        if (slots[idx]) {
+          slots[idx].done = true;
+          slots[idx].actual = new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          slots[idx].isOffline = Boolean(rec.isOffline);
+        }
+      });
+    }
 
     return slots;
   }, [records, user.workShift]);

@@ -69,6 +69,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [requestsFilterStatus, setRequestsFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [requestsSearchTerm, setRequestsSearchTerm] = useState('');
   const [syncDeviceFilter, setSyncDeviceFilter] = useState<'all' | 'online' | 'pending' | 'inactive'>('all');
+  const [isAutoFixing, setIsAutoFixing] = useState(false);
 
   // Filtro de colaboradores
   const [employeeFilterStatus, setEmployeeFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
@@ -278,13 +279,93 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   };
 
   const filteredRecords = useMemo(() => {
+    const selectedEmp = employees.find(e => e.matricula === reportFilter.matricula);
     return latestRecords.filter(r => {
-      const date = new Date(r.timestamp);
-      return (reportFilter.matricula === 'todos' || r.matricula === reportFilter.matricula) &&
+      const date = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
+      const rMat = String(r.matricula || '').trim().toLowerCase();
+      const filterMat = String(reportFilter.matricula || '').trim().toLowerCase();
+      const matchesMatricula = filterMat === 'todos' || 
+        (filterMat && rMat && rMat !== 'n/a' && rMat === filterMat) ||
+        (selectedEmp && r.userName && r.userName.trim().toLowerCase() === selectedEmp.name.trim().toLowerCase());
+
+      return matchesMatricula &&
              date.getMonth() === reportFilter.month &&
              date.getFullYear() === reportFilter.year;
+    }).sort((a, b) => {
+      const da = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+      const db = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+      return db - da;
     });
-  }, [latestRecords, reportFilter]);
+  }, [latestRecords, reportFilter, employees]);
+
+  const handleAutoFixPunchesSequence = async () => {
+    const empLabel = reportFilter.matricula === 'todos' 
+      ? 'todos os colaboradores' 
+      : (employees.find(e => e.matricula === reportFilter.matricula)?.name || 'colaborador selecionado');
+
+    if (!window.confirm(`Deseja analisar e corrigir a sequência de batidas (Entrada, Início de Intervalo, Retorno e Saída) para ${empLabel} no período selecionado?`)) {
+      return;
+    }
+
+    setIsAutoFixing(true);
+    try {
+      // Agrupar registros do filtro atual por colaborador e data local (YYYY-MM-DD)
+      const groups: { [key: string]: PointRecord[] } = {};
+      filteredRecords.forEach(r => {
+        const d = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const empKey = `${String(r.matricula || r.userName || '').trim().toLowerCase()}_${dateKey}`;
+        if (!groups[empKey]) groups[empKey] = [];
+        groups[empKey].push(r);
+      });
+
+      let updatedCount = 0;
+      for (const key in groups) {
+        const dayPunches = groups[key].sort((a, b) => {
+          const ta = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+          const tb = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+          return ta - tb;
+        });
+
+        for (let idx = 0; idx < dayPunches.length; idx++) {
+          const punch = dayPunches[idx];
+          let expectedType: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida' = 'entrada';
+          
+          if (dayPunches.length === 1) {
+            expectedType = 'entrada';
+          } else if (dayPunches.length === 2) {
+            expectedType = idx === 0 ? 'entrada' : 'saida';
+          } else if (dayPunches.length === 3) {
+            expectedType = idx === 0 ? 'entrada' : (idx === 1 ? 'inicio_intervalo' : 'saida');
+          } else {
+            if (idx === 0) expectedType = 'entrada';
+            else if (idx === 1) expectedType = 'inicio_intervalo';
+            else if (idx === 2) expectedType = 'fim_intervalo';
+            else expectedType = 'saida';
+          }
+
+          if (punch.type !== expectedType && punch.id) {
+            updatedCount++;
+            await updateDoc(doc(db, "records", punch.id), {
+              type: expectedType,
+              isAdjustment: true
+            });
+          }
+        }
+      }
+
+      if (updatedCount > 0) {
+        alert(`✅ SUCESSO: ${updatedCount} marcação(ões) corrigida(s) com a sequência exata de Entrada, Intervalo, Retorno e Saída para todos os colaboradores!`);
+      } else {
+        alert("✅ Todas as marcações filtradas já estão na sequência correta de jornada!");
+      }
+    } catch (err) {
+      console.error("Erro ao auto-corrigir batidas:", err);
+      alert("Houve uma instabilidade ao atualizar os registros. Tente novamente.");
+    } finally {
+      setIsAutoFixing(false);
+    }
+  };
 
   const calculateHoursDiff = (start: string, end: string) => {
     if (!start || !end) return 0;
@@ -1956,16 +2037,85 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                   .filter(emp => selectedEmployeeIndividual === 'todos' || emp.matricula === selectedEmployeeIndividual)
                   .map(emp => {
                     const dayRecs = latestRecords
-                      .filter(r => 
-                        r.matricula === emp.matricula && 
-                        r.timestamp.toISOString().split('T')[0] === selectedDateIndividual
-                      )
-                      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+                      .filter(r => {
+                        const rMat = String(r.matricula || '').trim().toLowerCase();
+                        const eMat = String(emp.matricula || '').trim().toLowerCase();
+                        const matchesEmp = (eMat && rMat && rMat !== 'n/a' && rMat === eMat) || 
+                          (emp.name && r.userName && r.userName.trim().toLowerCase() === emp.name.trim().toLowerCase());
+                        
+                        const d = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
+                        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        return matchesEmp && dateStr === selectedDateIndividual;
+                      })
+                      .sort((a, b) => {
+                        const ta = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+                        const tb = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+                        return ta - tb;
+                      });
 
-                    const e1 = dayRecs[0] ? dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const s1 = dayRecs[1] ? dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const e2 = dayRecs[2] ? dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const s2 = dayRecs[3] ? dayRecs[3].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                    let e1 = '-';
+                    let s1 = '-';
+                    let e2 = '-';
+                    let s2 = '-';
+                    let recE1: PointRecord | undefined;
+                    let recS1: PointRecord | undefined;
+                    let recE2: PointRecord | undefined;
+                    let recS2: PointRecord | undefined;
+
+                    // Mapeamento inteligente baseado nos tipos e na quantidade de batidas do dia
+                    const recEntrada = dayRecs.find(r => r.type === 'entrada');
+                    const recIntervalo = dayRecs.find(r => r.type === 'inicio_intervalo');
+                    const recRetorno = dayRecs.find(r => r.type === 'fim_intervalo');
+                    const recSaida = dayRecs.find(r => r.type === 'saida');
+
+                    if (recIntervalo || recRetorno || recSaida) {
+                      if (recEntrada) {
+                        e1 = recEntrada.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = recEntrada;
+                      } else if (dayRecs[0]) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                      }
+                      if (recIntervalo) {
+                        s1 = recIntervalo.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS1 = recIntervalo;
+                      }
+                      if (recRetorno) {
+                        e2 = recRetorno.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE2 = recRetorno;
+                      }
+                      if (recSaida) {
+                        s2 = recSaida.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = recSaida;
+                      }
+                    } else {
+                      if (dayRecs.length === 1) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                      } else if (dayRecs.length === 2) {
+                        // 2 batidas: Entrada e Saída do expediente
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                        s2 = dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = dayRecs[1];
+                      } else if (dayRecs.length === 3) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                        s1 = dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS1 = dayRecs[1];
+                        s2 = dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = dayRecs[2];
+                      } else if (dayRecs.length >= 4) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                        s1 = dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS1 = dayRecs[1];
+                        e2 = dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE2 = dayRecs[2];
+                        s2 = dayRecs[dayRecs.length - 1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = dayRecs[dayRecs.length - 1];
+                      }
+                    }
 
                     const renderRecordIcons = (rec: PointRecord | undefined) => {
                       if (!rec) return null;
@@ -1996,8 +2146,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     };
 
                     let workedMinutes = 0;
-                    if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
-                    if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
+                    if (e1 !== '-' && s1 !== '-' && e2 !== '-' && s2 !== '-') {
+                      workedMinutes = calculateHoursDiff(e1, s1) + calculateHoursDiff(e2, s2);
+                    } else if (e1 !== '-' && s2 !== '-' && s1 === '-' && e2 === '-') {
+                      workedMinutes = calculateHoursDiff(e1, s2);
+                    } else if (e1 !== '-' && s1 !== '-') {
+                      workedMinutes = calculateHoursDiff(e1, s1);
+                    }
 
                     const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
                     const dateObj = new Date(selectedDateIndividual + 'T12:00:00');
@@ -2019,19 +2174,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                         <td className="p-5 font-black text-slate-800">{emp.name}</td>
                         <td className="p-5">
                           <div className="font-mono">{e1}</div>
-                          {renderRecordIcons(dayRecs[0])}
+                          {renderRecordIcons(recE1)}
                         </td>
                         <td className="p-5">
                           <div className="font-mono">{s1}</div>
-                          {renderRecordIcons(dayRecs[1])}
+                          {renderRecordIcons(recS1)}
                         </td>
                         <td className="p-5">
                           <div className="font-mono">{e2}</div>
-                          {renderRecordIcons(dayRecs[2])}
+                          {renderRecordIcons(recE2)}
                         </td>
                         <td className="p-5">
                           <div className="font-mono">{s2}</div>
-                          {renderRecordIcons(dayRecs[3])}
+                          {renderRecordIcons(recS2)}
                         </td>
                         <td className="p-5 text-slate-600 font-mono">
                           {workedMinutes > 0 ? (
@@ -2313,7 +2468,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       {activeTab === 'correcao' && (
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-            <h3 className="text-sm font-black uppercase">Correção de Registros</h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-sm font-black uppercase text-slate-900">Correção de Registros & Sequência de Ponto</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                  Monitore e ajuste marcações de entrada, intervalo, retorno e saída de todos os colaboradores
+                </p>
+              </div>
+
+              {/* Botão de Auto-Correção de Sequência */}
+              <button
+                onClick={handleAutoFixPunchesSequence}
+                disabled={isAutoFixing}
+                className={`px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all ${
+                  isAutoFixing 
+                    ? 'bg-slate-400 text-white cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white active:scale-95'
+                }`}
+                title="Ajusta automaticamente marcações de saída, intervalo e retorno para todos os colaboradores"
+              >
+                <span>{isAutoFixing ? '🔄' : '⚡'}</span>
+                <span>{isAutoFixing ? 'Corrigindo...' : 'Auto-Corrigir Sequência (Entrada → Intervalo → Retorno → Saída)'}</span>
+              </button>
+            </div>
+
+            {/* Caixa Informativa */}
+            <div className="bg-blue-50/70 border border-blue-100 p-4 rounded-3xl text-[9px] text-blue-900 font-bold flex items-start gap-3">
+              <span className="text-base leading-none">💡</span>
+              <p className="leading-relaxed">
+                <strong>Regra de Classificação:</strong> Se um colaborador marcou saída do expediente e estava exibindo como entrada, use o botão <strong className="text-orange-600">"Auto-Corrigir Sequência"</strong> acima para reordenar automaticamente todas as batidas do dia (1ª Entrada, 2ª Intervalo, 3ª Retorno, 4ª Saída), ou clique individualmente em <strong className="text-blue-600">"Corrigir"</strong> na tabela abaixo.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
                 <option value="todos">Todos Colaboradores</option>
@@ -2341,18 +2527,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
                 {filteredRecords.map(rec => (
-                  <tr key={rec.id} className="border-b">
-                    <td className="p-5">
+                  <tr key={rec.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                    <td className="p-5 font-mono">
                       {rec.timestamp.toLocaleDateString('pt-BR')} {rec.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
                     </td>
-                    <td className="p-5">{rec.userName}</td>
+                    <td className="p-5 font-black text-slate-800">{rec.userName}</td>
                     <td className="p-5">
-                      <span className={`px-2 py-1 rounded-lg text-[8px] ${
-                        rec.type === 'entrada' ? 'bg-orange-100 text-orange-700' :
-                        rec.type === 'saida' ? 'bg-slate-100 text-slate-700' :
-                        'bg-blue-100 text-blue-700'
+                      <span className={`px-2.5 py-1 rounded-xl text-[9px] font-black uppercase border ${
+                        rec.type === 'entrada' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        rec.type === 'inicio_intervalo' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        rec.type === 'fim_intervalo' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        rec.type === 'saida' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                        'bg-slate-100 text-slate-700 border-slate-200'
                       }`}>
-                        {rec.type.replace('_', ' ')}
+                        {rec.type === 'entrada' ? '🟢 Entrada' :
+                         rec.type === 'inicio_intervalo' ? '☕ Início Intervalo' :
+                         rec.type === 'fim_intervalo' ? '🔙 Retorno Intervalo' :
+                         rec.type === 'saida' ? '🔴 Saída' :
+                         rec.type.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="p-5">
@@ -2389,13 +2581,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                           setEditRecordType(rec.type);
                           setShowEditRecordModal(true);
                         }} 
-                        className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black uppercase"
+                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-full text-[8px] font-black uppercase transition-all shadow-sm"
                       >
                         Corrigir
                       </button>
                       <button 
                         onClick={() => handleDeleteRecord(rec.id)} 
-                        className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[8px] font-black uppercase"
+                        className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-full text-[8px] font-black uppercase transition-all shadow-sm"
                       >
                         Excluir
                       </button>
@@ -3079,10 +3271,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Tipo de Registro</label>
                 <select value={manualPunchType} onChange={e => setManualPunchType(e.target.value as any)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border uppercase">
-                  <option value="entrada">Entrada</option>
-                  <option value="inicio_intervalo">Início Intervalo</option>
-                  <option value="fim_intervalo">Fim Intervalo</option>
-                  <option value="saida">Saída</option>
+                  <option value="entrada">🟢 Entrada</option>
+                  <option value="inicio_intervalo">☕ Início Intervalo</option>
+                  <option value="fim_intervalo">🔙 Retorno Intervalo</option>
+                  <option value="saida">🔴 Saída (Fim de Expediente)</option>
                 </select>
               </div>
             </div>
@@ -3113,10 +3305,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Tipo de Registro</label>
                 <select value={editRecordType} onChange={e => setEditRecordType(e.target.value as any)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border uppercase">
-                  <option value="entrada">Entrada</option>
-                  <option value="inicio_intervalo">Início Intervalo</option>
-                  <option value="fim_intervalo">Fim Intervalo</option>
-                  <option value="saida">Saída</option>
+                  <option value="entrada">🟢 Entrada</option>
+                  <option value="inicio_intervalo">☕ Início Intervalo</option>
+                  <option value="fim_intervalo">🔙 Retorno Intervalo</option>
+                  <option value="saida">🔴 Saída (Fim de Expediente)</option>
                 </select>
               </div>
             </div>

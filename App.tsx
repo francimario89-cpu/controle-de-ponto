@@ -197,18 +197,50 @@ const App: React.FC = () => {
     setActiveView('dashboard');
   };
 
-  const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => {
+  const handlePunch = async (
+    photo: string, 
+    location: { lat: number; lng: number; address: string }, 
+    mood: string,
+    punchTypeOverride?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'
+  ) => {
     if (!user) return;
     const punchDate = new Date();
     const timeFormatted = punchDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const uniqueId = generatePunchId(punchDate);
     const signature = `PX-${user.matricula || 'N/A'}-${uniqueId}`;
     
-    // Determinar o tipo da batida automaticamente de acordo com as batidas de hoje
-    const todayStr = punchDate.toDateString();
-    const todayUserRecords = records.filter(r => r.matricula === user.matricula && new Date(r.timestamp).toDateString() === todayStr);
+    // Comparação ultra robusta para todos os colaboradores (matrícula ou nome completo)
+    const isMatchingUser = (r: PointRecord) => {
+      const rMat = String(r.matricula || '').trim().toLowerCase();
+      const uMat = String(user.matricula || '').trim().toLowerCase();
+      if (uMat && rMat && rMat !== 'n/a' && rMat === uMat) return true;
+      const rName = String(r.userName || '').trim().toLowerCase();
+      const uName = String(user.name || '').trim().toLowerCase();
+      if (rName && uName && rName === uName) return true;
+      return false;
+    };
+
+    const isSameLocalDate = (d1: any, d2: Date) => {
+      const date1 = d1?.toDate ? d1.toDate() : (d1 instanceof Date ? d1 : new Date(d1));
+      return (
+        date1.getFullYear() === d2.getFullYear() &&
+        date1.getMonth() === d2.getMonth() &&
+        date1.getDate() === d2.getDate()
+      );
+    };
+
+    // Determinar o tipo da batida de acordo com as batidas de hoje
+    const todayUserRecords = records
+      .filter(r => isMatchingUser(r) && isSameLocalDate(r.timestamp, punchDate))
+      .sort((a, b) => {
+        const da = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+        const db = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+        return da - db;
+      });
+
     const punchTypes: ('entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida')[] = ['entrada', 'inicio_intervalo', 'fim_intervalo', 'saida'];
-    const currentType = punchTypes[Math.min(todayUserRecords.length, 3)] || 'entrada';
+    const autoSuggestedType = punchTypes[Math.min(todayUserRecords.length, 3)] || 'entrada';
+    const currentType = punchTypeOverride || autoSuggestedType;
     const typeLabel = currentType === 'entrada' ? 'Entrada' : currentType === 'saida' ? 'Saída' : currentType === 'inicio_intervalo' ? 'Início do Intervalo' : 'Retorno do Intervalo';
 
     const baseRecordData = {
@@ -438,14 +470,40 @@ const App: React.FC = () => {
         </main>
 
         {!isAdmin && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
-        {!isAdmin && showPunchCamera && (
-          <PunchCamera 
-            geofenceConfig={company?.geofence} 
-            authorizedIP={company?.authorizedIP} 
-            onCapture={handlePunch} 
-            onCancel={() => setShowPunchCamera(false)} 
-          />
-        )}
+        {!isAdmin && showPunchCamera && (() => {
+          const isMatchingUser = (r: PointRecord) => {
+            const rMat = String(r.matricula || '').trim().toLowerCase();
+            const uMat = String(user.matricula || '').trim().toLowerCase();
+            if (uMat && rMat && rMat !== 'n/a' && rMat === uMat) return true;
+            const rName = String(r.userName || '').trim().toLowerCase();
+            const uName = String(user.name || '').trim().toLowerCase();
+            if (rName && uName && rName === uName) return true;
+            return false;
+          };
+
+          const now = new Date();
+          const todayUserRecords = records.filter(r => {
+            const d = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
+            return isMatchingUser(r) && 
+              d.getFullYear() === now.getFullYear() && 
+              d.getMonth() === now.getMonth() && 
+              d.getDate() === now.getDate();
+          });
+
+          const punchTypes: ('entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida')[] = ['entrada', 'inicio_intervalo', 'fim_intervalo', 'saida'];
+          const suggestedType = punchTypes[Math.min(todayUserRecords.length, 3)] || 'entrada';
+
+          return (
+            <PunchCamera 
+              geofenceConfig={company?.geofence} 
+              authorizedIP={company?.authorizedIP} 
+              defaultPunchType={suggestedType}
+              todayPunchesCount={todayUserRecords.length}
+              onCapture={handlePunch} 
+              onCancel={() => setShowPunchCamera(false)} 
+            />
+          );
+        })()}
         {!isAdmin && lastPunch && <PunchSuccess record={lastPunch} onClose={() => setLastPunch(null)} />}
 
         {/* Modal de Sincronização / Fila Local */}

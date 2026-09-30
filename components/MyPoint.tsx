@@ -124,20 +124,34 @@ export const MyPoint: React.FC<MyPointProps> = ({ records = [], user, company, o
       let e2 = '';
       let s2 = '';
 
-      if (dayRecords.length === 1) {
-        e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      } else if (dayRecords.length === 2) {
-        e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        s2 = new Date(dayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      } else if (dayRecords.length === 3) {
-        e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        s1 = new Date(dayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        e2 = new Date(dayRecords[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      } else if (dayRecords.length >= 4) {
-        e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        s1 = new Date(dayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        e2 = new Date(dayRecords[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        s2 = new Date(dayRecords[3].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const recEntrada = dayRecords.find(r => r.type === 'entrada');
+      const recIntervalo = dayRecords.find(r => r.type === 'inicio_intervalo');
+      const recRetorno = dayRecords.find(r => r.type === 'fim_intervalo');
+      const recSaida = dayRecords.find(r => r.type === 'saida');
+
+      if (recIntervalo || recRetorno || recSaida) {
+        if (recEntrada) e1 = new Date(recEntrada.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        else if (dayRecords[0]) e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        if (recIntervalo) s1 = new Date(recIntervalo.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (recRetorno) e2 = new Date(recRetorno.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (recSaida) s2 = new Date(recSaida.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      } else {
+        if (dayRecords.length === 1) {
+          e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } else if (dayRecords.length === 2) {
+          e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s2 = new Date(dayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } else if (dayRecords.length === 3) {
+          e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s1 = new Date(dayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s2 = new Date(dayRecords[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        } else if (dayRecords.length >= 4) {
+          e1 = new Date(dayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s1 = new Date(dayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          e2 = new Date(dayRecords[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          s2 = new Date(dayRecords[3].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
       }
 
       // Cálculo de minutos trabalhados
