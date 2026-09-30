@@ -131,6 +131,14 @@ export interface AttendanceRequest {
   attachment?: string;
   attachmentName?: string;
   suggestedTimes?: string[];
+  // Campos detalhados de Ajuste do Espelho de Ponto (Portaria 671 MTP)
+  adjustType?: 'entrada' | 'saida_intervalo' | 'retorno_intervalo' | 'saida' | 'inclusao' | 'correcao';
+  requestedTime?: string;
+  originalTime?: string;
+  rejectionReason?: string;
+  approvedBy?: string;
+  approvedAt?: Date | string;
+  auditLog?: string;
 }
 
 export interface MedicalLeave {

@@ -375,6 +375,28 @@ const App: React.FC = () => {
                 {activeView === 'mypoint' && <MyPoint records={records.filter(r => r.matricula === user.matricula)} user={user} company={company} onNavigate={setActiveView} />}
                 {activeView === 'card' && <AttendanceCard records={records.filter(r => r.matricula === user.matricula)} company={company} />}
                 {activeView === 'requests' && <Requests />}
+                {activeView === 'sync' && (
+                  <div className="space-y-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-slate-900 rounded-[35px] p-6 border dark:border-slate-800 shadow-sm text-center space-y-4">
+                      <div className="w-16 h-16 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-3xl flex items-center justify-center mx-auto text-2xl font-black">
+                        🔄
+                      </div>
+                      <div>
+                        <h2 className="text-base font-black uppercase text-slate-800 dark:text-white">Central de Sincronização</h2>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Status de Conectividade e Fila Local</p>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        O PontoExato funciona 100% offline. Quando você estiver sem sinal, suas marcações ficam salvas com criptografia e chave anti-duplicidade no dispositivo e são transmitidas assim que a internet retornar.
+                      </p>
+                      <button
+                        onClick={() => setShowSyncCenterModal(true)}
+                        className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase text-xs tracking-wider shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                      >
+                        Abrir Fila de Sincronização
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {activeView === 'assistant' && <AiAssistant user={user} records={records.filter(r => r.matricula === user.matricula)} />}
                 {activeView === 'profile' && <Profile user={user} company={company} onLogout={handleLogout} />}
                 {activeView === 'vacation' && <VacationView user={user} />}
