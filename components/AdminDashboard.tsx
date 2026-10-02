@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck, LayoutDashboard, Users, CheckSquare, Edit3, Palmtree, FileSpreadsheet, UserCheck } from 'lucide-react';
+import { Eye, EyeOff, MapPin, Camera, X, Calendar, Plus, Trash2, ShieldCheck, LayoutDashboard, Users, CheckSquare, Edit3, Palmtree, FileSpreadsheet, UserCheck, Clock, CheckCircle2, XCircle, AlertCircle, FileText, RefreshCw, Search } from 'lucide-react';
 import { PointRecord, Company, Employee, AttendanceRequest, Holiday } from '../types';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getAllHolidaysForYear, getAllHolidaysWithStatus, getHolidayForDate } from '../utils/holidays';
+import { generatePunchId, getOfflineRecords } from '../utils/offlineStorage';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -63,6 +64,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [selectedDateIndividual, setSelectedDateIndividual] = useState<string>(new Date().toISOString().split('T')[0]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
+  const [selectedRequestModal, setSelectedRequestModal] = useState<AttendanceRequest | null>(null);
+  const [adminRejectReason, setAdminRejectReason] = useState('');
+  const [requestsFilterStatus, setRequestsFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [requestsSearchTerm, setRequestsSearchTerm] = useState('');
+  const [syncDeviceFilter, setSyncDeviceFilter] = useState<'all' | 'online' | 'pending' | 'inactive'>('all');
+  const [isAutoFixing, setIsAutoFixing] = useState(false);
 
   // Filtro de colaboradores
   const [employeeFilterStatus, setEmployeeFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
@@ -79,6 +86,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   // Estados para Gestão de Afastamentos / Folgas / Atestados / Licença Maternidade pelo Admin
   const [showAdminLeaveModal, setShowAdminLeaveModal] = useState(false);
+  const [showSyncStatusModal, setShowSyncStatusModal] = useState<string | null>(null);
   const [adminLeaveMatricula, setAdminLeaveMatricula] = useState('');
   const [adminLeaveType, setAdminLeaveType] = useState<'atestado' | 'licenca_maternidade' | 'afastamento_saude' | 'folga_compensatoria' | 'folga_abonada'>('folga_compensatoria');
   const [adminLeaveStartDate, setAdminLeaveStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -271,13 +279,93 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   };
 
   const filteredRecords = useMemo(() => {
+    const selectedEmp = employees.find(e => e.matricula === reportFilter.matricula);
     return latestRecords.filter(r => {
-      const date = new Date(r.timestamp);
-      return (reportFilter.matricula === 'todos' || r.matricula === reportFilter.matricula) &&
+      const date = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
+      const rMat = String(r.matricula || '').trim().toLowerCase();
+      const filterMat = String(reportFilter.matricula || '').trim().toLowerCase();
+      const matchesMatricula = filterMat === 'todos' || 
+        (filterMat && rMat && rMat !== 'n/a' && rMat === filterMat) ||
+        (selectedEmp && r.userName && r.userName.trim().toLowerCase() === selectedEmp.name.trim().toLowerCase());
+
+      return matchesMatricula &&
              date.getMonth() === reportFilter.month &&
              date.getFullYear() === reportFilter.year;
+    }).sort((a, b) => {
+      const da = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+      const db = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+      return db - da;
     });
-  }, [latestRecords, reportFilter]);
+  }, [latestRecords, reportFilter, employees]);
+
+  const handleAutoFixPunchesSequence = async () => {
+    const empLabel = reportFilter.matricula === 'todos' 
+      ? 'todos os colaboradores' 
+      : (employees.find(e => e.matricula === reportFilter.matricula)?.name || 'colaborador selecionado');
+
+    if (!window.confirm(`Deseja analisar e corrigir a sequência de batidas (Entrada, Início de Intervalo, Retorno e Saída) para ${empLabel} no período selecionado?`)) {
+      return;
+    }
+
+    setIsAutoFixing(true);
+    try {
+      // Agrupar registros do filtro atual por colaborador e data local (YYYY-MM-DD)
+      const groups: { [key: string]: PointRecord[] } = {};
+      filteredRecords.forEach(r => {
+        const d = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const empKey = `${String(r.matricula || r.userName || '').trim().toLowerCase()}_${dateKey}`;
+        if (!groups[empKey]) groups[empKey] = [];
+        groups[empKey].push(r);
+      });
+
+      let updatedCount = 0;
+      for (const key in groups) {
+        const dayPunches = groups[key].sort((a, b) => {
+          const ta = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+          const tb = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+          return ta - tb;
+        });
+
+        for (let idx = 0; idx < dayPunches.length; idx++) {
+          const punch = dayPunches[idx];
+          let expectedType: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida' = 'entrada';
+          
+          if (dayPunches.length === 1) {
+            expectedType = 'entrada';
+          } else if (dayPunches.length === 2) {
+            expectedType = idx === 0 ? 'entrada' : 'saida';
+          } else if (dayPunches.length === 3) {
+            expectedType = idx === 0 ? 'entrada' : (idx === 1 ? 'inicio_intervalo' : 'saida');
+          } else {
+            if (idx === 0) expectedType = 'entrada';
+            else if (idx === 1) expectedType = 'inicio_intervalo';
+            else if (idx === 2) expectedType = 'fim_intervalo';
+            else expectedType = 'saida';
+          }
+
+          if (punch.type !== expectedType && punch.id) {
+            updatedCount++;
+            await updateDoc(doc(db, "records", punch.id), {
+              type: expectedType,
+              isAdjustment: true
+            });
+          }
+        }
+      }
+
+      if (updatedCount > 0) {
+        alert(`✅ SUCESSO: ${updatedCount} marcação(ões) corrigida(s) com a sequência exata de Entrada, Intervalo, Retorno e Saída para todos os colaboradores!`);
+      } else {
+        alert("✅ Todas as marcações filtradas já estão na sequência correta de jornada!");
+      }
+    } catch (err) {
+      console.error("Erro ao auto-corrigir batidas:", err);
+      alert("Houve uma instabilidade ao atualizar os registros. Tente novamente.");
+    } finally {
+      setIsAutoFixing(false);
+    }
+  };
 
   const calculateHoursDiff = (start: string, end: string) => {
     if (!start || !end) return 0;
@@ -1066,7 +1154,158 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     });
   }, [employees, employeeFilterStatus, employeeSearchTerm]);
 
+  // Cálculo dos registros originais do colaborador no dia da solicitação
+  const originalDayPunches = useMemo(() => {
+    if (!selectedRequestModal) return { e1: '—', s1: '—', e2: '—', s2: '—', records: [] };
+    const reqDateStr = selectedRequestModal.date; // YYYY-MM-DD
+    const empRecs = latestRecords.filter(r => {
+      const rDate = new Date(r.timestamp);
+      const rDateStr = `${rDate.getFullYear()}-${String(rDate.getMonth() + 1).padStart(2, '0')}-${String(rDate.getDate()).padStart(2, '0')}`;
+      return r.matricula === selectedRequestModal.matricula && rDateStr === reqDateStr;
+    }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    let e1 = '—';
+    let s1 = '—';
+    let e2 = '—';
+    let s2 = '—';
+    if (empRecs.length === 1) {
+      e1 = new Date(empRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } else if (empRecs.length === 2) {
+      e1 = new Date(empRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      s2 = new Date(empRecs[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } else if (empRecs.length === 3) {
+      e1 = new Date(empRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      s1 = new Date(empRecs[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      e2 = new Date(empRecs[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } else if (empRecs.length >= 4) {
+      e1 = new Date(empRecs[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      s1 = new Date(empRecs[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      e2 = new Date(empRecs[2].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      s2 = new Date(empRecs[3].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return { e1, s1, e2, s2, records: empRecs };
+  }, [selectedRequestModal, latestRecords]);
+
+  const getRequestTypeDisplay = (req: AttendanceRequest) => {
+    if (req.type === 'licenca_maternidade') return 'Licença Maternidade';
+    if (req.type === 'folga_compensatoria') return 'Folga Compensatória';
+    if (req.type === 'folga_abonada') return 'Folga Abonada';
+    if (req.type === 'atestado' || req.type === 'afastamento_saude') return 'Atestado Médico';
+    if (req.adjustType === 'entrada') return 'Entrada';
+    if (req.adjustType === 'saida_intervalo') return 'Saída Intervalo';
+    if (req.adjustType === 'retorno_intervalo') return 'Retorno Intervalo';
+    if (req.adjustType === 'saida') return 'Saída';
+    if (req.adjustType === 'correcao') return 'Correção de Horário';
+    return 'Inclusão de Ponto';
+  };
+
+  const handleApproveAdjustment = async (req: AttendanceRequest) => {
+    try {
+      const isAdjustmentType = req.type === 'inclusão' || req.type === 'ajuste' || !!req.adjustType;
+      const adminName = company?.name ? `Administrador (${company.name})` : 'Administrador RH';
+      const now = new Date();
+      const nowStr = `${now.toLocaleDateString('pt-BR')} — ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+      if (isAdjustmentType) {
+        // Criar registro de ponto real no banco de dados para recalcular o espelho e o banco de horas
+        const dateStr = req.date;
+        const timeStr = req.requestedTime || '08:00';
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const [hh, mm] = timeStr.split(':').map(Number);
+        const punchTimestamp = new Date(y, m - 1, d, hh, mm);
+
+        let punchType: 'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo' = 'entrada';
+        if (req.adjustType === 'entrada') punchType = 'entrada';
+        else if (req.adjustType === 'saida_intervalo') punchType = 'inicio_intervalo';
+        else if (req.adjustType === 'retorno_intervalo') punchType = 'fim_intervalo';
+        else if (req.adjustType === 'saida') punchType = 'saida';
+        else if (req.adjustType === 'correcao') punchType = 'entrada';
+
+        const uniqueId = generatePunchId(punchTimestamp);
+        const signature = `PX-${req.matricula}-${uniqueId}-AJUSTE-RH`;
+
+        await addDoc(collection(db, "records"), {
+          userName: req.userName,
+          matricula: req.matricula,
+          timestamp: punchTimestamp,
+          address: 'Ajuste de Ponto Aprovado pelo RH (Portaria 671 MTP)',
+          latitude: 0,
+          longitude: 0,
+          photo: req.attachment || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
+          status: 'synchronized',
+          digitalSignature: signature,
+          type: punchType,
+          companyCode: company?.id || req.companyCode,
+          isAdjustment: true,
+          uniqueId: uniqueId
+        });
+
+        const auditEntry = `\n${nowStr}:\n${adminName} aprovou a alteração.\nRegistro alterado de: "${req.originalTime || '—'}" para "${req.requestedTime}".`;
+        
+        await updateDoc(doc(db, "requests", req.id), {
+          status: 'approved',
+          approvedBy: adminName,
+          approvedAt: now,
+          auditLog: (req.auditLog ? req.auditLog + '\n\n' : '') + auditEntry
+        });
+
+        alert(`✅ AJUSTE DE PONTO APROVADO COM SUCESSO!\n\nO registro de ponto das ${timeStr} foi incluído no espelho e o banco de horas foi recalculado.`);
+      } else {
+        // Folgas ou Atestados
+        await updateDoc(doc(db, "requests", req.id), {
+          status: 'approved',
+          approvedBy: adminName,
+          approvedAt: now,
+          auditLog: (req.auditLog ? req.auditLog + '\n\n' : '') + `\n${nowStr}: ${adminName} aprovou a solicitação.`
+        });
+        alert("SOLICITAÇÃO APROVADA COM SUCESSO!");
+      }
+
+      setSelectedRequestModal(null);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao aprovar o ajuste de ponto. Verifique a conexão.");
+    }
+  };
+
+  const handleRejectAdjustment = async (req: AttendanceRequest, reasonPrompt?: string) => {
+    const reason = (reasonPrompt !== undefined ? reasonPrompt : adminRejectReason.trim()) || prompt("Informe o motivo da recusa:") || "Horário informado não corresponde ao período trabalhado.";
+    if (!reason || !reason.trim()) return;
+
+    try {
+      const adminName = company?.name ? `Administrador (${company.name})` : 'Administrador RH';
+      const now = new Date();
+      const nowStr = `${now.toLocaleDateString('pt-BR')} — ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      const auditEntry = `\n${nowStr}:\n${adminName} recusou a solicitação.\nMotivo: "${reason.trim()}".`;
+
+      await updateDoc(doc(db, "requests", req.id), {
+        status: 'rejected',
+        rejectionReason: reason.trim(),
+        approvedBy: adminName,
+        approvedAt: now,
+        auditLog: (req.auditLog ? req.auditLog + '\n\n' : '') + auditEntry
+      });
+
+      alert(`❌ SOLICITAÇÃO RECUSADA!\n\nO colaborador receberá o motivo informado: "${reason.trim()}".`);
+      setSelectedRequestModal(null);
+      setAdminRejectReason('');
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao registrar recusa.");
+    }
+  };
+
   const handleRequestStatus = async (id: string, status: 'approved' | 'rejected') => {
+    const targetReq = requests.find(r => r.id === id);
+    if (targetReq) {
+      if (status === 'approved') {
+        await handleApproveAdjustment(targetReq);
+      } else {
+        await handleRejectAdjustment(targetReq);
+      }
+      return;
+    }
+
     try {
       await updateDoc(doc(db, "requests", id), { status });
       alert(`SOLICITAÇÃO ${status === 'approved' ? 'APROVADA' : 'RECUSADA'} COM SUCESSO!`);
@@ -1301,6 +1540,73 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
             <div className="bg-white p-8 rounded-[40px] border shadow-sm text-center">
               <p className="text-[10px] font-black text-blue-600 uppercase mb-2">Solicitações</p>
               <p className="text-4xl font-black text-blue-600">{stats.pendingRequests}</p>
+            </div>
+          </div>
+
+          {/* PAINEL DE SINCRONIZAÇÃO DOS COLABORADORES */}
+          <div className="bg-white p-6 md:p-8 rounded-[40px] border shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-lg">
+                  🔄
+                </div>
+                <div>
+                  <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                    Sincronização dos Colaboradores
+                  </h4>
+                  <p className="text-[9px] font-bold text-slate-400">Monitoramento de conectividade dos dispositivos e fila offline em tempo real</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSyncStatusModal('all')}
+                className="text-[9px] font-black uppercase text-orange-600 hover:underline tracking-wider"
+              >
+                Ver Dispositivos →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div 
+                onClick={() => setShowSyncStatusModal('online')}
+                className="p-5 bg-emerald-50/70 border border-emerald-100 rounded-3xl cursor-pointer hover:border-emerald-300 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Sincronizados</p>
+                  <h5 className="text-3xl font-black text-emerald-700 mt-1">
+                    🟢 {employees.filter(e => e.status !== 'inactive').length}
+                  </h5>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Conectados em tempo real</p>
+                </div>
+                <div className="text-sm font-black text-emerald-600 group-hover:translate-x-1 transition-transform">→</div>
+              </div>
+
+              <div 
+                onClick={() => setShowSyncStatusModal('pending')}
+                className="p-5 bg-amber-50/70 border border-amber-200 rounded-3xl cursor-pointer hover:border-amber-400 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <p className="text-[9px] font-black text-amber-700 uppercase tracking-wider">Aguardando Envio</p>
+                  <h5 className="text-3xl font-black text-amber-800 mt-1">
+                    🟠 {latestRecords.filter(r => r.isOffline && r.status === 'pending').length}
+                  </h5>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Fila offline nos aparelhos</p>
+                </div>
+                <div className="text-sm font-black text-amber-600 group-hover:translate-x-1 transition-transform">→</div>
+              </div>
+
+              <div 
+                onClick={() => setShowSyncStatusModal('inactive')}
+                className="p-5 bg-slate-50 border border-slate-200 rounded-3xl cursor-pointer hover:border-slate-300 transition-all flex items-center justify-between group"
+              >
+                <div>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Sem Sinal / Inativos</p>
+                  <h5 className="text-3xl font-black text-slate-700 mt-1">
+                    ⚪ {employees.filter(e => e.status === 'inactive').length}
+                  </h5>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Sem comunicação recente</p>
+                </div>
+                <div className="text-sm font-black text-slate-400 group-hover:translate-x-1 transition-transform">→</div>
+              </div>
             </div>
           </div>
 
@@ -1731,16 +2037,85 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                   .filter(emp => selectedEmployeeIndividual === 'todos' || emp.matricula === selectedEmployeeIndividual)
                   .map(emp => {
                     const dayRecs = latestRecords
-                      .filter(r => 
-                        r.matricula === emp.matricula && 
-                        r.timestamp.toISOString().split('T')[0] === selectedDateIndividual
-                      )
-                      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+                      .filter(r => {
+                        const rMat = String(r.matricula || '').trim().toLowerCase();
+                        const eMat = String(emp.matricula || '').trim().toLowerCase();
+                        const matchesEmp = (eMat && rMat && rMat !== 'n/a' && rMat === eMat) || 
+                          (emp.name && r.userName && r.userName.trim().toLowerCase() === emp.name.trim().toLowerCase());
+                        
+                        const d = r.timestamp?.toDate ? r.timestamp.toDate() : (r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp));
+                        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        return matchesEmp && dateStr === selectedDateIndividual;
+                      })
+                      .sort((a, b) => {
+                        const ta = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+                        const tb = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+                        return ta - tb;
+                      });
 
-                    const e1 = dayRecs[0] ? dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const s1 = dayRecs[1] ? dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const e2 = dayRecs[2] ? dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const s2 = dayRecs[3] ? dayRecs[3].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                    let e1 = '-';
+                    let s1 = '-';
+                    let e2 = '-';
+                    let s2 = '-';
+                    let recE1: PointRecord | undefined;
+                    let recS1: PointRecord | undefined;
+                    let recE2: PointRecord | undefined;
+                    let recS2: PointRecord | undefined;
+
+                    // Mapeamento inteligente baseado nos tipos e na quantidade de batidas do dia
+                    const recEntrada = dayRecs.find(r => r.type === 'entrada');
+                    const recIntervalo = dayRecs.find(r => r.type === 'inicio_intervalo');
+                    const recRetorno = dayRecs.find(r => r.type === 'fim_intervalo');
+                    const recSaida = dayRecs.find(r => r.type === 'saida');
+
+                    if (recIntervalo || recRetorno || recSaida) {
+                      if (recEntrada) {
+                        e1 = recEntrada.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = recEntrada;
+                      } else if (dayRecs[0]) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                      }
+                      if (recIntervalo) {
+                        s1 = recIntervalo.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS1 = recIntervalo;
+                      }
+                      if (recRetorno) {
+                        e2 = recRetorno.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE2 = recRetorno;
+                      }
+                      if (recSaida) {
+                        s2 = recSaida.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = recSaida;
+                      }
+                    } else {
+                      if (dayRecs.length === 1) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                      } else if (dayRecs.length === 2) {
+                        // 2 batidas: Entrada e Saída do expediente
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                        s2 = dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = dayRecs[1];
+                      } else if (dayRecs.length === 3) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                        s1 = dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS1 = dayRecs[1];
+                        s2 = dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = dayRecs[2];
+                      } else if (dayRecs.length >= 4) {
+                        e1 = dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE1 = dayRecs[0];
+                        s1 = dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS1 = dayRecs[1];
+                        e2 = dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recE2 = dayRecs[2];
+                        s2 = dayRecs[dayRecs.length - 1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                        recS2 = dayRecs[dayRecs.length - 1];
+                      }
+                    }
 
                     const renderRecordIcons = (rec: PointRecord | undefined) => {
                       if (!rec) return null;
@@ -1771,8 +2146,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     };
 
                     let workedMinutes = 0;
-                    if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
-                    if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
+                    if (e1 !== '-' && s1 !== '-' && e2 !== '-' && s2 !== '-') {
+                      workedMinutes = calculateHoursDiff(e1, s1) + calculateHoursDiff(e2, s2);
+                    } else if (e1 !== '-' && s2 !== '-' && s1 === '-' && e2 === '-') {
+                      workedMinutes = calculateHoursDiff(e1, s2);
+                    } else if (e1 !== '-' && s1 !== '-') {
+                      workedMinutes = calculateHoursDiff(e1, s1);
+                    }
 
                     const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
                     const dateObj = new Date(selectedDateIndividual + 'T12:00:00');
@@ -1794,19 +2174,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                         <td className="p-5 font-black text-slate-800">{emp.name}</td>
                         <td className="p-5">
                           <div className="font-mono">{e1}</div>
-                          {renderRecordIcons(dayRecs[0])}
+                          {renderRecordIcons(recE1)}
                         </td>
                         <td className="p-5">
                           <div className="font-mono">{s1}</div>
-                          {renderRecordIcons(dayRecs[1])}
+                          {renderRecordIcons(recS1)}
                         </td>
                         <td className="p-5">
                           <div className="font-mono">{e2}</div>
-                          {renderRecordIcons(dayRecs[2])}
+                          {renderRecordIcons(recE2)}
                         </td>
                         <td className="p-5">
                           <div className="font-mono">{s2}</div>
-                          {renderRecordIcons(dayRecs[3])}
+                          {renderRecordIcons(recS2)}
                         </td>
                         <td className="p-5 text-slate-600 font-mono">
                           {workedMinutes > 0 ? (
@@ -1844,180 +2224,282 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         </div>
       )}
 
-      {activeTab === 'aprovacoes' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
-            <div>
-              <h3 className="text-sm font-black uppercase text-slate-900">Solicitações, Folgas e Afastamentos</h3>
-              <p className="text-[10px] text-slate-500 font-medium">Gerencie folgas compensatórias (banco de horas), abonos, atestados médicos e licenças da equipe.</p>
+      {activeTab === 'aprovacoes' && (() => {
+        const pendingCount = requests.filter(r => r.status === 'pending').length;
+        const approvedCount = requests.filter(r => r.status === 'approved').length;
+        const rejectedCount = requests.filter(r => r.status === 'rejected').length;
+
+        const filteredReqs = requests.filter(r => {
+          const matchesStatus = requestsFilterStatus === 'all' ? true : r.status === requestsFilterStatus;
+          const search = requestsSearchTerm.toLowerCase().trim();
+          const matchesSearch = !search ||
+            (r.userName && r.userName.toLowerCase().includes(search)) ||
+            (r.matricula && r.matricula.toLowerCase().includes(search)) ||
+            (r.reason && r.reason.toLowerCase().includes(search));
+          return matchesStatus && matchesSearch;
+        });
+
+        return (
+          <div className="space-y-6">
+            {/* CABEÇALHO COM CONTADOR DE PENDENTES */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center text-xl font-black">
+                  📝
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-black uppercase text-slate-900">
+                      Solicitações de Ajustes de Ponto
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-100 text-rose-700 border border-rose-200">
+                      🔴 {pendingCount} pendente{pendingCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Portaria MTP nº 671/2021 • Transparência, Auditoria e Recálculo Automático
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAdminLeaveModal(true)}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-amber-600/20 transition-all shrink-0"
+              >
+                <span>🏖️</span> + Lançar Folga / Afastamento (RH)
+              </button>
             </div>
-            <button 
-              onClick={() => setShowAdminLeaveModal(true)}
-              className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-amber-600/20 transition-all"
-            >
-              <span>🏖️</span> + Lançar Folga / Afastamento (RH)
-            </button>
-          </div>
 
-          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-left min-w-[950px]">
-              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
-                <tr>
-                  <th className="p-5">Data Pedido</th>
-                  <th className="p-5">Colaborador</th>
-                  <th className="p-5">Tipo</th>
-                  <th className="p-5">Período / Data</th>
-                  <th className="p-5">Horários / CID</th>
-                  <th className="p-5">Motivo/Justificativa</th>
-                  <th className="p-5">Status</th>
-                  <th className="p-5 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="text-[11px] font-bold uppercase">
-                {requests.map(req => {
-                  const reqTimes: string[] = (req as any).times || (req as any).suggestedTimes || [];
-                  const isMaternidade = req.type === 'licenca_maternidade';
-                  const isFolgaComp = req.type === 'folga_compensatoria';
-                  const isFolgaAbono = req.type === 'folga_abonada';
-                  const isAtestado = req.type === 'atestado' || req.type === 'afastamento_saude' || req.type === 'abono';
-                  const isSpecialAbsence = isMaternidade || isAtestado || isFolgaComp || isFolgaAbono;
-                  const formattedStartDate = req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
-                  const formattedEndDate = req.endDate ? new Date(req.endDate.includes('T') ? req.endDate : req.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : formattedStartDate;
+            {/* BARRA DE FILTROS E BUSCA */}
+            <div className="bg-white p-4 rounded-3xl border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex bg-slate-100 p-1 rounded-2xl w-full sm:w-auto">
+                <button
+                  onClick={() => setRequestsFilterStatus('all')}
+                  className={`px-3 py-2 text-[9px] font-black uppercase rounded-xl transition-all ${
+                    requestsFilterStatus === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Todos ({requests.length})
+                </button>
+                <button
+                  onClick={() => setRequestsFilterStatus('pending')}
+                  className={`px-3 py-2 text-[9px] font-black uppercase rounded-xl transition-all flex items-center gap-1.5 ${
+                    requestsFilterStatus === 'pending' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>🔴 Pendentes</span>
+                  <span className="bg-white/20 px-1.5 py-0.2 rounded-full text-[8px]">{pendingCount}</span>
+                </button>
+                <button
+                  onClick={() => setRequestsFilterStatus('approved')}
+                  className={`px-3 py-2 text-[9px] font-black uppercase rounded-xl transition-all ${
+                    requestsFilterStatus === 'approved' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🟢 Aprovadas ({approvedCount})
+                </button>
+                <button
+                  onClick={() => setRequestsFilterStatus('rejected')}
+                  className={`px-3 py-2 text-[9px] font-black uppercase rounded-xl transition-all ${
+                    requestsFilterStatus === 'rejected' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  ⚪ Recusadas ({rejectedCount})
+                </button>
+              </div>
 
-                  return (
-                    <tr key={req.id} className="border-b hover:bg-slate-50/50 transition-colors">
-                      <td className="p-5 text-slate-400">{req.createdAt.toLocaleDateString('pt-BR')}</td>
-                      <td className="p-5 font-black text-slate-800">
-                        <div>
-                          <p>{req.userName}</p>
-                          <span className="text-[8px] text-slate-400 font-mono">MAT: {req.matricula}</span>
-                        </div>
-                      </td>
-                      <td className="p-5">
-                        {isMaternidade ? (
-                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-pink-100 text-pink-700 border border-pink-200">
-                            🤱 LIC. MATERNIDADE
-                          </span>
-                        ) : isFolgaComp ? (
-                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
-                            🏖️ FOLGA COMPENSATÓRIA
-                          </span>
-                        ) : isFolgaAbono ? (
-                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            🎁 FOLGA ABONADA
-                          </span>
-                        ) : isAtestado ? (
-                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">
-                            🏥 ATESTADO MÉDICO
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-blue-100 text-blue-700 border border-blue-200">
-                            📝 INCLUSÃO PONTO
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-5 font-mono text-slate-700">
-                        {isSpecialAbsence ? (
+              <div className="relative w-full sm:w-72">
+                <input
+                  type="text"
+                  placeholder="BUSCAR COLABORADOR OU MOTIVO..."
+                  value={requestsSearchTerm}
+                  onChange={e => setRequestsSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none focus:border-orange-500 uppercase"
+                />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              </div>
+            </div>
+
+            {/* TABELA DE SOLICITAÇÕES */}
+            <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+              <table className="w-full text-left min-w-[950px]">
+                <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                  <tr>
+                    <th className="p-5">Funcionário</th>
+                    <th className="p-5">Data do Ponto</th>
+                    <th className="p-5">Solicitação</th>
+                    <th className="p-5">Horário Solicitado</th>
+                    <th className="p-5">Motivo / Justificativa</th>
+                    <th className="p-5">Comprovante</th>
+                    <th className="p-5">Status</th>
+                    <th className="p-5 text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[11px] font-bold uppercase">
+                  {filteredReqs.map(req => {
+                    const isAdjustment = req.type === 'inclusão' || req.type === 'ajuste' || !!req.adjustType;
+                    const formattedPointDate = req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+                    const typeLabel = getRequestTypeDisplay(req);
+
+                    return (
+                      <tr 
+                        key={req.id} 
+                        onClick={() => setSelectedRequestModal(req)}
+                        className="border-b hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                      >
+                        <td className="p-5 font-black text-slate-800">
                           <div>
-                            <p className="font-black text-slate-800 text-[10px]">
-                              {formattedStartDate} até {formattedEndDate}
-                            </p>
-                            <span className={`text-[8px] font-sans font-black px-2 py-0.5 rounded-md inline-block mt-0.5 border ${
-                              isFolgaComp 
-                                ? 'bg-amber-50 text-amber-800 border-amber-200' 
-                                : isFolgaAbono 
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                  : 'bg-purple-50 text-purple-700 border-purple-100'
-                            }`}>
-                              {req.daysCount ? `${req.daysCount} DIA(S) DE DISPENSA` : '1 DIA'}
+                            <p className="group-hover:text-orange-600 transition-colors">{req.userName}</p>
+                            <span className="text-[8px] text-slate-400 font-mono">MAT: {req.matricula}</span>
+                          </div>
+                        </td>
+
+                        <td className="p-5 font-mono text-slate-700">
+                          <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] font-black">
+                            {formattedPointDate}
+                          </span>
+                        </td>
+
+                        <td className="p-5">
+                          <span className={`px-2.5 py-1 rounded-lg text-[8.5px] font-black uppercase border ${
+                            isAdjustment
+                              ? 'bg-orange-50 text-orange-700 border-orange-200'
+                              : req.type === 'folga_compensatoria'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : req.type === 'licenca_maternidade'
+                              ? 'bg-pink-50 text-pink-700 border-pink-200'
+                              : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          }`}>
+                            {typeLabel}
+                          </span>
+                        </td>
+
+                        <td className="p-5 font-mono">
+                          {req.requestedTime ? (
+                            <span className="font-black text-slate-900 text-xs bg-slate-50 px-2.5 py-1 rounded-xl border">
+                              {req.requestedTime}
                             </span>
-                          </div>
-                        ) : (
-                          <span className="text-[10px]">{formattedStartDate}</span>
-                        )}
-                      </td>
-                      <td className="p-5">
-                        {req.cid && (
-                          <div className="mb-1">
-                            <span className="bg-slate-800 text-white font-mono text-[8px] font-black px-2 py-0.5 rounded">
-                              CID: {req.cid}
-                            </span>
-                          </div>
-                        )}
-                        {reqTimes.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {reqTimes.map((tm: string, idx: number) => (
-                              <span key={idx} className="bg-slate-100 border border-slate-200 text-slate-800 font-mono font-black px-2 py-0.5 rounded-md text-[9px]">
-                                {tm}
-                              </span>
-                            ))}
-                          </div>
-                        ) : isFolgaComp ? (
-                          <span className="text-amber-800 text-[8px] font-black bg-amber-50 border border-amber-200 px-2 py-1 rounded-md">
-                            Débito no Banco de Horas
-                          </span>
-                        ) : isFolgaAbono ? (
-                          <span className="text-emerald-800 text-[8px] font-black bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md">
-                            Abono s/ Débito (100%)
-                          </span>
-                        ) : isMaternidade || isAtestado ? (
-                          <span className="text-emerald-700 text-[8px] font-black bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-md">
-                            Abono Legal Integral
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[8px] font-semibold">
-                            Horário a definir
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-5 text-[9px] text-slate-500 max-w-[200px]">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-semibold text-slate-800">{req.reason}</span>
-                          {req.attachment && (
-                            <button 
-                              onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
-                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[8px] font-black uppercase mt-0.5 bg-blue-50 px-2 py-1 rounded border border-blue-100 w-fit"
-                            >
-                              <Camera size={10} /> Ver Documento / Atestado
-                            </button>
+                          ) : (
+                            <span className="text-slate-400 text-[9px] font-normal">N/A</span>
                           )}
-                        </div>
-                      </td>
-                      <td className="p-5">
-                        <span className={`px-3 py-1 rounded-full text-[8px] font-black ${
-                          req.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 
-                          req.status === 'rejected' ? 'bg-red-50 text-red-600 border border-red-200' : 
-                          'bg-amber-50 text-amber-600 border border-amber-200'
-                        }`}>
-                          {req.status === 'pending' ? 'PENDENTE' : req.status === 'approved' ? 'APROVADO' : 'RECUSADO'}
-                        </span>
-                      </td>
-                      <td className="p-5 text-center">
-                        {req.status === 'pending' ? (
-                          <div className="flex justify-center gap-2">
-                            <button onClick={() => handleRequestStatus(req.id, 'approved')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Aprovar</button>
-                            <button onClick={() => handleRequestStatus(req.id, 'rejected')} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm">Recusar</button>
+                        </td>
+
+                        <td className="p-5 text-[9px] text-slate-600 max-w-[240px]">
+                          <p className="truncate font-semibold italic" title={req.reason}>
+                            "{req.reason}"
+                          </p>
+                        </td>
+
+                        <td className="p-5" onClick={e => e.stopPropagation()}>
+                          {req.attachment ? (
+                            <button
+                              onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[8px] font-black uppercase bg-blue-50 px-2 py-1 rounded border border-blue-100"
+                            >
+                              <Camera size={10} /> Ver Anexo
+                            </button>
+                          ) : (
+                            <span className="text-slate-300 text-[8px]">-</span>
+                          )}
+                        </td>
+
+                        <td className="p-5">
+                          <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase flex items-center gap-1 w-fit ${
+                            req.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 
+                            req.status === 'rejected' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 
+                            'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {req.status === 'approved' ? '🟢 Aprovada' : req.status === 'rejected' ? '🔴 Recusada' : '🟡 Pendente'}
+                          </span>
+                        </td>
+
+                        <td className="p-5 text-center" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => setSelectedRequestModal(req)}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1"
+                              title="Visualizar detalhes completos"
+                            >
+                              🔍 Detalhes
+                            </button>
+
+                            {req.status === 'pending' && (
+                              <>
+                                <button 
+                                  onClick={() => handleApproveAdjustment(req)} 
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm"
+                                  title="Aprovar ajuste e recalcular"
+                                >
+                                  Aprovar
+                                </button>
+                                <button 
+                                  onClick={() => handleRejectAdjustment(req)} 
+                                  className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm"
+                                  title="Recusar solicitação"
+                                >
+                                  Recusar
+                                </button>
+                              </>
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-slate-400 text-[8px] font-black">CONCLUÍDO</span>
-                        )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {filteredReqs.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="p-12 text-center text-slate-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <span className="text-3xl">📄</span>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                            Nenhuma solicitação encontrada
+                          </p>
+                        </div>
                       </td>
                     </tr>
-                  );
-                })}
-                {requests.length === 0 && (
-                  <tr><td colSpan={8} className="p-10 text-center text-slate-400">Nenhuma solicitação pendente</td></tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {activeTab === 'correcao' && (
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-            <h3 className="text-sm font-black uppercase">Correção de Registros</h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-sm font-black uppercase text-slate-900">Correção de Registros & Sequência de Ponto</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                  Monitore e ajuste marcações de entrada, intervalo, retorno e saída de todos os colaboradores
+                </p>
+              </div>
+
+              {/* Botão de Auto-Correção de Sequência */}
+              <button
+                onClick={handleAutoFixPunchesSequence}
+                disabled={isAutoFixing}
+                className={`px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all ${
+                  isAutoFixing 
+                    ? 'bg-slate-400 text-white cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white active:scale-95'
+                }`}
+                title="Ajusta automaticamente marcações de saída, intervalo e retorno para todos os colaboradores"
+              >
+                <span>{isAutoFixing ? '🔄' : '⚡'}</span>
+                <span>{isAutoFixing ? 'Corrigindo...' : 'Auto-Corrigir Sequência (Entrada → Intervalo → Retorno → Saída)'}</span>
+              </button>
+            </div>
+
+            {/* Caixa Informativa */}
+            <div className="bg-blue-50/70 border border-blue-100 p-4 rounded-3xl text-[9px] text-blue-900 font-bold flex items-start gap-3">
+              <span className="text-base leading-none">💡</span>
+              <p className="leading-relaxed">
+                <strong>Regra de Classificação:</strong> Se um colaborador marcou saída do expediente e estava exibindo como entrada, use o botão <strong className="text-orange-600">"Auto-Corrigir Sequência"</strong> acima para reordenar automaticamente todas as batidas do dia (1ª Entrada, 2ª Intervalo, 3ª Retorno, 4ª Saída), ou clique individualmente em <strong className="text-blue-600">"Corrigir"</strong> na tabela abaixo.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
                 <option value="todos">Todos Colaboradores</option>
@@ -2045,18 +2527,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               </thead>
               <tbody className="text-[11px] font-bold uppercase">
                 {filteredRecords.map(rec => (
-                  <tr key={rec.id} className="border-b">
-                    <td className="p-5">
+                  <tr key={rec.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                    <td className="p-5 font-mono">
                       {rec.timestamp.toLocaleDateString('pt-BR')} {rec.timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
                     </td>
-                    <td className="p-5">{rec.userName}</td>
+                    <td className="p-5 font-black text-slate-800">{rec.userName}</td>
                     <td className="p-5">
-                      <span className={`px-2 py-1 rounded-lg text-[8px] ${
-                        rec.type === 'entrada' ? 'bg-orange-100 text-orange-700' :
-                        rec.type === 'saida' ? 'bg-slate-100 text-slate-700' :
-                        'bg-blue-100 text-blue-700'
+                      <span className={`px-2.5 py-1 rounded-xl text-[9px] font-black uppercase border ${
+                        rec.type === 'entrada' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        rec.type === 'inicio_intervalo' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        rec.type === 'fim_intervalo' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        rec.type === 'saida' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                        'bg-slate-100 text-slate-700 border-slate-200'
                       }`}>
-                        {rec.type.replace('_', ' ')}
+                        {rec.type === 'entrada' ? '🟢 Entrada' :
+                         rec.type === 'inicio_intervalo' ? '☕ Início Intervalo' :
+                         rec.type === 'fim_intervalo' ? '🔙 Retorno Intervalo' :
+                         rec.type === 'saida' ? '🔴 Saída' :
+                         rec.type.replace('_', ' ')}
                       </span>
                     </td>
                     <td className="p-5">
@@ -2093,13 +2581,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                           setEditRecordType(rec.type);
                           setShowEditRecordModal(true);
                         }} 
-                        className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black uppercase"
+                        className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-full text-[8px] font-black uppercase transition-all shadow-sm"
                       >
                         Corrigir
                       </button>
                       <button 
                         onClick={() => handleDeleteRecord(rec.id)} 
-                        className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[8px] font-black uppercase"
+                        className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-full text-[8px] font-black uppercase transition-all shadow-sm"
                       >
                         Excluir
                       </button>
@@ -2783,10 +3271,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Tipo de Registro</label>
                 <select value={manualPunchType} onChange={e => setManualPunchType(e.target.value as any)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border uppercase">
-                  <option value="entrada">Entrada</option>
-                  <option value="inicio_intervalo">Início Intervalo</option>
-                  <option value="fim_intervalo">Fim Intervalo</option>
-                  <option value="saida">Saída</option>
+                  <option value="entrada">🟢 Entrada</option>
+                  <option value="inicio_intervalo">☕ Início Intervalo</option>
+                  <option value="fim_intervalo">🔙 Retorno Intervalo</option>
+                  <option value="saida">🔴 Saída (Fim de Expediente)</option>
                 </select>
               </div>
             </div>
@@ -2817,10 +3305,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Tipo de Registro</label>
                 <select value={editRecordType} onChange={e => setEditRecordType(e.target.value as any)} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border uppercase">
-                  <option value="entrada">Entrada</option>
-                  <option value="inicio_intervalo">Início Intervalo</option>
-                  <option value="fim_intervalo">Fim Intervalo</option>
-                  <option value="saida">Saída</option>
+                  <option value="entrada">🟢 Entrada</option>
+                  <option value="inicio_intervalo">☕ Início Intervalo</option>
+                  <option value="fim_intervalo">🔙 Retorno Intervalo</option>
+                  <option value="saida">🔴 Saída (Fim de Expediente)</option>
                 </select>
               </div>
             </div>
@@ -3276,6 +3764,415 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           </div>
         </div>
       )}
+
+      {/* MODAL DE MONITORAMENTO DE SINCRONIZAÇÃO DE DISPOSITIVOS */}
+      {showSyncStatusModal && (() => {
+        const offlineQueue = getOfflineRecords();
+        const pendingQueueCount = offlineQueue.length;
+        const onlineCount = employees.filter(e => e.status !== 'inactive').length;
+        const inactiveCount = employees.filter(e => e.status === 'inactive').length;
+
+        const filteredEmpList = employees.filter(emp => {
+          const isInactive = emp.status === 'inactive';
+          const hasPending = emp.matricula === 'TEMP-2026' ? pendingQueueCount > 0 : false;
+          
+          if (syncDeviceFilter === 'online') return !isInactive && !hasPending;
+          if (syncDeviceFilter === 'pending') return hasPending;
+          if (syncDeviceFilter === 'inactive') return isInactive;
+          return true;
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in font-sans">
+            <div className="bg-white rounded-[36px] w-full max-w-2xl p-6 md:p-8 shadow-2xl space-y-4 animate-in zoom-in duration-200 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-lg">
+                    🔄
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase text-slate-900">
+                      Sincronização dos Colaboradores
+                    </h3>
+                    <p className="text-[9px] font-bold text-slate-400">
+                      Última sincronização de cada dispositivo e status da fila local
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setShowSyncStatusModal(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl">
+                  ✕
+                </button>
+              </div>
+
+              {/* CARDS RESUMO / CONTADORES */}
+              <div className="grid grid-cols-3 gap-2.5">
+                <button
+                  onClick={() => setSyncDeviceFilter(syncDeviceFilter === 'online' ? 'all' : 'online')}
+                  className={`p-3 rounded-2xl border text-left transition-all ${
+                    syncDeviceFilter === 'online' ? 'bg-emerald-100 border-emerald-300 ring-2 ring-emerald-500' : 'bg-emerald-50 border-emerald-100'
+                  }`}
+                >
+                  <p className="text-[8px] font-black uppercase text-emerald-600">Sincronizados</p>
+                  <p className="text-base font-black text-emerald-800">🟢 {onlineCount}</p>
+                </button>
+
+                <button
+                  onClick={() => setSyncDeviceFilter(syncDeviceFilter === 'pending' ? 'all' : 'pending')}
+                  className={`p-3 rounded-2xl border text-left transition-all ${
+                    syncDeviceFilter === 'pending' ? 'bg-amber-100 border-amber-300 ring-2 ring-amber-500' : 'bg-amber-50 border-amber-200'
+                  }`}
+                >
+                  <p className="text-[8px] font-black uppercase text-amber-700">Aguardando</p>
+                  <p className="text-base font-black text-amber-900">🟠 {pendingQueueCount > 0 ? 1 : 0}</p>
+                </button>
+
+                <button
+                  onClick={() => setSyncDeviceFilter(syncDeviceFilter === 'inactive' ? 'all' : 'inactive')}
+                  className={`p-3 rounded-2xl border text-left transition-all ${
+                    syncDeviceFilter === 'inactive' ? 'bg-slate-200 border-slate-300 ring-2 ring-slate-500' : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <p className="text-[8px] font-black uppercase text-slate-500">Inativos / Erro</p>
+                  <p className="text-base font-black text-slate-700">⚪ {inactiveCount}</p>
+                </button>
+              </div>
+
+              {/* FILTROS EM ABAS */}
+              <div className="flex bg-slate-100 p-1 rounded-2xl text-[9px] font-black uppercase">
+                <button
+                  onClick={() => setSyncDeviceFilter('all')}
+                  className={`flex-1 py-1.5 rounded-xl transition-all ${syncDeviceFilter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                  Todos ({employees.length})
+                </button>
+                <button
+                  onClick={() => setSyncDeviceFilter('online')}
+                  className={`flex-1 py-1.5 rounded-xl transition-all ${syncDeviceFilter === 'online' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500'}`}
+                >
+                  🟢 Online ({onlineCount})
+                </button>
+                <button
+                  onClick={() => setSyncDeviceFilter('pending')}
+                  className={`flex-1 py-1.5 rounded-xl transition-all ${syncDeviceFilter === 'pending' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500'}`}
+                >
+                  🟠 Pendente ({pendingQueueCount > 0 ? 1 : 0})
+                </button>
+                <button
+                  onClick={() => setSyncDeviceFilter('inactive')}
+                  className={`flex-1 py-1.5 rounded-xl transition-all ${syncDeviceFilter === 'inactive' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500'}`}
+                >
+                  ⚪ Inativos ({inactiveCount})
+                </button>
+              </div>
+
+              {/* TABELA DE DISPOSITIVOS */}
+              <div className="flex-1 overflow-y-auto no-scrollbar border rounded-2xl">
+                <table className="w-full text-left border-collapse text-[10px]">
+                  <thead className="bg-slate-50 text-slate-500 font-black uppercase border-b sticky top-0">
+                    <tr>
+                      <th className="p-3">Funcionário</th>
+                      <th className="p-3">Matrícula</th>
+                      <th className="p-3">Última Sincronização</th>
+                      <th className="p-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y font-bold">
+                    {filteredEmpList.map(emp => {
+                      const isInactive = emp.status === 'inactive';
+                      const hasPending = emp.matricula === 'TEMP-2026' ? pendingQueueCount > 0 : false;
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-50/50">
+                          <td className="p-3">
+                            <p className="font-black text-slate-900">{emp.name}</p>
+                            <p className="text-[8px] text-slate-400 font-normal">{emp.roleFunction || 'Colaborador'}</p>
+                          </td>
+                          <td className="p-3 font-mono text-slate-600">{emp.matricula}</td>
+                          <td className="p-3 font-mono text-slate-500">
+                            {new Date().toLocaleDateString('pt-BR')} — {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="p-3 text-center">
+                            {isInactive ? (
+                              <span className="bg-slate-100 text-slate-600 text-[8px] px-2.5 py-1 rounded-full font-black uppercase">
+                                ⚪ Inativo
+                              </span>
+                            ) : hasPending ? (
+                              <span className="bg-amber-100 text-amber-800 text-[8px] px-2.5 py-1 rounded-full font-black uppercase">
+                                🟠 {pendingQueueCount} Pendente{pendingQueueCount > 1 ? 's' : ''}
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-100 text-emerald-800 text-[8px] px-2.5 py-1 rounded-full font-black uppercase">
+                                🟢 Online
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredEmpList.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-slate-400">
+                          Nenhum colaborador com este status
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="pt-2 border-t flex justify-end">
+                <button
+                  onClick={() => setShowSyncStatusModal(null)}
+                  className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL DETALHES DA SOLICITAÇÃO DE AJUSTE DE PONTO (PORTARIA 671 MTP) */}
+      {selectedRequestModal && (() => {
+        const req = selectedRequestModal;
+        const isAdjustment = req.type === 'inclusão' || req.type === 'ajuste' || !!req.adjustType;
+        const formattedDate = req.date ? new Date(req.date.includes('T') ? req.date : req.date + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+        const typeLabel = getRequestTypeDisplay(req);
+
+        return (
+          <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in font-sans">
+            <div className="bg-white rounded-[36px] w-full max-w-lg p-6 md:p-8 shadow-2xl space-y-4 animate-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+              {/* CABEÇALHO DO MODAL */}
+              <div className="flex items-center justify-between border-b pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-black">
+                    ✏️
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                      Detalhes da Solicitação de Ajuste
+                    </h3>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">
+                      Portaria MTP nº 671/2021 • Auditoria & Transparência
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedRequestModal(null)} 
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* CONTEÚDO SCROLLÁVEL */}
+              <div className="flex-1 overflow-y-auto no-scrollbar space-y-3.5 pr-1">
+                {/* DADOS DO COLABORADOR E DATA */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border flex items-center justify-between text-[10px]">
+                  <div>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">Colaborador</p>
+                    <p className="font-black text-slate-900 text-xs">{req.userName}</p>
+                    <p className="text-[8px] font-mono text-slate-500">Matrícula: {req.matricula}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">Data do Ponto</p>
+                    <p className="font-black text-slate-900 text-xs font-mono">{formattedDate}</p>
+                    <span className={`px-2 py-0.5 rounded-full text-[7.5px] font-black uppercase inline-block mt-1 ${
+                      req.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                      req.status === 'rejected' ? 'bg-rose-100 text-rose-800' :
+                      'bg-amber-100 text-amber-800'
+                    }`}>
+                      {req.status === 'approved' ? 'Aprovada' : req.status === 'rejected' ? 'Recusada' : 'Pendente'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* REGISTRO ORIGINAL DO DIA */}
+                {isAdjustment && (
+                  <div className="p-4 bg-slate-50 rounded-2xl border space-y-2">
+                    <div className="flex justify-between items-center">
+                      <p className="text-[8.5px] font-black uppercase text-slate-500 tracking-wider">
+                        Registro Original do Dia ({formattedDate})
+                      </p>
+                      <span className="text-[7.5px] text-slate-400 font-bold uppercase">
+                        {originalDayPunches.records.length} marcação(ões) no banco
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5 text-center font-mono">
+                      <div className="p-2 bg-white rounded-xl border">
+                        <p className="text-[7px] font-sans font-bold text-slate-400 uppercase">Entrada</p>
+                        <p className={`text-[11px] font-bold ${originalDayPunches.e1 !== '—' ? 'text-emerald-600' : 'text-slate-300'}`}>
+                          {originalDayPunches.e1}
+                        </p>
+                      </div>
+                      <div className="p-2 bg-white rounded-xl border">
+                        <p className="text-[7px] font-sans font-bold text-slate-400 uppercase">Intervalo</p>
+                        <p className={`text-[11px] font-bold ${originalDayPunches.s1 !== '—' ? 'text-slate-700' : 'text-slate-300'}`}>
+                          {originalDayPunches.s1}
+                        </p>
+                      </div>
+                      <div className="p-2 bg-white rounded-xl border">
+                        <p className="text-[7px] font-sans font-bold text-slate-400 uppercase">Retorno</p>
+                        <p className={`text-[11px] font-bold ${originalDayPunches.e2 !== '—' ? 'text-slate-700' : 'text-rose-400 font-black'}`}>
+                          {originalDayPunches.e2}
+                        </p>
+                      </div>
+                      <div className="p-2 bg-white rounded-xl border">
+                        <p className="text-[7px] font-sans font-bold text-slate-400 uppercase">Saída</p>
+                        <p className={`text-[11px] font-bold ${originalDayPunches.s2 !== '—' ? 'text-emerald-600' : 'text-slate-300'}`}>
+                          {originalDayPunches.s2}
+                        </p>
+                      </div>
+                    </div>
+
+                    {(originalDayPunches.e1 === '—' || originalDayPunches.s1 === '—' || originalDayPunches.e2 === '—' || originalDayPunches.s2 === '—') && (
+                      <p className="text-[8px] text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-200 flex items-center gap-1 font-bold">
+                        ⚠️ O sistema detectou marcação pendente neste dia. A solicitação visa regularizar a folha.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* SOLICITAÇÃO SOLICITADA */}
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl space-y-1.5">
+                  <p className="text-[8.5px] font-black uppercase text-orange-600 tracking-wider">
+                    Alteração Solicitada pelo Colaborador
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-900 uppercase">
+                      {typeLabel}
+                    </span>
+                    <span className="text-base font-black font-mono bg-white text-orange-600 px-3 py-1 rounded-xl border border-orange-200 shadow-sm">
+                      {req.requestedTime || 'Horário definido'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* MOTIVO DA SOLICITAÇÃO */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border space-y-1">
+                  <p className="text-[8px] font-black uppercase text-slate-400">Motivo Informado</p>
+                  <p className="text-[10px] font-semibold text-slate-800 italic">
+                    "{req.reason}"
+                  </p>
+                </div>
+
+                {/* ANEXO / COMPROVANTE */}
+                {req.attachment && (
+                  <div className="p-3.5 bg-slate-50 rounded-2xl border space-y-2">
+                    <p className="text-[8px] font-black uppercase text-slate-400">Documento / Comprovante Anexo</p>
+                    <div className="flex items-center gap-3">
+                      <img 
+                        src={req.attachment} 
+                        alt="Comprovante" 
+                        className="w-16 h-16 object-cover rounded-xl border cursor-pointer hover:opacity-80 transition-opacity" 
+                        onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
+                      />
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedPhotoUrl(req.attachment!); setShowPhotoModal(true); }}
+                          className="px-3 py-1.5 bg-white border text-blue-600 hover:text-blue-800 rounded-xl text-[9px] font-black uppercase flex items-center gap-1 shadow-sm"
+                        >
+                          <Camera size={12} /> Ampliar Comprovante
+                        </button>
+                        <p className="text-[8px] text-slate-400 mt-1">{req.attachmentName || 'Arquivo enviado pelo colaborador'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* HISTÓRICO DE AUDITORIA (PORTARIA 671) */}
+                <div className="p-3.5 bg-slate-900 text-white rounded-2xl space-y-2 text-[9px]">
+                  <p className="font-black uppercase tracking-wider text-orange-400 flex items-center gap-1">
+                    <ShieldCheck size={12} /> Auditoria e Histórico da Marcação
+                  </p>
+                  <div className="font-mono text-[8.5px] space-y-1.5 opacity-90 leading-relaxed border-t border-slate-800 pt-2 whitespace-pre-line">
+                    {req.auditLog ? (
+                      req.auditLog
+                    ) : (
+                      `${req.createdAt.toLocaleDateString('pt-BR')} às ${req.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}: ${req.userName} enviou a solicitação de ${typeLabel} para ${req.requestedTime || 'ajuste'}.`
+                    )}
+                  </div>
+                </div>
+
+                {/* CAMPO DE JUSTIFICATIVA CASO VÁ RECUSAR */}
+                {req.status === 'pending' && (
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-[8.5px] font-black uppercase text-slate-500 block">
+                      Justificativa do RH (Obrigatória em caso de recusa)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Horário informado não corresponde ao período trabalhado / câmera não identificou."
+                      value={adminRejectReason}
+                      onChange={e => setAdminRejectReason(e.target.value)}
+                      className="w-full p-3 bg-slate-50 border rounded-2xl text-[10px] font-medium outline-none focus:border-orange-500"
+                    />
+                  </div>
+                )}
+
+                {/* STATUS FINAL SE JÁ CONCLUÍDO */}
+                {req.status === 'approved' && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[9px] font-bold text-emerald-800 space-y-0.5">
+                    <p className="font-black uppercase flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Solicitação Aprovada
+                    </p>
+                    <p className="opacity-90">
+                      O registro foi lançado no espelho e o banco de horas foi recalculado.
+                      {req.approvedBy && ` (Aprovado por: ${req.approvedBy})`}
+                    </p>
+                  </div>
+                )}
+
+                {req.status === 'rejected' && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-[9px] font-bold text-rose-800 space-y-0.5">
+                    <p className="font-black uppercase flex items-center gap-1">
+                      <XCircle size={12} /> Solicitação Recusada
+                    </p>
+                    {req.rejectionReason && (
+                      <p className="opacity-90">
+                        Motivo informado: "{req.rejectionReason}"
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* BOTÕES DE AÇÃO */}
+              <div className="pt-2 border-t flex gap-2">
+                {req.status === 'pending' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleRejectAdjustment(req)}
+                      className="flex-1 py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl font-black uppercase text-[10px] tracking-wider transition-all"
+                    >
+                      ❌ Recusar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApproveAdjustment(req)}
+                      className="flex-[2] py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle2 size={14} /> Aprovar Ajuste
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRequestModal(null)}
+                    className="w-full py-3.5 bg-slate-900 hover:bg-black text-white rounded-2xl font-black uppercase text-[10px] tracking-wider"
+                  >
+                    Fechar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
