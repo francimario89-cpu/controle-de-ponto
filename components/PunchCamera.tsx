@@ -3,11 +3,12 @@ import React, { useRef, useEffect, useState } from 'react';
 import { MapPin, RefreshCw, AlertTriangle, ShieldAlert, ArrowLeft, CheckCircle2, Wifi, Info } from 'lucide-react';
 
 interface PunchCameraProps {
-  onCapture: (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => void;
+  onCapture: (photo: string, location: { lat: number; lng: number; address: string }, mood: string, punchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida') => void;
   onCancel: () => void;
   isFirstAccess?: boolean;
   geofenceConfig?: { enabled: boolean; lat: number; lng: number; radius: number };
   authorizedIP?: string;
+  defaultPunchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida';
 }
 
 interface CameraErrorInfo {
@@ -18,14 +19,19 @@ interface CameraErrorInfo {
   allowBypass: boolean;
 }
 
-const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstAccess, geofenceConfig, authorizedIP }) => {
+const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstAccess, geofenceConfig, authorizedIP, defaultPunchType }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorInfo, setErrorInfo] = useState<CameraErrorInfo | null>(null);
   const [livenessStage, setLivenessStage] = useState(0); 
   const [selectedMood, setSelectedMood] = useState('feliz');
+  const [selectedPunchType, setSelectedPunchType] = useState<'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'>(defaultPunchType || 'entrada');
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    if (defaultPunchType) setSelectedPunchType(defaultPunchType);
+  }, [defaultPunchType]);
 
   useEffect(() => {
     const handleOnline = () => setIsOfflineMode(false);
@@ -95,7 +101,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
         canvas.height = videoRef.current.videoHeight || 480;
         canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
         const data = canvas.toDataURL('image/jpeg', 0.82);
-        onCapture(data, coords, selectedMood);
+        onCapture(data, coords, selectedMood, selectedPunchType);
       }
     }, 3600);
   };
@@ -340,6 +346,39 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
            <div className={`w-full h-full border-2 rounded-[90px] transition-all duration-500 ${loading ? 'border-orange-500 scale-105' : 'border-white/20 border-dashed'}`}></div>
         </div>
 
+        {/* Seletor do Tipo de Batida (Entrada, Intervalo, Retorno, Saída) */}
+        {!loading && !errorInfo && !isFirstAccess && (
+          <div className="absolute inset-x-0 top-3 flex flex-col items-center px-3 z-20">
+            <div className="flex items-center justify-between w-full max-w-[320px] bg-black/70 backdrop-blur-md p-1 rounded-2xl border border-white/15 shadow-xl">
+              {[
+                { id: 'entrada', label: 'Entrada', badge: '🟢' },
+                { id: 'inicio_intervalo', label: 'Intervalo', badge: '🟡' },
+                { id: 'fim_intervalo', label: 'Retorno', badge: '🔵' },
+                { id: 'saida', label: 'Saída', badge: '🔴' }
+              ].map((t) => {
+                const isSelected = selectedPunchType === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setSelectedPunchType(t.id as any)}
+                    className={`flex-1 py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-orange-500 text-white font-black shadow-md shadow-orange-500/50 scale-105'
+                        : 'text-slate-300 opacity-60 hover:opacity-100 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-[10px] leading-tight">{t.badge}</span>
+                    <span className="text-[7.5px] font-black uppercase mt-0.5 tracking-tight truncate">
+                      {t.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {!loading && !errorInfo && (
           <div className="absolute inset-x-0 bottom-4 flex flex-col items-center gap-2 px-3">
             <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
@@ -479,7 +518,11 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
               loading ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-white hover:bg-orange-500 hover:text-white text-slate-900 active:scale-95'
             }`}
           >
-            {loading ? 'Validando Presença...' : (isFirstAccess ? 'Gravar Face Agora' : 'Confirmar e Registrar')}
+            {loading ? 'Validando Presença...' : (isFirstAccess ? 'Gravar Face Agora' : `Confirmar ${
+              selectedPunchType === 'entrada' ? 'Entrada 🟢' :
+              selectedPunchType === 'inicio_intervalo' ? 'Intervalo 🟡' :
+              selectedPunchType === 'fim_intervalo' ? 'Retorno 🔵' : 'Saída 🔴'
+            }`)}
           </button>
         )}
         <div className="flex flex-col items-center gap-0.5 opacity-30">

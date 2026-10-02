@@ -1194,6 +1194,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     }
   };
 
+  const handleAutoFixDailySequence = async () => {
+    if (!confirm("Deseja auto-organizar as batidas do dia na sequência correta de jornada (1ª Entrada, 2ª Início Intervalo, 3ª Fim Intervalo, 4ª Saída)?")) return;
+    
+    // Agrupar registros filtrados por colaborador e data
+    const groups: { [key: string]: PointRecord[] } = {};
+    filteredRecords.forEach(r => {
+      const dayStr = new Date(r.timestamp).toDateString();
+      const key = `${r.matricula || r.userName}_${dayStr}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+
+    let updatedCount = 0;
+    try {
+      for (const key of Object.keys(groups)) {
+        const dayPunches = groups[key].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        
+        let targetTypes: ('entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida')[] = [];
+        if (dayPunches.length === 1) {
+          targetTypes = ['entrada'];
+        } else if (dayPunches.length === 2) {
+          targetTypes = ['entrada', 'saida'];
+        } else if (dayPunches.length === 3) {
+          targetTypes = ['entrada', 'inicio_intervalo', 'saida'];
+        } else {
+          targetTypes = ['entrada', 'inicio_intervalo', 'fim_intervalo', 'saida'];
+        }
+
+        for (let i = 0; i < dayPunches.length; i++) {
+          const expectedType = targetTypes[Math.min(i, targetTypes.length - 1)];
+          if (dayPunches[i].type !== expectedType) {
+            await updateDoc(doc(db, "records", dayPunches[i].id), {
+              type: expectedType,
+              isAdjustment: true
+            });
+            updatedCount++;
+          }
+        }
+      }
+      alert(`Sucesso! ${updatedCount} registro(s) foram reorganizados na sequência correta.`);
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao reorganizar registros.");
+    }
+  };
+
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6">
@@ -2009,7 +2055,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
       {activeTab === 'correcao' && (
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-            <h3 className="text-sm font-black uppercase">Correção de Registros</h3>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black uppercase text-slate-800">Correção de Registros</h3>
+                <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Ajuste os tipos de batida (Entrada, Intervalo, Retorno, Saída) ou horários</p>
+              </div>
+              <button
+                onClick={handleAutoFixDailySequence}
+                className="px-5 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
+              >
+                <span>⚡ Reorganizar Sequência Diária Automática</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={reportFilter.matricula} onChange={e => setReportFilter({...reportFilter, matricula: e.target.value})} className="p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border">
                 <option value="todos">Todos Colaboradores</option>

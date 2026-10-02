@@ -150,15 +150,37 @@ const App: React.FC = () => {
     setActiveView('dashboard');
   };
 
-  const handlePunch = async (photo: string, location: { lat: number; lng: number; address: string }, mood: string) => {
+  // Determinar a próxima batida sugerida para o colaborador hoje
+  const getSuggestedPunchType = (userMatricula?: string, userName?: string): 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida' => {
+    const todayStr = new Date().toDateString();
+    const todayUserRecords = records
+      .filter(r => {
+        const matchesMatricula = userMatricula && r.matricula && String(r.matricula).trim().toLowerCase() === String(userMatricula).trim().toLowerCase();
+        const matchesName = userName && r.userName && r.userName.trim().toLowerCase() === userName.trim().toLowerCase();
+        const matchesDate = new Date(r.timestamp).toDateString() === todayStr;
+        return (matchesMatricula || matchesName) && matchesDate;
+      })
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    if (todayUserRecords.length === 0) return 'entrada';
+    const lastType = todayUserRecords[todayUserRecords.length - 1].type;
+    if (lastType === 'entrada') return 'inicio_intervalo';
+    if (lastType === 'inicio_intervalo') return 'fim_intervalo';
+    if (lastType === 'fim_intervalo') return 'saida';
+    return 'entrada';
+  };
+
+  const handlePunch = async (
+    photo: string, 
+    location: { lat: number; lng: number; address: string }, 
+    mood: string,
+    punchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'
+  ) => {
     if (!user) return;
     const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}`;
     
-    // Determinar o tipo da batida automaticamente de acordo com as batidas de hoje
-    const todayStr = new Date().toDateString();
-    const todayUserRecords = records.filter(r => r.matricula === user.matricula && new Date(r.timestamp).toDateString() === todayStr);
-    const punchTypes: ('entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida')[] = ['entrada', 'inicio_intervalo', 'fim_intervalo', 'saida'];
-    const currentType = punchTypes[Math.min(todayUserRecords.length, 3)] || 'entrada';
+    // Se o colaborador escolheu um tipo específico na tela, usa ele; senão, calcula inteligentemente
+    const currentType = punchType || getSuggestedPunchType(user.matricula, user.name);
 
     const baseRecordData = {
       userName: user.name,
@@ -308,6 +330,7 @@ const App: React.FC = () => {
           <PunchCamera 
             geofenceConfig={company?.geofence} 
             authorizedIP={company?.authorizedIP} 
+            defaultPunchType={getSuggestedPunchType(user?.matricula, user?.name)}
             onCapture={handlePunch} 
             onCancel={() => setShowPunchCamera(false)} 
           />
