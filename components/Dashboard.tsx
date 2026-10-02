@@ -122,39 +122,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
       { type: scheduled[3]?.label || 'Saída', time: scheduled[3]?.time || '17:00', done: false, actual: '', isOffline: false },
     ];
 
-    const hasExplicitTypes = todayRecords.some(r => r.type === 'inicio_intervalo' || r.type === 'fim_intervalo' || r.type === 'saida');
-
-    if (hasExplicitTypes) {
-      todayRecords.forEach(rec => {
-        let targetSlotIndex = -1;
-        if (rec.type === 'entrada') targetSlotIndex = 0;
-        else if (rec.type === 'inicio_intervalo') targetSlotIndex = 1;
-        else if (rec.type === 'fim_intervalo') targetSlotIndex = 2;
-        else if (rec.type === 'saida') targetSlotIndex = 3;
-
-        if (targetSlotIndex >= 0 && slots[targetSlotIndex]) {
-          slots[targetSlotIndex].done = true;
-          slots[targetSlotIndex].actual = new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          slots[targetSlotIndex].isOffline = Boolean(rec.isOffline);
-        }
-      });
-    } else if (todayRecords.length === 2) {
-      slots[0].done = true;
-      slots[0].actual = new Date(todayRecords[0].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      slots[0].isOffline = Boolean(todayRecords[0].isOffline);
-
-      slots[3].done = true;
-      slots[3].actual = new Date(todayRecords[1].timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      slots[3].isOffline = Boolean(todayRecords[1].isOffline);
-    } else {
-      todayRecords.forEach((rec, idx) => {
-        if (slots[idx]) {
-          slots[idx].done = true;
-          slots[idx].actual = new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          slots[idx].isOffline = Boolean(rec.isOffline);
-        }
-      });
-    }
+    todayRecords.forEach((rec, idx) => {
+      if (slots[idx]) {
+        slots[idx].done = true;
+        slots[idx].actual = new Date(rec.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        slots[idx].isOffline = Boolean(rec.isOffline);
+      }
+    });
 
     return slots;
   }, [records, user.workShift]);
@@ -175,6 +149,53 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 
     return messages;
   }, [records]);
+
+  const currentBalance = useMemo(() => {
+    if (user.isExemptPointControl) return { text: 'Dispensado', isPositive: true, subtext: 'Cargo de Confiança' };
+
+    const today = new Date().toDateString();
+    const todayRecords = records
+      .filter(r => new Date(r.timestamp).toDateString() === today)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    let workedMin = 0;
+    if (todayRecords.length >= 2) {
+      const e1 = new Date(todayRecords[0].timestamp).getTime();
+      const s1 = new Date(todayRecords[1].timestamp).getTime();
+      workedMin += Math.max(0, Math.floor((s1 - e1) / 60000));
+    }
+    if (todayRecords.length >= 4) {
+      const e2 = new Date(todayRecords[2].timestamp).getTime();
+      const s2 = new Date(todayRecords[3].timestamp).getTime();
+      workedMin += Math.max(0, Math.floor((s2 - e2) / 60000));
+    }
+
+    const expectedDailyMin = user.hoursPerWeek ? Math.floor((user.hoursPerWeek / 5) * 60) : 480;
+
+    if (todayRecords.length >= 4) {
+      const diff = workedMin - expectedDailyMin;
+      const sign = diff >= 0 ? '+' : '-';
+      const absH = Math.floor(Math.abs(diff) / 60);
+      const absM = Math.abs(diff) % 60;
+      return {
+        text: `${sign}${String(absH).padStart(2, '0')}:${String(absM).padStart(2, '0')}h`,
+        isPositive: diff >= 0,
+        subtext: diff >= 0 ? 'Horas Extras' : 'A Compensar'
+      };
+    }
+
+    if (workedMin > 0) {
+      const hours = Math.floor(workedMin / 60);
+      const mins = workedMin % 60;
+      return {
+        text: `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}h`,
+        isPositive: true,
+        subtext: 'Trabalhado Hoje'
+      };
+    }
+
+    return { text: '+00:00h', isPositive: true, subtext: 'Banco de Horas' };
+  }, [records, user]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-36 overflow-y-auto no-scrollbar">
@@ -326,7 +347,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-[44px] p-8 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-6">
+      <div className="bg-white dark:bg-slate-900 rounded-[44px] p-6 md:p-8 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-6">
         <div className="text-center space-y-1">
           <p className="text-[42px] font-black text-slate-800 dark:text-white tracking-tighter leading-none">
             {time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -336,6 +357,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
           </p>
         </div>
 
+        {/* 1. Botão Registrar */}
         <button 
           onClick={onPunchClick}
           className="w-48 h-48 rounded-full bg-orange-500 p-2 shadow-2xl shadow-orange-200 dark:shadow-none relative group active:scale-90 transition-all"
@@ -352,52 +374,94 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
           <div className="absolute inset-0 rounded-full bg-orange-500 animate-ping opacity-20 -z-10"></div>
         </button>
 
-        <div className="flex gap-4 w-full pt-4">
-           <div className="flex-1 bg-slate-50 dark:bg-slate-800 p-4 rounded-3xl text-center">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Carga Horária</p>
-              <p className="text-sm font-black text-slate-700 dark:text-slate-200">{user.workShift || '08:00h'}</p>
-           </div>
-           <div className="flex-1 bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-3xl text-center">
-              <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Saldo Atual</p>
-              <p className="text-sm font-black text-emerald-600">+00:15h</p>
-           </div>
+        {/* 2. LINHA DO TEMPO - HOJE (Abaixo do botão Registrar) */}
+        <div className="w-full pt-4 pb-1 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between mb-4 px-1">
+            <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+              Linha do Tempo - Hoje
+            </p>
+            <span className="text-[8px] font-black text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2.5 py-0.5 rounded-full uppercase">
+              {timeline.filter(t => t.done).length} de {timeline.length} Registros
+            </span>
+          </div>
+          <div className="flex justify-between items-center relative px-2">
+            <div className="absolute left-6 right-6 h-0.5 bg-slate-100 dark:bg-slate-800 top-4 -z-0"></div>
+            {timeline.map((rec, i) => (
+              <div key={i} className="flex flex-col items-center space-y-2.5 relative z-10">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-4 transition-all ${
+                  rec.done 
+                    ? 'bg-orange-500 border-orange-100 dark:border-orange-950 text-white shadow-md' 
+                    : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400'
+                }`}>
+                  {rec.done ? <span className="text-[10px] font-black">✓</span> : <span className="text-[8px] font-black">{i + 1}</span>}
+                </div>
+                <div className="text-center">
+                  <p className={`text-[8.5px] font-black uppercase ${rec.done ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
+                    {rec.type}
+                  </p>
+                  <p className={`text-[10px] font-mono font-bold ${rec.done ? 'text-orange-600' : 'text-slate-400'}`}>
+                    {rec.done ? rec.actual : rec.time}
+                  </p>
+                  {rec.isOffline && (
+                    <span className="text-[7px] font-black text-amber-500 uppercase block">Offline</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 3. SALDO ATUAL (Abaixo da Linha do Tempo) */}
+        <div className="w-full pt-1">
+          <div className={`p-4 rounded-3xl flex items-center justify-between border ${
+            currentBalance.isPositive 
+              ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30' 
+              : 'bg-rose-50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/30'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-base shadow-sm ${
+                currentBalance.isPositive 
+                  ? 'bg-emerald-500 text-white' 
+                  : 'bg-rose-500 text-white'
+              }`}>
+                ⏱️
+              </div>
+              <div className="text-left">
+                <p className={`text-[8.5px] font-black uppercase tracking-widest ${
+                  currentBalance.isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
+                }`}>
+                  Saldo Atual de Horas
+                </p>
+                <p className={`text-[8px] font-bold uppercase ${
+                  currentBalance.isPositive ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-rose-600/80 dark:text-rose-400/80'
+                }`}>
+                  {currentBalance.subtext}
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <p className={`text-lg font-black font-mono tracking-tight ${
+                currentBalance.isPositive ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'
+              }`}>
+                {currentBalance.text}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* NOVO CARD CENTRAL DE JUSTIFICATIVA */}
       <div onClick={() => onNavigate('requests')} className="bg-orange-600 p-6 rounded-[35px] shadow-lg shadow-orange-200 dark:shadow-none flex items-center justify-between group active:scale-95 transition-all cursor-pointer">
-         <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-xl text-white">📝</div>
-            <div>
-               <p className="text-[11px] font-black text-white uppercase tracking-widest">Justificativa para o RH</p>
-               <p className="text-[9px] font-bold text-white/70 uppercase">Faltas, Atestados ou Ajustes</p>
-            </div>
-         </div>
-         <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
-         </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 rounded-[40px] p-6 border dark:border-slate-800 shadow-sm">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Linha do Tempo - Hoje</p>
-        <div className="flex justify-between items-center relative">
-          <div className="absolute left-0 right-0 h-0.5 bg-slate-100 dark:bg-slate-800 top-4 -z-0"></div>
-          {timeline.map((rec, i) => (
-            <div key={i} className="flex flex-col items-center space-y-3 relative z-10">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-4 transition-all ${rec.done ? 'bg-orange-500 border-orange-50 text-white shadow-lg' : 'bg-white dark:bg-slate-800 border-slate-50 dark:border-slate-700 text-slate-300'}`}>
-                {rec.done ? <span className="text-[10px]">✓</span> : <span className="text-[8px] font-black">{i+1}</span>}
-              </div>
-              <div className="text-center">
-                <p className={`text-[9px] font-black uppercase ${rec.done ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{rec.type}</p>
-                <p className={`text-[10px] font-bold ${rec.done ? 'text-orange-600' : 'text-slate-400'}`}>
-                  {rec.done ? rec.actual : rec.time}
-                </p>
-                {rec.isOffline && (
-                  <span className="text-[7px] font-black text-amber-500 uppercase block">Offline</span>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-xl text-white">📝</div>
+          <div>
+            <p className="text-[11px] font-black text-white uppercase tracking-widest">Justificativa para o RH</p>
+            <p className="text-[9px] font-bold text-white/70 uppercase">Faltas, Atestados ou Ajustes</p>
+          </div>
+        </div>
+        <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
         </div>
       </div>
 

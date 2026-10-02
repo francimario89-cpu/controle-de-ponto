@@ -1072,9 +1072,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
 
   useEffect(() => {
     if (availableIndividualEmployees.length > 0) {
-      const exists = availableIndividualEmployees.some(e => e.matricula === selectedEmployeeIndividual);
-      if (!exists) {
-        setSelectedEmployeeIndividual(availableIndividualEmployees[0].matricula);
+      if (selectedEmployeeIndividual !== 'todos') {
+        const exists = availableIndividualEmployees.some(e => e.matricula === selectedEmployeeIndividual);
+        if (!exists) {
+          setSelectedEmployeeIndividual('todos');
+        }
       }
     } else {
       setSelectedEmployeeIndividual('');
@@ -1740,8 +1742,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     type="button"
                     onClick={() => {
                       setIndividualStatusTab('active');
-                      const firstActive = employees.find(e => e.status !== 'inactive');
-                      if (firstActive) setSelectedEmployeeIndividual(firstActive.matricula);
+                      setSelectedEmployeeIndividual('todos');
                     }}
                     className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all flex items-center gap-2 ${
                       individualStatusTab === 'active' 
@@ -1757,12 +1758,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     type="button"
                     onClick={() => {
                       setIndividualStatusTab('inactive');
-                      const firstInactive = employees.find(e => e.status === 'inactive');
-                      if (firstInactive) {
-                        setSelectedEmployeeIndividual(firstInactive.matricula);
-                      } else {
-                        setSelectedEmployeeIndividual('');
-                      }
+                      setSelectedEmployeeIndividual('todos');
                     }}
                     className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all flex items-center gap-2 ${
                       individualStatusTab === 'inactive' 
@@ -1800,7 +1796,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1">
-                    <span>Colaborador ({individualStatusTab === 'active' ? 'Ativo' : 'Desativado'})</span>
+                    <span>Colaborador ({individualStatusTab === 'active' ? 'Ativos' : 'Desativados'})</span>
                   </label>
                   <select 
                     value={selectedEmployeeIndividual} 
@@ -1811,11 +1807,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     {availableIndividualEmployees.length === 0 ? (
                       <option value="">Nenhum colaborador {individualStatusTab === 'active' ? 'ativo' : 'desativado'} encontrado</option>
                     ) : (
-                      availableIndividualEmployees.map(e => (
-                        <option key={e.id} value={e.matricula}>
-                          {e.name} — Matrícula: {e.matricula} {e.roleFunction ? `• ${e.roleFunction}` : ''}
+                      <>
+                        <option value="todos">
+                          Todos ({individualStatusTab === 'active' ? 'Todos os Ativos' : 'Todos os Desativados'}) — {availableIndividualEmployees.length} colaboradores
                         </option>
-                      ))
+                        {availableIndividualEmployees.map(e => (
+                          <option key={e.id} value={e.matricula}>
+                            {e.name} — Matrícula: {e.matricula} {e.roleFunction ? `• ${e.roleFunction}` : ''}
+                          </option>
+                        ))}
+                      </>
                     )}
                   </select>
                 </div>
@@ -1854,8 +1855,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 </div>
               </div>
 
-              {/* Card Resumo do Colaborador Selecionado */}
-              {selectedEmpObj && (
+              {/* Card Resumo do Colaborador Selecionado ou Visão Geral de Todos */}
+              {selectedEmpObj ? (
                 <div className="p-4 bg-orange-50/60 border border-orange-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-orange-500 text-white flex items-center justify-center font-black text-sm uppercase shadow-sm">
@@ -1896,6 +1897,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                     >
                       <Plus size={12} /> Lançar Ponto Manual
                     </button>
+                  </div>
+                </div>
+              ) : selectedEmployeeIndividual === 'todos' && availableIndividualEmployees.length > 0 && (
+                <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-slate-700">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-200 text-slate-700 flex items-center justify-center font-black text-sm">
+                      👥
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-black uppercase text-slate-900">
+                        Visualizando Todos os Colaboradores {individualStatusTab === 'active' ? 'Ativos' : 'Desativados'} ({availableIndividualEmployees.length})
+                      </p>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase">
+                        Exibindo batidas, horários, intervalos e horas extras de todos na data selecionada.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-500">
+                    💡 Para filtrar apenas um colaborador ou emitir o espelho PDF individual, selecione o nome dele no campo acima.
                   </div>
                 </div>
               )}
@@ -1949,7 +1969,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                       </td>
                     </tr>
                   ) : availableIndividualEmployees
-                    .filter(emp => emp.matricula === selectedEmployeeIndividual)
+                    .filter(emp => selectedEmployeeIndividual === 'todos' || emp.matricula === selectedEmployeeIndividual)
                     .map(emp => {
                       const dayRecs = latestRecords
                         .filter(r => 
