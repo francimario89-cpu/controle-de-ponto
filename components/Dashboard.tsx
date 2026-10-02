@@ -198,7 +198,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
   }, [records, user]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-1.5 sm:p-4 space-y-2.5 sm:space-y-4 pb-16 sm:pb-28 overflow-y-auto no-scrollbar">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-1.5 sm:p-4 space-y-2.5 sm:space-y-4 pb-28 sm:pb-32 overflow-y-auto no-scrollbar">
       <div className="space-y-1 px-1">
         <div className="flex items-center justify-between">
           <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Olá, {user.name.split(' ')[0]} 👋</p>
