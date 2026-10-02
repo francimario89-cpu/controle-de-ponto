@@ -450,20 +450,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
         </div>
       </div>
 
-      {/* CARD CENTRAL DE JUSTIFICATIVA */}
-      <div onClick={() => onNavigate('requests')} className="bg-orange-600 p-3.5 sm:p-4 rounded-[22px] sm:rounded-[28px] shadow-md shadow-orange-500/10 flex items-center justify-between group active:scale-95 transition-all cursor-pointer">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center text-base sm:text-lg text-white">📝</div>
-          <div>
-            <p className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wider">Justificativa para o RH</p>
-            <p className="text-[8px] sm:text-[9px] font-bold text-white/70 uppercase">Faltas, Atestados ou Ajustes</p>
-          </div>
-        </div>
-        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/10 rounded-full flex items-center justify-center text-white">
-          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
-        </div>
-      </div>
-
       {/* MODAL DE FILA DE PONTOS OFFLINE COM STATUS E BOTÃO DE RECONEXÃO */}
       {showOfflineModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
