@@ -59,7 +59,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
   const [showAdminPass, setShowAdminPass] = useState(false);
   const [showNewEmpPass, setShowNewEmpPass] = useState(false);
   const [showResetPass, setShowResetPass] = useState(false);
-  const [selectedEmployeeIndividual, setSelectedEmployeeIndividual] = useState<string>('todos');
+  const [individualStatusTab, setIndividualStatusTab] = useState<'active' | 'inactive'>('active');
+  const [selectedEmployeeIndividual, setSelectedEmployeeIndividual] = useState<string>('');
   const [selectedDateIndividual, setSelectedDateIndividual] = useState<string>(new Date().toISOString().split('T')[0]);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
@@ -1064,6 +1065,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
     });
   }, [employees, employeeFilterStatus, employeeSearchTerm]);
 
+  // Lista de colaboradores disponíveis para a Consulta de Ponto Individual (separados por Ativos e Desativados)
+  const availableIndividualEmployees = useMemo(() => {
+    return employees.filter(emp => individualStatusTab === 'active' ? emp.status !== 'inactive' : emp.status === 'inactive');
+  }, [employees, individualStatusTab]);
+
+  useEffect(() => {
+    if (availableIndividualEmployees.length > 0) {
+      const exists = availableIndividualEmployees.some(e => e.matricula === selectedEmployeeIndividual);
+      if (!exists) {
+        setSelectedEmployeeIndividual(availableIndividualEmployees[0].matricula);
+      }
+    } else {
+      setSelectedEmployeeIndividual('');
+    }
+  }, [availableIndividualEmployees, selectedEmployeeIndividual]);
+
   const handleRequestStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
       await updateDoc(doc(db, "requests", id), { status });
@@ -1699,188 +1716,368 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         </div>
       )}
 
-      {activeTab === 'pontos_individuais' && (
-        <div className="space-y-6">
-          <div className="bg-white p-8 rounded-[40px] border shadow-sm space-y-6">
-            <h3 className="text-sm font-black uppercase">Consulta de Pontos Individuais</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[8px] font-black text-slate-400 uppercase ml-2">Colaborador</label>
-                <select 
-                  value={selectedEmployeeIndividual} 
-                  onChange={e => setSelectedEmployeeIndividual(e.target.value)} 
-                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black uppercase outline-none border"
-                >
-                  <option value="todos">Todos</option>
-                  {employees.map(e => <option key={e.id} value={e.matricula}>{e.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black text-slate-400 uppercase ml-2">Data</label>
-                <input 
-                  type="date" 
-                  value={selectedDateIndividual} 
-                  onChange={e => setSelectedDateIndividual(e.target.value)} 
-                  className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" 
-                />
-              </div>
-            </div>
+      {activeTab === 'pontos_individuais' && (() => {
+        const selectedEmpObj = availableIndividualEmployees.find(e => e.matricula === selectedEmployeeIndividual);
 
-            {(() => {
-              const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
-              if (!holidayInfo) return null;
-              return (
-                <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex items-center justify-between gap-3 text-orange-800">
+        return (
+          <div className="space-y-6">
+            {/* Bloco de Filtros e Seleção do Colaborador Individual */}
+            <div className="bg-white p-6 md:p-8 rounded-[40px] border shadow-sm space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-900 tracking-wide flex items-center gap-2">
+                    <UserCheck size={18} className="text-orange-600" />
+                    Consulta de Ponto Individual
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    Consulte batidas diárias, fotos, geolocalização e emita o espelho de ponto por colaborador.
+                  </p>
+                </div>
+
+                {/* Abas: Ativos vs Desativados */}
+                <div className="bg-slate-100 p-1.5 rounded-2xl flex items-center gap-1 shadow-inner shrink-0">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setIndividualStatusTab('active');
+                      const firstActive = employees.find(e => e.status !== 'inactive');
+                      if (firstActive) setSelectedEmployeeIndividual(firstActive.matricula);
+                    }}
+                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all flex items-center gap-2 ${
+                      individualStatusTab === 'active' 
+                        ? 'bg-emerald-600 text-white shadow-md' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${individualStatusTab === 'active' ? 'bg-white' : 'bg-emerald-500'}`} />
+                    Ativos ({employees.filter(e => e.status !== 'inactive').length})
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setIndividualStatusTab('inactive');
+                      const firstInactive = employees.find(e => e.status === 'inactive');
+                      if (firstInactive) {
+                        setSelectedEmployeeIndividual(firstInactive.matricula);
+                      } else {
+                        setSelectedEmployeeIndividual('');
+                      }
+                    }}
+                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all flex items-center gap-2 ${
+                      individualStatusTab === 'inactive' 
+                        ? 'bg-slate-700 text-white shadow-md' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${individualStatusTab === 'inactive' ? 'bg-white' : 'bg-slate-400'}`} />
+                    Desativados ({employees.filter(e => e.status === 'inactive').length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Banner informativo quando na aba de Desativados */}
+              {individualStatusTab === 'inactive' && (
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between gap-3 text-slate-600">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">🎉</span>
+                    <span className="text-base">📁</span>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-wide">
-                        {holidayInfo.description} ({holidayInfo.type === 'feriado' ? 'Feriado' : 'Ponto Facultativo'})
+                      <p className="text-[9px] font-black uppercase text-slate-800">
+                        Histórico de Colaboradores Desativados
                       </p>
-                      <p className="text-[8px] font-bold text-orange-600 uppercase">
-                        Dia com dispensa legal de jornada. Horas trabalhadas neste dia são computadas com 100% de adicional de hora extra.
+                      <p className="text-[8px] font-bold text-slate-500 uppercase">
+                        Registros preservados para comprovação legal, rescisões e emissão de folhas passadas (Portaria 671 MTP / CLT).
                       </p>
                     </div>
                   </div>
-                  <span className="px-3 py-1 bg-white border border-orange-200 rounded-xl text-[8px] font-black uppercase text-orange-700">
-                    {holidayInfo.isNational ? '🏛️ Nacional' : '🏢 Local / Empresa'}
+                  <span className="px-3 py-1 bg-slate-200 rounded-xl text-[8px] font-black uppercase text-slate-700 shrink-0">
+                    Histórico Arquivado
                   </span>
                 </div>
-              );
-            })()}
-          </div>
+              )}
 
-          <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
-            <table className="w-full text-left min-w-[800px]">
-              <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
-                <tr>
-                  <th className="p-5">Colaborador</th>
-                  <th className="p-5">Entrada</th>
-                  <th className="p-5">Intervalo</th>
-                  <th className="p-5">Retorno</th>
-                  <th className="p-5">Saída</th>
-                  <th className="p-5">Total Trabalhado</th>
-                  <th className="p-5">Horas Extras</th>
-                  <th className="p-5 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="text-[11px] font-bold uppercase">
-                {employees
-                  .filter(emp => selectedEmployeeIndividual === 'todos' || emp.matricula === selectedEmployeeIndividual)
-                  .map(emp => {
-                    const dayRecs = latestRecords
-                      .filter(r => 
-                        r.matricula === emp.matricula && 
-                        r.timestamp.toISOString().split('T')[0] === selectedDateIndividual
-                      )
-                      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+              {/* Seletores: Colaborador e Data */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1">
+                    <span>Colaborador ({individualStatusTab === 'active' ? 'Ativo' : 'Desativado'})</span>
+                  </label>
+                  <select 
+                    value={selectedEmployeeIndividual} 
+                    onChange={e => setSelectedEmployeeIndividual(e.target.value)} 
+                    disabled={availableIndividualEmployees.length === 0}
+                    className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-black uppercase outline-none focus:border-orange-500 transition-all disabled:opacity-50"
+                  >
+                    {availableIndividualEmployees.length === 0 ? (
+                      <option value="">Nenhum colaborador {individualStatusTab === 'active' ? 'ativo' : 'desativado'} encontrado</option>
+                    ) : (
+                      availableIndividualEmployees.map(e => (
+                        <option key={e.id} value={e.matricula}>
+                          {e.name} — Matrícula: {e.matricula} {e.roleFunction ? `• ${e.roleFunction}` : ''}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
 
-                    const e1 = dayRecs[0] ? dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const s1 = dayRecs[1] ? dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const e2 = dayRecs[2] ? dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
-                    const s2 = dayRecs[3] ? dayRecs[3].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between ml-2">
+                    <label className="text-[8px] font-black text-slate-400 uppercase">Data da Consulta</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDateIndividual(new Date().toISOString().split('T')[0])}
+                        className="text-[8px] font-black text-orange-600 hover:underline uppercase"
+                      >
+                        Hoje
+                      </button>
+                      <span className="text-slate-300 text-[8px]">•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() - 1);
+                          setSelectedDateIndividual(d.toISOString().split('T')[0]);
+                        }}
+                        className="text-[8px] font-black text-slate-500 hover:underline uppercase"
+                      >
+                        Ontem
+                      </button>
+                    </div>
+                  </div>
+                  <input 
+                    type="date" 
+                    value={selectedDateIndividual} 
+                    onChange={e => setSelectedDateIndividual(e.target.value)} 
+                    className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-black outline-none focus:border-orange-500 transition-all" 
+                  />
+                </div>
+              </div>
 
-                    const renderRecordIcons = (rec: PointRecord | undefined) => {
-                      if (!rec) return null;
-                      return (
-                        <div className="flex gap-1 mt-1">
-                          {rec.photo && (
-                            <button 
-                              onClick={() => { setSelectedPhotoUrl(rec.photo); setShowPhotoModal(true); }}
-                              className="text-blue-400 hover:text-blue-600"
-                              title="Ver Foto"
-                            >
-                              <Camera size={10} />
-                            </button>
-                          )}
-                          {rec.latitude && rec.longitude && (
-                            <a 
-                              href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-emerald-400 hover:text-emerald-600"
-                              title="Ver Localização"
-                            >
-                              <MapPin size={10} />
-                            </a>
-                          )}
-                        </div>
-                      );
-                    };
+              {/* Card Resumo do Colaborador Selecionado */}
+              {selectedEmpObj && (
+                <div className="p-4 bg-orange-50/60 border border-orange-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-500 text-white flex items-center justify-center font-black text-sm uppercase shadow-sm">
+                      {selectedEmpObj.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-slate-900 uppercase">{selectedEmpObj.name}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase ${selectedEmpObj.status === 'inactive' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {selectedEmpObj.status === 'inactive' ? '⚪ Desativado' : '🟢 Ativo'}
+                        </span>
+                      </div>
+                      <p className="text-[8px] font-bold text-slate-500 uppercase">
+                        Matrícula: {selectedEmpObj.matricula} {selectedEmpObj.cpf ? `• CPF: ${selectedEmpObj.cpf}` : ''} {selectedEmpObj.roleFunction ? `• Função: ${selectedEmpObj.roleFunction}` : ''}
+                      </p>
+                    </div>
+                  </div>
 
-                    let workedMinutes = 0;
-                    if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
-                    if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleExportPDF(selectedEmpObj.matricula)}
+                      className="bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 px-3.5 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                      title="Baixar Folha / Espelho PDF Mensal deste colaborador"
+                    >
+                      <FileSpreadsheet size={12} /> Espelho PDF do Mês
+                    </button>
 
-                    const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
-                    const dateObj = new Date(selectedDateIndividual + 'T12:00:00');
-                    const dayOfWeek = dateObj.getDay();
-                    let extraMinutes = 0;
-                    if (workedMinutes > 0) {
-                      if (holidayInfo || dayOfWeek === 0) {
-                        // Feriado ou Domingo: 100% de Horas Extras
-                        extraMinutes = workedMinutes;
-                      } else if (dayOfWeek === 6) {
-                        extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : 0;
-                      } else {
-                        extraMinutes = workedMinutes > 480 ? (workedMinutes - 480) : 0;
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEmployeeManualPunch(selectedEmpObj);
+                        setManualPunchDate(selectedDateIndividual);
+                        setShowManualPunchModal(true);
+                      }}
+                      className="bg-orange-600 hover:bg-orange-700 text-white px-3.5 py-2 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                      title="Adicionar batida manual nesta data"
+                    >
+                      <Plus size={12} /> Lançar Ponto Manual
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Notificação de Feriado */}
+              {(() => {
+                const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
+                if (!holidayInfo) return null;
+                return (
+                  <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex items-center justify-between gap-3 text-orange-800">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🎉</span>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wide">
+                          {holidayInfo.description} ({holidayInfo.type === 'feriado' ? 'Feriado' : 'Ponto Facultativo'})
+                        </p>
+                        <p className="text-[8px] font-bold text-orange-600 uppercase">
+                          Dia com dispensa legal de jornada. Horas trabalhadas neste dia são computadas com 100% de adicional de hora extra.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-white border border-orange-200 rounded-xl text-[8px] font-black uppercase text-orange-700">
+                      {holidayInfo.isNational ? '🏛️ Nacional' : '🏢 Local / Empresa'}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Tabela com as Marcações Individuais do Colaborador Selecionado */}
+            <div className="bg-white rounded-[40px] border overflow-hidden shadow-sm overflow-x-auto">
+              <table className="w-full text-left min-w-[800px]">
+                <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-500">
+                  <tr>
+                    <th className="p-5">Colaborador</th>
+                    <th className="p-5">Entrada</th>
+                    <th className="p-5">Intervalo</th>
+                    <th className="p-5">Retorno</th>
+                    <th className="p-5">Saída</th>
+                    <th className="p-5">Total Trabalhado</th>
+                    <th className="p-5">Horas Extras</th>
+                    <th className="p-5 text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[11px] font-bold uppercase">
+                  {availableIndividualEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-12 text-center text-slate-400">
+                        <div className="text-2xl mb-1">⚪</div>
+                        Nenhum colaborador {individualStatusTab === 'active' ? 'ativo' : 'desativado'} encontrado no sistema.
+                      </td>
+                    </tr>
+                  ) : availableIndividualEmployees
+                    .filter(emp => emp.matricula === selectedEmployeeIndividual)
+                    .map(emp => {
+                      const dayRecs = latestRecords
+                        .filter(r => 
+                          r.matricula === emp.matricula && 
+                          r.timestamp.toISOString().split('T')[0] === selectedDateIndividual
+                        )
+                        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+                      const e1 = dayRecs[0] ? dayRecs[0].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                      const s1 = dayRecs[1] ? dayRecs[1].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                      const e2 = dayRecs[2] ? dayRecs[2].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+                      const s2 = dayRecs[3] ? dayRecs[3].timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '-';
+
+                      const renderRecordIcons = (rec: PointRecord | undefined) => {
+                        if (!rec) return null;
+                        return (
+                          <div className="flex gap-1 mt-1">
+                            {rec.photo && (
+                              <button 
+                                onClick={() => { setSelectedPhotoUrl(rec.photo); setShowPhotoModal(true); }}
+                                className="text-blue-400 hover:text-blue-600"
+                                title="Ver Foto da Batida"
+                              >
+                                <Camera size={10} />
+                              </button>
+                            )}
+                            {rec.latitude && rec.longitude && (
+                              <a 
+                                href={`https://www.google.com/maps?q=${rec.latitude},${rec.longitude}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-emerald-400 hover:text-emerald-600"
+                                title="Ver Localização GPS"
+                              >
+                                <MapPin size={10} />
+                              </a>
+                            )}
+                          </div>
+                        );
+                      };
+
+                      let workedMinutes = 0;
+                      if (dayRecs[0] && dayRecs[1]) workedMinutes += calculateHoursDiff(e1, s1);
+                      if (dayRecs[2] && dayRecs[3]) workedMinutes += calculateHoursDiff(e2, s2);
+
+                      const holidayInfo = getHolidayForDate(selectedDateIndividual, customHolidays);
+                      const dateObj = new Date(selectedDateIndividual + 'T12:00:00');
+                      const dayOfWeek = dateObj.getDay();
+                      let extraMinutes = 0;
+                      if (workedMinutes > 0) {
+                        if (holidayInfo || dayOfWeek === 0) {
+                          // Feriado ou Domingo: 100% de Horas Extras
+                          extraMinutes = workedMinutes;
+                        } else if (dayOfWeek === 6) {
+                          extraMinutes = workedMinutes > 240 ? (workedMinutes - 240) : 0;
+                        } else {
+                          extraMinutes = workedMinutes > 480 ? (workedMinutes - 480) : 0;
+                        }
                       }
-                    }
 
-                    return (
-                      <tr key={emp.id} className="border-b hover:bg-slate-50/50 transition-colors">
-                        <td className="p-5 font-black text-slate-800">{emp.name}</td>
-                        <td className="p-5">
-                          <div className="font-mono">{e1}</div>
-                          {renderRecordIcons(dayRecs[0])}
-                        </td>
-                        <td className="p-5">
-                          <div className="font-mono">{s1}</div>
-                          {renderRecordIcons(dayRecs[1])}
-                        </td>
-                        <td className="p-5">
-                          <div className="font-mono">{e2}</div>
-                          {renderRecordIcons(dayRecs[2])}
-                        </td>
-                        <td className="p-5">
-                          <div className="font-mono">{s2}</div>
-                          {renderRecordIcons(dayRecs[3])}
-                        </td>
-                        <td className="p-5 text-slate-600 font-mono">
-                          {workedMinutes > 0 ? (
-                            formatMinutesToHours(workedMinutes)
-                          ) : holidayInfo ? (
-                            <span className="text-[8px] font-black px-2 py-0.5 rounded bg-orange-100 text-orange-700">Feriado</span>
-                          ) : '-'}
-                        </td>
-                        <td className="p-5">
-                          {extraMinutes > 0 ? (
-                            <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black font-mono">
-                              +{formatMinutesToHours(extraMinutes)}
-                            </span>
-                          ) : '-'}
-                        </td>
-                        <td className="p-5 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedEmployeeManualPunch(emp);
-                              setManualPunchDate(selectedDateIndividual);
-                              setShowManualPunchModal(true);
-                            }}
-                            className="bg-orange-50 hover:bg-orange-100 text-orange-600 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1 mx-auto"
-                            title="Adicionar batida manual nesta data"
-                          >
-                            <Plus size={10} /> Lançar Ponto
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
+                      return (
+                        <tr key={emp.id} className="border-b hover:bg-slate-50/50 transition-colors">
+                          <td className="p-5 font-black text-slate-800">
+                            <div>{emp.name}</div>
+                            <span className="text-[8px] font-bold text-slate-400">Matrícula: {emp.matricula}</span>
+                          </td>
+                          <td className="p-5">
+                            <div className="font-mono">{e1}</div>
+                            {renderRecordIcons(dayRecs[0])}
+                          </td>
+                          <td className="p-5">
+                            <div className="font-mono">{s1}</div>
+                            {renderRecordIcons(dayRecs[1])}
+                          </td>
+                          <td className="p-5">
+                            <div className="font-mono">{e2}</div>
+                            {renderRecordIcons(dayRecs[2])}
+                          </td>
+                          <td className="p-5">
+                            <div className="font-mono">{s2}</div>
+                            {renderRecordIcons(dayRecs[3])}
+                          </td>
+                          <td className="p-5 text-slate-600 font-mono">
+                            {workedMinutes > 0 ? (
+                              formatMinutesToHours(workedMinutes)
+                            ) : holidayInfo ? (
+                              <span className="text-[8px] font-black px-2 py-0.5 rounded bg-orange-100 text-orange-700">Feriado</span>
+                            ) : '-'}
+                          </td>
+                          <td className="p-5">
+                            {extraMinutes > 0 ? (
+                              <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black font-mono">
+                                +{formatMinutesToHours(extraMinutes)}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="p-5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setSelectedEmployeeManualPunch(emp);
+                                  setManualPunchDate(selectedDateIndividual);
+                                  setShowManualPunchModal(true);
+                                }}
+                                className="bg-orange-50 hover:bg-orange-100 text-orange-600 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1 active:scale-95"
+                                title="Adicionar batida manual nesta data"
+                              >
+                                <Plus size={10} /> Lançar Ponto
+                              </button>
+
+                              <button
+                                onClick={() => handleExportPDF(emp.matricula)}
+                                className="bg-slate-50 hover:bg-slate-100 text-slate-700 px-2.5 py-1.5 rounded-xl text-[8px] font-black uppercase transition-all shadow-sm flex items-center gap-1 active:scale-95"
+                                title="Baixar Folha Mensal em PDF"
+                              >
+                                <FileSpreadsheet size={10} /> PDF
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {activeTab === 'aprovacoes' && (
         <div className="space-y-6">
