@@ -198,22 +198,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
   }, [records, user]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-6 space-y-6 pb-36 overflow-y-auto no-scrollbar">
-      <div className="space-y-2">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-1.5 sm:p-4 space-y-2.5 sm:space-y-4 pb-16 sm:pb-28 overflow-y-auto no-scrollbar">
+      <div className="space-y-1 px-1">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Olá, {user.name.split(' ')[0]} 👋</p>
-          <div className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
-            <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
+          <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Olá, {user.name.split(' ')[0]} 👋</p>
+          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-slate-800 shadow-xs">
+            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
+            <span className="text-[8px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
               {isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Painel de Ponto</h2>
+          <h2 className="text-base sm:text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Painel de Ponto</h2>
           {user.isExemptPointControl && (
-            <span className="bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 px-2.5 py-1 rounded-xl text-[8px] font-black uppercase tracking-wider flex items-center gap-1">
+            <span className="bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 px-2 py-0.5 rounded-lg text-[7.5px] font-black uppercase tracking-wider flex items-center gap-1">
               👑 Cargo de Gerência
             </span>
           )}
@@ -222,24 +222,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 
       {/* BANNER MODO OFFLINE */}
       {!isOnline && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-4 rounded-3xl flex items-center justify-between animate-in slide-in-from-top-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-base shadow-sm shrink-0">
-              <WifiOff size={18} />
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-3 sm:p-4 rounded-2xl sm:rounded-3xl flex items-center justify-between animate-in slide-in-from-top-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-500 text-white flex items-center justify-center text-sm sm:text-base shadow-sm shrink-0">
+              <WifiOff size={16} />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-300">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-300">
                 Modo Ponto Offline Ativo
               </p>
-              <p className="text-[9px] font-bold text-amber-700/80 dark:text-amber-400/80">
-                Você pode registrar seu ponto normalmente. As marcações são gravadas com assinatura digital no aparelho e sincronizadas com o RH assim que o sinal voltar.
+              <p className="text-[8px] sm:text-[9px] font-bold text-amber-700/80 dark:text-amber-400/80 line-clamp-2">
+                Suas batidas são salvas com segurança no aparelho e sincronizadas com o RH assim que o sinal voltar.
               </p>
             </div>
           </div>
           {offlineRecords.length > 0 && (
             <button
               onClick={() => setShowOfflineModal(true)}
-              className="ml-2 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase shrink-0 active:scale-95 shadow-sm"
+              className="ml-2 px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[8.5px] font-black uppercase shrink-0 active:scale-95 shadow-sm"
             >
               Fila ({offlineRecords.length})
             </button>
@@ -249,34 +249,34 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 
       {/* BANNER BATIDAS OFFLINE PENDENTES DE SINCRONIZAÇÃO */}
       {offlineRecords.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 p-4 rounded-3xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <Clock size={18} />
+        <div className="bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-sm flex items-center justify-between animate-in slide-in-from-top-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Clock size={16} />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-800 dark:text-white">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-slate-800 dark:text-white">
                 {offlineRecords.length} marcação(ões) offline no aparelho
               </p>
-              <p className="text-[8px] font-bold text-slate-400 uppercase">
+              <p className="text-[7.5px] sm:text-[8px] font-bold text-slate-400 uppercase">
                 {isOnline ? 'Pronto para sincronização na nuvem' : 'Salvo no dispositivo (Portaria 671 MTP)'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setShowOfflineModal(true)}
-              className="px-2.5 py-1.5 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 hover:underline"
+              className="px-2 py-1 text-[8.5px] font-black uppercase text-amber-600 dark:text-amber-400 hover:underline"
             >
-              Ver Fila
+              Fila
             </button>
             <button
               onClick={handleManualSync}
               disabled={isSyncing}
-              className="px-4 py-2.5 rounded-2xl font-black text-[9px] uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all bg-orange-600 hover:bg-orange-700 text-white active:scale-95"
+              className="px-3 py-1.5 rounded-xl font-black text-[8.5px] uppercase tracking-wider flex items-center gap-1 shadow-sm transition-all bg-orange-600 hover:bg-orange-700 text-white active:scale-95"
             >
-              <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+              <RefreshCw size={11} className={isSyncing ? 'animate-spin' : ''} />
               {isSyncing ? 'Enviando...' : 'Sincronizar'}
             </button>
           </div>
@@ -285,7 +285,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 
       {/* TOAST DE SINCRONIZAÇÃO */}
       {syncToast && (
-        <div className="p-4 bg-emerald-500 text-white rounded-3xl shadow-lg flex items-center justify-between text-[10px] font-black uppercase tracking-wider animate-in fade-in">
+        <div className="p-3 bg-emerald-500 text-white rounded-2xl shadow-md flex items-center justify-between text-[9px] font-black uppercase tracking-wider animate-in fade-in">
           <span>✅ {syncToast}</span>
           <button onClick={() => setSyncToast(null)} className="opacity-70 hover:opacity-100">✕</button>
         </div>
@@ -293,117 +293,116 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 
       {/* LEMBRETE INTELIGENTE DE PONTO */}
       {activeReminder && (
-        <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-5 rounded-[32px] shadow-xl shadow-orange-500/20 flex items-center justify-between animate-in slide-in-from-top-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl text-white shadow-inner">
-              <Bell size={22} className="animate-bounce" />
+        <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-3.5 sm:p-4 rounded-2xl sm:rounded-[28px] shadow-lg shadow-orange-500/15 flex items-center justify-between animate-in slide-in-from-top-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg text-white shadow-inner shrink-0">
+              <Bell size={18} className="animate-bounce" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="bg-white/25 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider">
-                  Lembrete de Horário
+              <div className="flex items-center gap-1.5">
+                <span className="bg-white/25 px-2 py-0.5 rounded-full text-[7.5px] font-black uppercase tracking-wider">
+                  Lembrete
                 </span>
-                <span className="text-[10px] font-black opacity-90">{activeReminder.scheduledTime}</span>
+                <span className="text-[9px] font-black opacity-90">{activeReminder.scheduledTime}</span>
               </div>
-              <p className="text-xs font-black uppercase tracking-tight mt-0.5">
-                {activeReminder.slotLabel}: {activeReminder.minutesLeft === 0 ? 'Horário atingido agora!' : `Faltam ${activeReminder.minutesLeft} minuto(s)`}
-              </p>
-              <p className="text-[9px] font-bold text-white/80">
-                Evite atrasos registrando sua marcação no horário correto.
+              <p className="text-[11px] font-black uppercase tracking-tight mt-0.5">
+                {activeReminder.slotLabel}: {activeReminder.minutesLeft === 0 ? 'Horário atingido agora!' : `Faltam ${activeReminder.minutesLeft} min`}
               </p>
             </div>
           </div>
           <button 
             onClick={onPunchClick}
-            className="bg-white text-orange-600 px-4 py-2.5 rounded-2xl font-black text-[9px] uppercase tracking-wider shadow-lg active:scale-95 transition-all whitespace-nowrap"
+            className="bg-white text-orange-600 px-3 py-2 rounded-xl font-black text-[8.5px] uppercase tracking-wider shadow-md active:scale-95 transition-all whitespace-nowrap"
           >
-            Registrar Já
+            Registrar
           </button>
         </div>
       )}
 
       {user.isExemptPointControl && (
-        <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 p-4 rounded-3xl flex items-start gap-3 text-purple-900 dark:text-purple-200 animate-in fade-in">
-          <span className="text-2xl">👑</span>
+        <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 p-3 rounded-2xl flex items-start gap-2.5 text-purple-900 dark:text-purple-200 animate-in fade-in">
+          <span className="text-xl">👑</span>
           <div className="space-y-0.5">
-            <p className="text-[10px] font-black uppercase tracking-wider text-purple-800 dark:text-purple-300">
+            <p className="text-[9px] font-black uppercase tracking-wider text-purple-800 dark:text-purple-300">
               Dispensado de Controle de Jornada (Art. 62, II da CLT)
             </p>
-            <p className="text-[9px] font-bold opacity-80 leading-relaxed">
-              Você ocupa cargo de gerência/confiança. O registro de horários é facultativo e não há desconto de banco de horas ou faltas.
+            <p className="text-[8px] font-bold opacity-80 leading-relaxed">
+              Cargo de confiança: registro facultativo sem desconto de banco de horas ou faltas.
             </p>
           </div>
         </div>
       )}
 
       {alerts.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {alerts.map(alert => (
-            <div key={alert.id} className={`p-4 rounded-3xl flex items-center gap-3 animate-in slide-in-from-top-4 ${alert.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 border border-amber-100 dark:border-amber-900/30' : 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-100 dark:border-blue-900/30'}`}>
-              <span className="text-lg">{alert.type === 'warning' ? '⚠️' : '🔔'}</span>
-              <p className="text-[10px] font-black uppercase tracking-wider">{alert.text}</p>
+            <div key={alert.id} className={`p-3 rounded-2xl flex items-center gap-2.5 animate-in slide-in-from-top-3 ${alert.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 border border-amber-100 dark:border-amber-900/30' : 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-100 dark:border-blue-900/30'}`}>
+              <span className="text-base">{alert.type === 'warning' ? '⚠️' : '🔔'}</span>
+              <p className="text-[9px] font-black uppercase tracking-wider">{alert.text}</p>
             </div>
           ))}
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-[44px] p-6 md:p-8 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-6">
-        <div className="text-center space-y-1">
-          <p className="text-[42px] font-black text-slate-800 dark:text-white tracking-tighter leading-none">
+      {/* BLOCO PRINCIPAL COMPACTO PARA CABER PERFEITAMENTE NO CELULAR */}
+      <div className="bg-white dark:bg-slate-900 rounded-[30px] sm:rounded-[40px] p-4 sm:p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-3.5 sm:space-y-4">
+        {/* Relógio e Data */}
+        <div className="text-center space-y-0.5">
+          <p className="text-[32px] sm:text-[40px] font-black text-slate-800 dark:text-white tracking-tighter leading-none">
             {time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </p>
-          <p className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em]">
+          <p className="text-[8.5px] sm:text-[9.5px] font-black text-orange-500 uppercase tracking-[0.25em]">
             {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(time)}
           </p>
         </div>
 
-        {/* 1. Botão Registrar */}
+        {/* 1. Botão Registrar (Tamanho Responsivo Compacto) */}
         <button 
           onClick={onPunchClick}
-          className="w-48 h-48 rounded-full bg-orange-500 p-2 shadow-2xl shadow-orange-200 dark:shadow-none relative group active:scale-90 transition-all"
+          className="w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-orange-500 p-1.5 sm:p-2 shadow-xl shadow-orange-500/20 dark:shadow-none relative group active:scale-95 transition-all"
         >
-          <div className="w-full h-full rounded-full border-4 border-white/20 flex flex-col items-center justify-center text-white space-y-1">
-            <span className="text-4xl">☝️</span>
-            <span className="text-[11px] font-black uppercase tracking-widest">
+          <div className="w-full h-full rounded-full border-4 border-white/20 flex flex-col items-center justify-center text-white space-y-0.5">
+            <span className="text-2xl sm:text-3xl leading-none">☝️</span>
+            <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest mt-1">
               {!isOnline ? 'Registrar Ponto' : 'Registrar'}
             </span>
-            <span className="text-[10px] font-bold opacity-60 uppercase">
+            <span className="text-[8px] sm:text-[9px] font-bold opacity-70 uppercase">
               {!isOnline ? 'Modo Offline' : 'Ponto Agora'}
             </span>
           </div>
-          <div className="absolute inset-0 rounded-full bg-orange-500 animate-ping opacity-20 -z-10"></div>
+          <div className="absolute inset-0 rounded-full bg-orange-500 animate-ping opacity-15 -z-10"></div>
         </button>
 
         {/* 2. LINHA DO TEMPO - HOJE (Abaixo do botão Registrar) */}
-        <div className="w-full pt-4 pb-1 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+        <div className="w-full pt-3 pb-0.5 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between mb-2.5 px-1">
+            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               Linha do Tempo - Hoje
             </p>
-            <span className="text-[8px] font-black text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2.5 py-0.5 rounded-full uppercase">
+            <span className="text-[7.5px] sm:text-[8px] font-black text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-full uppercase">
               {timeline.filter(t => t.done).length} de {timeline.length} Registros
             </span>
           </div>
-          <div className="flex justify-between items-center relative px-2">
-            <div className="absolute left-6 right-6 h-0.5 bg-slate-100 dark:bg-slate-800 top-4 -z-0"></div>
+          <div className="flex justify-between items-center relative px-1 sm:px-2">
+            <div className="absolute left-5 right-5 h-0.5 bg-slate-100 dark:bg-slate-800 top-3.5 -z-0"></div>
             {timeline.map((rec, i) => (
-              <div key={i} className="flex flex-col items-center space-y-2.5 relative z-10">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-4 transition-all ${
+              <div key={i} className="flex flex-col items-center space-y-1.5 relative z-10">
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-2 sm:border-4 transition-all ${
                   rec.done 
-                    ? 'bg-orange-500 border-orange-100 dark:border-orange-950 text-white shadow-md' 
+                    ? 'bg-orange-500 border-orange-100 dark:border-orange-950 text-white shadow-sm' 
                     : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400'
                 }`}>
-                  {rec.done ? <span className="text-[10px] font-black">✓</span> : <span className="text-[8px] font-black">{i + 1}</span>}
+                  {rec.done ? <span className="text-[9px] font-black">✓</span> : <span className="text-[8px] font-black">{i + 1}</span>}
                 </div>
                 <div className="text-center">
-                  <p className={`text-[8.5px] font-black uppercase ${rec.done ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
+                  <p className={`text-[7.5px] sm:text-[8px] font-black uppercase leading-tight ${rec.done ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
                     {rec.type}
                   </p>
-                  <p className={`text-[10px] font-mono font-bold ${rec.done ? 'text-orange-600' : 'text-slate-400'}`}>
+                  <p className={`text-[9px] sm:text-[10px] font-mono font-bold leading-tight ${rec.done ? 'text-orange-600' : 'text-slate-400'}`}>
                     {rec.done ? rec.actual : rec.time}
                   </p>
                   {rec.isOffline && (
-                    <span className="text-[7px] font-black text-amber-500 uppercase block">Offline</span>
+                    <span className="text-[6.5px] font-black text-amber-500 uppercase block">Offline</span>
                   )}
                 </div>
               </div>
@@ -413,13 +412,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 
         {/* 3. SALDO ATUAL (Abaixo da Linha do Tempo) */}
         <div className="w-full pt-1">
-          <div className={`p-4 rounded-3xl flex items-center justify-between border ${
+          <div className={`p-2.5 sm:p-3 rounded-2xl flex items-center justify-between border ${
             currentBalance.isPositive 
               ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30' 
               : 'bg-rose-50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/30'
           }`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-base shadow-sm ${
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm shadow-xs ${
                 currentBalance.isPositive 
                   ? 'bg-emerald-500 text-white' 
                   : 'bg-rose-500 text-white'
@@ -427,12 +426,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
                 ⏱️
               </div>
               <div className="text-left">
-                <p className={`text-[8.5px] font-black uppercase tracking-widest ${
+                <p className={`text-[8px] sm:text-[8.5px] font-black uppercase tracking-wider ${
                   currentBalance.isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                 }`}>
                   Saldo Atual de Horas
                 </p>
-                <p className={`text-[8px] font-bold uppercase ${
+                <p className={`text-[7.5px] sm:text-[8px] font-bold uppercase ${
                   currentBalance.isPositive ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-rose-600/80 dark:text-rose-400/80'
                 }`}>
                   {currentBalance.subtext}
@@ -441,7 +440,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
             </div>
 
             <div className="text-right">
-              <p className={`text-lg font-black font-mono tracking-tight ${
+              <p className={`text-sm sm:text-base font-black font-mono tracking-tight ${
                 currentBalance.isPositive ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'
               }`}>
                 {currentBalance.text}
@@ -451,17 +450,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
         </div>
       </div>
 
-      {/* NOVO CARD CENTRAL DE JUSTIFICATIVA */}
-      <div onClick={() => onNavigate('requests')} className="bg-orange-600 p-6 rounded-[35px] shadow-lg shadow-orange-200 dark:shadow-none flex items-center justify-between group active:scale-95 transition-all cursor-pointer">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-xl text-white">📝</div>
+      {/* CARD CENTRAL DE JUSTIFICATIVA */}
+      <div onClick={() => onNavigate('requests')} className="bg-orange-600 p-3.5 sm:p-4 rounded-[22px] sm:rounded-[28px] shadow-md shadow-orange-500/10 flex items-center justify-between group active:scale-95 transition-all cursor-pointer">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center text-base sm:text-lg text-white">📝</div>
           <div>
-            <p className="text-[11px] font-black text-white uppercase tracking-widest">Justificativa para o RH</p>
-            <p className="text-[9px] font-bold text-white/70 uppercase">Faltas, Atestados ou Ajustes</p>
+            <p className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wider">Justificativa para o RH</p>
+            <p className="text-[8px] sm:text-[9px] font-bold text-white/70 uppercase">Faltas, Atestados ou Ajustes</p>
           </div>
         </div>
-        <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-white/10 rounded-full flex items-center justify-center text-white">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
         </div>
       </div>
 

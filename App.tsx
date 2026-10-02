@@ -276,7 +276,7 @@ const App: React.FC = () => {
         </header>
 
         <main ref={mainRef} className="flex-1 overflow-y-auto no-scrollbar">
-          <div className={`mx-auto w-full min-h-full ${isAdminView ? 'p-4 md:p-8 pt-2 md:pt-4' : 'max-w-md p-4'}`}>
+          <div className={`mx-auto w-full min-h-full ${isAdminView ? 'p-3 md:p-8 pt-2 md:pt-4' : 'max-w-md p-2 sm:p-4'}`}>
             {activeView === 'companies' ? (
               <CompaniesView />
             ) : !isAdmin ? (
