@@ -2565,23 +2565,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
           <div className="bg-white rounded-[44px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in overflow-y-auto max-h-[90vh] no-scrollbar">
             <h2 className="text-[14px] font-black uppercase text-center mb-6 text-orange-600 tracking-widest">Novo Colaborador</h2>
             <div className="space-y-3">
-              <input type="text" placeholder="NOME COMPLETO" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-              <div className="flex gap-2">
-                <input type="text" placeholder="MATRÍCULA" value={newEmp.matricula} onChange={e => setNewEmp({...newEmp, matricula: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-                <input type="text" placeholder="CPF" value={newEmp.cpf} onChange={e => setNewEmp({...newEmp, cpf: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              <input type="text" placeholder="NOME COMPLETO" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all" />
+              <div className="grid grid-cols-2 gap-3 w-full">
+                <input type="text" placeholder="MATRÍCULA" value={newEmp.matricula} onChange={e => setNewEmp({...newEmp, matricula: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
+                <input type="text" placeholder="CPF" value={newEmp.cpf} onChange={e => setNewEmp({...newEmp, cpf: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data de Nascimento</label>
-                <input type="date" value={newEmp.birthDate} onChange={e => setNewEmp({...newEmp, birthDate: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="date" value={newEmp.birthDate} onChange={e => setNewEmp({...newEmp, birthDate: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all" />
               </div>
-              <input type="text" placeholder="CARGO / FUNÇÃO" value={newEmp.roleFunction} onChange={e => setNewEmp({...newEmp, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-              <div className="flex gap-2">
-                <input type="text" placeholder="CTPS Nº" value={newEmp.ctpsNumber} onChange={e => setNewEmp({...newEmp, ctpsNumber: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-                <input type="text" placeholder="SÉRIE" value={newEmp.ctpsSeries} onChange={e => setNewEmp({...newEmp, ctpsSeries: e.target.value})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              <input type="text" placeholder="CARGO / FUNÇÃO" value={newEmp.roleFunction} onChange={e => setNewEmp({...newEmp, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all" />
+              <div className="grid grid-cols-2 gap-3 w-full">
+                <input type="text" placeholder="CTPS Nº" value={newEmp.ctpsNumber} onChange={e => setNewEmp({...newEmp, ctpsNumber: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
+                <input type="text" placeholder="SÉRIE" value={newEmp.ctpsSeries} onChange={e => setNewEmp({...newEmp, ctpsSeries: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
               </div>
-              <div className="flex gap-2">
-                <input type="text" placeholder="HORÁRIO (EX: 08:00 - 18:00)" value={newEmp.workShift} onChange={e => setNewEmp({...newEmp, workShift: e.target.value})} className="flex-[2] p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
-                <input type="number" placeholder="HORAS/SEM" value={newEmp.weeklyHours} onChange={e => setNewEmp({...newEmp, weeklyHours: parseInt(e.target.value) || 44})} className="flex-1 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+              <div className="grid grid-cols-3 gap-3 w-full">
+                <div className="col-span-2 min-w-0">
+                  <input type="text" placeholder="HORÁRIO (EX: 08:00 - 18:00)" value={newEmp.workShift} onChange={e => setNewEmp({...newEmp, workShift: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
+                </div>
+                <div className="col-span-1 min-w-0">
+                  <input type="number" placeholder="HORAS/SEM" value={newEmp.weeklyHours} onChange={e => setNewEmp({...newEmp, weeklyHours: parseInt(e.target.value) || 44})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
+                </div>
               </div>
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Status Inicial</label>
@@ -2678,42 +2682,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Nome Completo</label>
                 <input type="text" value={editEmpData.name} onChange={e => setEditEmpData({...editEmpData, name: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
+              <div className="grid grid-cols-2 gap-3 w-full">
+                <div className="min-w-0">
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Matrícula</label>
-                  <input type="text" value={editEmpData.matricula} onChange={e => setEditEmpData({...editEmpData, matricula: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                  <input type="text" value={editEmpData.matricula} onChange={e => setEditEmpData({...editEmpData, matricula: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0">
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">CPF</label>
-                  <input type="text" value={editEmpData.cpf} onChange={e => setEditEmpData({...editEmpData, cpf: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                  <input type="text" value={editEmpData.cpf} onChange={e => setEditEmpData({...editEmpData, cpf: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
                 </div>
               </div>
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Data de Nascimento</label>
-                <input type="date" value={editEmpData.birthDate} onChange={e => setEditEmpData({...editEmpData, birthDate: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="date" value={editEmpData.birthDate} onChange={e => setEditEmpData({...editEmpData, birthDate: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all" />
               </div>
               <div>
                 <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Cargo / Função</label>
-                <input type="text" value={editEmpData.roleFunction} onChange={e => setEditEmpData({...editEmpData, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                <input type="text" value={editEmpData.roleFunction} onChange={e => setEditEmpData({...editEmpData, roleFunction: e.target.value.toUpperCase()})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all" />
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
+              <div className="grid grid-cols-2 gap-3 w-full">
+                <div className="min-w-0">
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">CTPS Nº</label>
-                  <input type="text" value={editEmpData.ctpsNumber} onChange={e => setEditEmpData({...editEmpData, ctpsNumber: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                  <input type="text" value={editEmpData.ctpsNumber} onChange={e => setEditEmpData({...editEmpData, ctpsNumber: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0">
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">SÉRIE</label>
-                  <input type="text" value={editEmpData.ctpsSeries} onChange={e => setEditEmpData({...editEmpData, ctpsSeries: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                  <input type="text" value={editEmpData.ctpsSeries} onChange={e => setEditEmpData({...editEmpData, ctpsSeries: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <div className="flex-[2]">
+              <div className="grid grid-cols-3 gap-3 w-full">
+                <div className="col-span-2 min-w-0">
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Horário</label>
-                  <input type="text" value={editEmpData.workShift} onChange={e => setEditEmpData({...editEmpData, workShift: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                  <input type="text" value={editEmpData.workShift} onChange={e => setEditEmpData({...editEmpData, workShift: e.target.value})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
                 </div>
-                <div className="flex-1">
+                <div className="col-span-1 min-w-0">
                   <label className="text-[8px] font-black uppercase text-slate-400 ml-2">Horas/Sem</label>
-                  <input type="number" value={editEmpData.weeklyHours} onChange={e => setEditEmpData({...editEmpData, weeklyHours: parseInt(e.target.value) || 44})} className="w-full p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border" />
+                  <input type="number" value={editEmpData.weeklyHours} onChange={e => setEditEmpData({...editEmpData, weeklyHours: parseInt(e.target.value) || 44})} className="w-full min-w-0 p-4 bg-slate-50 rounded-2xl text-[10px] font-black outline-none border focus:border-orange-500 transition-all box-border" />
                 </div>
               </div>
               <div>
