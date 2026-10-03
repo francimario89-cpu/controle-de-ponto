@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Wifi, WifiOff, RefreshCw, Bell, Clock, ShieldCheck, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, Bell, Clock, ShieldCheck, X, AlertTriangle, CheckCircle2, Fingerprint, Building2, Check } from 'lucide-react';
 import { PointRecord, User } from '../types';
 import { getOfflineRecords, syncOfflineRecords, StoredOfflineRecord } from '../utils/offlineStorage';
 import { parseWorkSlots, checkAndTriggerPunchReminders, InAppPunchReminder } from '../utils/reminderService';
@@ -116,10 +116,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
 
     const scheduled = parseWorkSlots(user.workShift);
     const slots = [
-      { type: scheduled[0]?.label || 'Entrada', time: scheduled[0]?.time || '08:00', done: false, actual: '', isOffline: false },
-      { type: scheduled[1]?.label || 'Intervalo', time: scheduled[1]?.time || '12:00', done: false, actual: '', isOffline: false },
-      { type: scheduled[2]?.label || 'Retorno', time: scheduled[2]?.time || '13:00', done: false, actual: '', isOffline: false },
-      { type: scheduled[3]?.label || 'Saída', time: scheduled[3]?.time || '17:00', done: false, actual: '', isOffline: false },
+      { type: 'ENTRADA', time: scheduled[0]?.time || '08:00', done: false, actual: '', isOffline: false, icon: 'clock' },
+      { type: 'INTERVALO', time: scheduled[1]?.time || '12:00', done: false, actual: '', isOffline: false, icon: 'clock' },
+      { type: 'RETORNO', time: scheduled[2]?.time || '13:00', done: false, actual: '', isOffline: false, icon: 'clock' },
+      { type: 'FIM DO EXPEDIENTE', time: scheduled[3]?.time || '17:00', done: false, actual: '', isOffline: false, icon: 'building' },
     ];
 
     todayRecords.forEach((rec, idx) => {
@@ -347,26 +347,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
       {/* BLOCO PRINCIPAL COMPACTO PARA CABER PERFEITAMENTE NO CELULAR */}
       <div className="bg-white dark:bg-slate-900 rounded-[30px] sm:rounded-[40px] p-4 sm:p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-3.5 sm:space-y-4">
         {/* Relógio e Data */}
-        <div className="text-center space-y-0.5">
-          <p className="text-[32px] sm:text-[40px] font-black text-slate-800 dark:text-white tracking-tighter leading-none">
+        <div className="text-center space-y-1">
+          <p className="text-[38px] sm:text-[44px] font-black text-slate-900 dark:text-white tracking-tighter leading-none">
             {time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </p>
-          <p className="text-[8.5px] sm:text-[9.5px] font-black text-orange-500 uppercase tracking-[0.25em]">
+          <p className="text-[9px] sm:text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-[0.2em]">
             {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(time)}
           </p>
         </div>
 
-        {/* 1. Botão Registrar (Tamanho Responsivo Compacto) */}
+        {/* 1. Botão Registrar com a Digital (Conforme a foto) */}
         <button 
           onClick={onPunchClick}
-          className="w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-orange-500 p-1.5 sm:p-2 shadow-xl shadow-orange-500/20 dark:shadow-none relative group active:scale-95 transition-all"
+          className="w-40 h-40 sm:w-44 sm:h-44 rounded-full bg-gradient-to-b from-orange-500 via-orange-500 to-orange-600 p-2 shadow-2xl shadow-orange-500/35 relative group active:scale-95 transition-all cursor-pointer"
         >
-          <div className="w-full h-full rounded-full border-4 border-white/20 flex flex-col items-center justify-center text-white space-y-0.5">
-            <span className="text-2xl sm:text-3xl leading-none">☝️</span>
-            <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest mt-1">
-              {!isOnline ? 'Registrar Ponto' : 'Registrar'}
-            </span>
-            <span className="text-[8px] sm:text-[9px] font-bold opacity-70 uppercase">
+          <div className="w-full h-full rounded-full border-[3.5px] border-white/20 flex flex-col items-center justify-center text-white space-y-1">
+            <Fingerprint size={42} strokeWidth={1.8} className="text-white drop-shadow-sm transition-transform group-hover:scale-105" />
+            <div className="text-center leading-tight mt-0.5">
+              <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-wider block text-white drop-shadow-xs">
+                Registrar
+              </span>
+              <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-wider block text-white drop-shadow-xs">
+                Ponto
+              </span>
+            </div>
+            <span className="text-[8.5px] sm:text-[9px] font-bold text-orange-100 uppercase tracking-widest opacity-90 pt-0.5">
               {!isOnline ? 'Modo Offline' : 'Ponto Agora'}
             </span>
           </div>
@@ -376,37 +381,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
         {/* 2. LINHA DO TEMPO - HOJE (Abaixo do botão Registrar) */}
         <div className="w-full pt-3 pb-0.5 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between mb-2.5 px-1">
-            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+            <p className="text-[9px] sm:text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
               Linha do Tempo - Hoje
             </p>
-            <span className="text-[7.5px] sm:text-[8px] font-black text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-full uppercase">
+            <span className="text-[7.5px] sm:text-[8px] font-black text-orange-700 bg-orange-100/70 dark:bg-orange-950/40 px-2.5 py-0.5 rounded-full uppercase">
               {timeline.filter(t => t.done).length} de {timeline.length} Registros
             </span>
           </div>
           <div className="flex justify-between items-center relative px-1 sm:px-2">
             <div className="absolute left-5 right-5 h-0.5 bg-slate-100 dark:bg-slate-800 top-3.5 -z-0"></div>
-            {timeline.map((rec, i) => (
-              <div key={i} className="flex flex-col items-center space-y-1.5 relative z-10">
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-2 sm:border-4 transition-all ${
-                  rec.done 
-                    ? 'bg-orange-500 border-orange-100 dark:border-orange-950 text-white shadow-sm' 
-                    : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400'
-                }`}>
-                  {rec.done ? <span className="text-[9px] font-black">✓</span> : <span className="text-[8px] font-black">{i + 1}</span>}
+            {timeline.map((rec, i) => {
+              const doneCount = timeline.filter(t => t.done).length;
+              const isLatestDone = rec.done && i === doneCount - 1 && doneCount > 1;
+
+              return (
+                <div key={i} className="flex flex-col items-center space-y-1.5 relative z-10">
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                    rec.done 
+                      ? isLatestDone
+                        ? 'bg-orange-500 border-orange-200 text-white shadow-sm'
+                        : 'bg-emerald-500 border-emerald-100 text-white shadow-sm' 
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 shadow-2xs'
+                  }`}>
+                    {rec.done ? (
+                      <Check size={14} strokeWidth={3} />
+                    ) : rec.icon === 'building' ? (
+                      <Building2 size={13} strokeWidth={2} />
+                    ) : (
+                      <Clock size={13} strokeWidth={2} />
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <p className={`text-[7.5px] sm:text-[8px] font-black uppercase leading-tight ${rec.done ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
+                      {rec.type}
+                    </p>
+                    <p className={`text-[9px] sm:text-[10px] font-mono font-bold leading-tight ${rec.done ? 'text-slate-700 dark:text-slate-300 font-black' : 'text-slate-400'}`}>
+                      {rec.done ? rec.actual : rec.time}
+                    </p>
+                    {rec.isOffline && (
+                      <span className="text-[6.5px] font-black text-amber-500 uppercase block">Offline</span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className={`text-[7.5px] sm:text-[8px] font-black uppercase leading-tight ${rec.done ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
-                    {rec.type}
-                  </p>
-                  <p className={`text-[9px] sm:text-[10px] font-mono font-bold leading-tight ${rec.done ? 'text-orange-600' : 'text-slate-400'}`}>
-                    {rec.done ? rec.actual : rec.time}
-                  </p>
-                  {rec.isOffline && (
-                    <span className="text-[6.5px] font-black text-amber-500 uppercase block">Offline</span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
