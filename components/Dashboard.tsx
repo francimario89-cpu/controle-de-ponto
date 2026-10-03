@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Wifi, WifiOff, RefreshCw, Bell, Clock, ShieldCheck, X, AlertTriangle, CheckCircle2, Fingerprint, Building2, Check } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, Bell, Clock, ShieldCheck, X, AlertTriangle, CheckCircle2, Building2, Check } from 'lucide-react';
 import { PointRecord, User } from '../types';
 import { getOfflineRecords, syncOfflineRecords, StoredOfflineRecord } from '../utils/offlineStorage';
 import { parseWorkSlots, checkAndTriggerPunchReminders, InAppPunchReminder } from '../utils/reminderService';
@@ -198,7 +198,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
   }, [records, user]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-1.5 sm:p-4 space-y-2.5 sm:space-y-4 pb-28 sm:pb-32 overflow-y-auto no-scrollbar">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-1.5 sm:p-4 space-y-2 sm:space-y-3 pb-20 sm:pb-28 overflow-y-auto no-scrollbar">
       <div className="space-y-1 px-1">
         <div className="flex items-center justify-between">
           <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Olá, {user.name.split(' ')[0]} 👋</p>
@@ -345,43 +345,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
       )}
 
       {/* BLOCO PRINCIPAL COMPACTO PARA CABER PERFEITAMENTE NO CELULAR */}
-      <div className="bg-white dark:bg-slate-900 rounded-[30px] sm:rounded-[40px] p-4 sm:p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-3.5 sm:space-y-4">
+      <div className="bg-white dark:bg-slate-900 rounded-[26px] sm:rounded-[36px] p-3 sm:p-5 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col items-center space-y-2.5 sm:space-y-3.5">
         {/* Relógio e Data */}
-        <div className="text-center space-y-1">
-          <p className="text-[38px] sm:text-[44px] font-black text-slate-900 dark:text-white tracking-tighter leading-none">
+        <div className="text-center space-y-0.5">
+          <p className="text-[32px] sm:text-[40px] font-black text-slate-900 dark:text-white tracking-tighter leading-none">
             {time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </p>
-          <p className="text-[9px] sm:text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-[0.2em]">
+          <p className="text-[8.5px] sm:text-[9.5px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-[0.2em]">
             {new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(time)}
           </p>
         </div>
 
-        {/* 1. Botão Registrar com a Digital (Conforme a foto) */}
+        {/* 1. Botão Registrar com Destaque e Proporcional (☝️) */}
         <button 
           onClick={onPunchClick}
-          className="w-40 h-40 sm:w-44 sm:h-44 rounded-full bg-gradient-to-b from-orange-500 via-orange-500 to-orange-600 p-2 shadow-2xl shadow-orange-500/35 relative group active:scale-95 transition-all cursor-pointer"
+          className="w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-gradient-to-tr from-orange-600 via-orange-500 to-amber-500 p-2 shadow-xl shadow-orange-500/30 relative group active:scale-95 transition-all cursor-pointer"
         >
-          <div className="w-full h-full rounded-full border-[3.5px] border-white/20 flex flex-col items-center justify-center text-white space-y-1">
-            <Fingerprint size={42} strokeWidth={1.8} className="text-white drop-shadow-sm transition-transform group-hover:scale-105" />
+          <div className="w-full h-full rounded-full border-[3px] border-white/30 flex flex-col items-center justify-center text-white space-y-0.5">
+            <span className="text-2xl sm:text-3xl leading-none select-none transition-transform group-hover:scale-110">☝️</span>
             <div className="text-center leading-tight mt-0.5">
-              <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-wider block text-white drop-shadow-xs">
-                Registrar
-              </span>
-              <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-wider block text-white drop-shadow-xs">
-                Ponto
+              <span className="text-[11px] sm:text-[13px] font-black uppercase tracking-widest block text-white drop-shadow-sm">
+                {!isOnline ? 'Registrar Ponto' : 'Registrar'}
               </span>
             </div>
-            <span className="text-[8.5px] sm:text-[9px] font-bold text-orange-100 uppercase tracking-widest opacity-90 pt-0.5">
+            <span className="text-[8px] sm:text-[9px] font-bold text-orange-100 uppercase tracking-widest opacity-90">
               {!isOnline ? 'Modo Offline' : 'Ponto Agora'}
             </span>
           </div>
-          <div className="absolute inset-0 rounded-full bg-orange-500 animate-ping opacity-15 -z-10"></div>
+          <div className="absolute inset-0 rounded-full bg-orange-500 animate-ping opacity-20 -z-10"></div>
         </button>
 
         {/* 2. LINHA DO TEMPO - HOJE (Abaixo do botão Registrar) */}
-        <div className="w-full pt-3 pb-0.5 border-t border-slate-100 dark:border-slate-800">
-          <div className="flex items-center justify-between mb-2.5 px-1">
-            <p className="text-[9px] sm:text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+        <div className="w-full pt-2 pb-0.5 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <p className="text-[8.5px] sm:text-[9.5px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
               Linha do Tempo - Hoje
             </p>
             <span className="text-[7.5px] sm:text-[8px] font-black text-orange-700 bg-orange-100/70 dark:bg-orange-950/40 px-2.5 py-0.5 rounded-full uppercase">
@@ -395,7 +392,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPunchClick, lastPunch, records 
               const isLatestDone = rec.done && i === doneCount - 1 && doneCount > 1;
 
               return (
-                <div key={i} className="flex flex-col items-center space-y-1.5 relative z-10">
+                <div key={i} className="flex flex-col items-center space-y-1 relative z-10">
                   <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-2 transition-all ${
                     rec.done 
                       ? isLatestDone
