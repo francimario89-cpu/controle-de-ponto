@@ -62,8 +62,8 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
         md:static md:translate-x-0 md:shadow-none md:border-r md:w-64 md:shrink-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="flex flex-col items-center pt-12 pb-10 px-6 bg-slate-50 border-b border-slate-100">
-           <div className="w-20 h-20 rounded-[28px] border-4 border-white shadow-xl bg-white overflow-hidden mb-4 p-2 flex items-center justify-center">
+        <div className="flex flex-col items-center pt-5 pb-4 px-4 bg-slate-50 border-b border-slate-100">
+           <div className="w-14 h-14 rounded-2xl border-2 border-white shadow-md bg-white overflow-hidden mb-2 p-1.5 flex items-center justify-center">
               <img 
                 src={isMaster ? `https://ui-avatars.com/api/?name=MASTER&background=0057ff&color=fff` : (isAdmin ? (company?.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(company?.name || 'Empresa')}&background=0057ff&color=fff`) : (user.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'Usuario')}&background=f97316&color=fff`))} 
                 alt="Avatar / Logo"
@@ -71,22 +71,22 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
                 referrerPolicy="no-referrer"
               />
            </div>
-           <h2 className="text-slate-900 font-black text-sm text-center leading-tight uppercase truncate w-full tracking-tighter">
+           <h2 className="text-slate-900 font-black text-xs text-center leading-tight uppercase truncate w-full tracking-tight">
              {isMaster ? 'SUPER MASTER' : (isAdmin ? (company?.name || 'EMPRESA') : user.name)}
            </h2>
-           <p className="text-blue-600 text-[9px] font-black uppercase tracking-[0.3em] mt-2">
+           <p className="text-blue-600 text-[8.5px] font-black uppercase tracking-[0.2em] mt-1">
              {isMaster ? 'GESTÃO GLOBAL' : (isAdmin ? 'Administrador' : (user.roleFunction || 'Colaborador'))}
            </p>
            {isAdmin && !isMaster && company?.accessCode && (
-             <div className="mt-3 bg-blue-50 px-4 py-1.5 rounded-full border border-blue-200">
-               <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">CÓDIGO: {company.accessCode}</p>
+             <div className="mt-2 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+               <p className="text-[7.5px] font-black text-blue-600 uppercase tracking-widest">CÓDIGO: {company.accessCode}</p>
              </div>
            )}
         </div>
 
-        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1 no-scrollbar">
-          <div className="pt-2 pb-4 px-5">
-            <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{isMaster ? 'CONTROLE MASTER' : (isAdmin ? 'GESTÃO CORPORATIVA' : 'MENU COLABORADOR')}</p>
+        <div className="flex-1 overflow-y-auto py-2 px-2.5 space-y-0.5 no-scrollbar">
+          <div className="pt-1.5 pb-2 px-3">
+            <p className="text-[9px] font-black text-slate-800 uppercase tracking-widest">{isMaster ? 'CONTROLE MASTER' : (isAdmin ? 'GESTÃO CORPORATIVA' : 'MENU COLABORADOR')}</p>
           </div>
 
           {menuItems.map(item => {
@@ -95,7 +95,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
               <button 
                 key={item.id} 
                 onClick={() => { onNavigate(item.id); onClose(); }} 
-                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${isActive ? 'bg-slate-100 text-slate-600 shadow-sm font-black' : 'text-slate-800 hover:bg-slate-50 font-bold'}`}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all ${isActive ? 'bg-slate-100 text-slate-800 shadow-xs font-black' : 'text-slate-700 hover:bg-slate-50 font-bold'}`}
               >
                 <span className={`shrink-0 ${isActive ? 'text-orange-600' : 'text-slate-400'}`}>{item.icon}</span>
                 <span className="text-[10px] uppercase tracking-wider">{item.label}</span>
@@ -103,19 +103,19 @@ const Sidebar: React.FC<SidebarProps> = ({ user, company, isOpen, onClose, onNav
             );
           })}
 
-          <div className="pt-8 border-t mt-4">
+          <div className="pt-3 border-t mt-2">
             <button 
               onClick={() => onNavigate('logout')}
-              className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-red-600 hover:bg-red-50 font-black transition-all"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-red-600 hover:bg-red-50 font-black transition-all"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
               <span className="text-[10px] uppercase tracking-wider">Sair do App</span>
             </button>
           </div>
         </div>
         
-        <div className="p-6 text-center border-t">
-           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">PontoExato v4.8</p>
+        <div className="py-2.5 px-4 text-center border-t">
+           <p className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest">PontoExato v4.8</p>
         </div>
       </div>
     </>
