@@ -33,6 +33,26 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
   });
   const [detectingIP, setDetectingIP] = useState(false);
 
+  React.useEffect(() => {
+    if (company) {
+      setFormData(prev => ({
+        ...prev,
+        name: company.name || prev.name,
+        socialReason: company.socialReason || prev.socialReason,
+        cnpj: company.cnpj || prev.cnpj,
+        address: company.address || prev.address,
+        neighborhood: company.neighborhood || prev.neighborhood,
+        city: company.city || prev.city,
+        state: company.state || prev.state,
+        zip: company.zip || prev.zip,
+        phone: company.phone || prev.phone,
+        adminEmail: company.adminEmail || prev.adminEmail,
+        authorizedIP: company.authorizedIP || prev.authorizedIP
+      }));
+      if (company.logoUrl) setLogoUrl(company.logoUrl);
+    }
+  }, [company]);
+
   const handleDetectCurrentIP = async () => {
     setDetectingIP(true);
     try {

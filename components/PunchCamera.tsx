@@ -2,6 +2,8 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { MapPin, RefreshCw, AlertTriangle, ShieldAlert, ArrowLeft, CheckCircle2, Wifi, WifiOff, Info, Copy, Check } from 'lucide-react';
 import { validateCompanyNetwork } from '../utils/ipVerification';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface PunchCameraProps {
   onCapture: (
@@ -154,10 +156,23 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
     setLoading(true);
     setErrorInfo(null);
 
-    // 1. Validar IP (WiFi da Empresa) com validação estrita e sem bypass silencioso
-    if (effectiveAuthorizedIP) {
+    // 1. Validar IP (WiFi da Empresa) com busca em tempo real e sem bypass silencioso
+    let targetAuthorizedIP = effectiveAuthorizedIP;
+    if (companyCode) {
+      try {
+        const compDoc = await getDoc(doc(db, "companies", companyCode));
+        if (compDoc.exists()) {
+          const compData = compDoc.data();
+          if (compData.authorizedIP) {
+            targetAuthorizedIP = compData.authorizedIP.trim();
+          }
+        }
+      } catch {}
+    }
+
+    if (targetAuthorizedIP) {
       setLivenessStage(-1); // Estágio de Verificação de Rede
-      const netResult = await validateCompanyNetwork(effectiveAuthorizedIP, navigator.onLine);
+      const netResult = await validateCompanyNetwork(targetAuthorizedIP, navigator.onLine);
       if (!netResult.valid && netResult.error) {
         setErrorInfo({
           type: netResult.error.type as any,
