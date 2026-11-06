@@ -60,6 +60,11 @@ const PunchSuccess: React.FC<PunchSuccessProps> = ({ record, onClose, company })
              <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
                 <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Assinatura Digital (Hash SHA-256)</p>
                 <p className="text-[7.5px] font-mono text-slate-500 dark:text-slate-400 break-all">{record.digitalSignature}</p>
+                {record.ipAddress && (
+                  <p className="text-[8px] text-emerald-600 dark:text-emerald-400 font-mono mt-1 font-bold">
+                    🌐 Rede Validada (IP: {record.ipAddress})
+                  </p>
+                )}
              </div>
           </div>
 

@@ -100,6 +100,10 @@ export interface PointRecord {
   offlineSavedAt?: string;
   syncedAt?: string | Date;
   companyCode?: string;
+  verificationMethod?: 'facial_recognition' | 'matricula_with_photo' | 'mobile_biometrics';
+  isTotem?: boolean;
+  antiFraudPhoto?: string;
+  ipAddress?: string;
 }
 
 export interface DeviceSyncStatus {

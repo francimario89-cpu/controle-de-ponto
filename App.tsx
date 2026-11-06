@@ -19,6 +19,7 @@ import BottomNav from './components/BottomNav';
 import VacationView from './components/VacationView';
 import SettingsView from './components/SettingsView';
 import CompaniesView from './components/CompaniesView';
+import KioskMode from './components/KioskMode';
 import { saveOfflineRecord, getOfflineRecords, syncOfflineRecords } from './utils/offlineStorage';
 import { TEST_DEMO_COMPANY, seedSampleRecords } from './utils/testUserHelper';
 
@@ -27,7 +28,10 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('fortime_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [company, setCompany] = useState<Company | null>(null);
+  const [company, setCompany] = useState<Company | null>(() => {
+    const savedComp = localStorage.getItem('fortime_company');
+    return savedComp ? JSON.parse(savedComp) : null;
+  });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [records, setRecords] = useState<PointRecord[]>([]);
   const [activeView, setActiveView] = useState(() => {
@@ -68,9 +72,12 @@ const App: React.FC = () => {
     if (user?.companyCode) {
       const unsubCompany = onSnapshot(doc(db, "companies", user.companyCode), (snapshot) => {
         if (snapshot.exists()) {
-          setCompany({ id: snapshot.id, ...snapshot.data() } as Company);
+          const compData = { id: snapshot.id, ...snapshot.data() } as Company;
+          setCompany(compData);
+          localStorage.setItem('fortime_company', JSON.stringify(compData));
         } else if (user.companyCode === 'DEMO') {
           setCompany(TEST_DEMO_COMPANY);
+          localStorage.setItem('fortime_company', JSON.stringify(TEST_DEMO_COMPANY));
         }
       });
 
@@ -134,7 +141,10 @@ const App: React.FC = () => {
 
   const handleLogin = (u: User, c?: Company) => {
     setUser(u);
-    if (c) setCompany(c);
+    if (c) {
+      setCompany(c);
+      localStorage.setItem('fortime_company', JSON.stringify(c));
+    }
     localStorage.setItem('fortime_user', JSON.stringify(u));
     if (u.role === 'master') {
       setActiveView('companies');
@@ -147,6 +157,7 @@ const App: React.FC = () => {
     setUser(null);
     setCompany(null);
     localStorage.removeItem('fortime_user');
+    localStorage.removeItem('fortime_company');
     setActiveView('dashboard');
   };
 
@@ -174,7 +185,8 @@ const App: React.FC = () => {
     photo: string, 
     location: { lat: number; lng: number; address: string }, 
     mood: string,
-    punchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'
+    punchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida',
+    networkInfo?: { ip?: string; verifiedNetwork?: boolean }
   ) => {
     if (!user) return;
     const signature = `PX-${user.matricula || 'N/A'}-${Date.now()}`;
@@ -194,7 +206,8 @@ const App: React.FC = () => {
       digitalSignature: signature,
       type: currentType,
       companyCode: user.companyCode || '',
-      mood: mood
+      mood: mood,
+      ipAddress: networkInfo?.ip || ''
     };
 
     // Caso o dispositivo esteja offline, salva localmente
@@ -220,11 +233,55 @@ const App: React.FC = () => {
     }
   };
 
+  const handleTotemPunch = async (record: PointRecord) => {
+    const baseRecordData = {
+      ...record,
+      companyCode: user?.companyCode || company?.id || '',
+      status: 'synchronized' as const,
+      timestamp: new Date(record.timestamp || new Date()),
+    };
+
+    if (!navigator.onLine) {
+      const offlineRecord = saveOfflineRecord(baseRecordData);
+      setRecords(prev => [offlineRecord, ...prev]);
+      return;
+    }
+
+    try {
+      const docRef = await addDoc(collection(db, "records"), baseRecordData);
+      const recordWithId = { ...baseRecordData, id: docRef.id } as PointRecord;
+      setRecords(prev => [recordWithId, ...prev]);
+    } catch (err) {
+      console.warn("Falha ao salvar batida do totem no Firebase:", err);
+      const offlineRecord = saveOfflineRecord(baseRecordData);
+      setRecords(prev => [offlineRecord, ...prev]);
+    }
+  };
+
   const isMaster = user?.role === 'master';
   const isAdmin = user?.role === 'admin' || isMaster;
   const isAdminView = isAdmin && ['companies', 'dashboard', 'colaboradores', 'aprovacoes', 'feriados', 'saldos', 'company_profile', 'ferias', 'correcao', 'pontos_individuais'].includes(activeView);
 
   if (!user) return <Login onLogin={handleLogin} />;
+
+  // Renderização em tela cheia do Modo Totem (reconhecimento facial e fallback anti-fraude)
+  if (user.role === 'totem' || activeView === 'totem') {
+    return (
+      <KioskMode 
+        employees={employees} 
+        company={company} 
+        records={records} 
+        onPunch={handleTotemPunch} 
+        onExit={() => {
+          if (user.role === 'totem') {
+            handleLogout();
+          } else {
+            setActiveView('dashboard');
+          }
+        }} 
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 text-slate-900 overflow-hidden font-sans">
@@ -238,35 +295,6 @@ const App: React.FC = () => {
       />
 
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {/* Barra de Simulação do Colaborador Temporário */}
-        {(user.isTemporary || user.matricula === 'TEMP-2026') && (
-          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-4 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-wider z-40 shadow-sm shrink-0">
-            <div className="flex items-center gap-2 truncate">
-              <span className="bg-black/20 px-2 py-0.5 rounded-full text-[8px] font-bold">🧪 SIMULAÇÃO</span>
-              <span className="truncate">Colaborador Temporário (TEMP-2026)</span>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <button 
-                onClick={async () => {
-                  if (window.confirm("Deseja regerar as batidas de teste?")) {
-                    await seedSampleRecords(db);
-                    alert("Batidas de teste regeradas com sucesso!");
-                  }
-                }} 
-                className="underline hover:text-white/80 text-[9px] lowercase font-semibold"
-              >
-                regerar batidas
-              </button>
-              <button 
-                onClick={handleLogout} 
-                className="bg-white text-orange-600 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase hover:bg-orange-50 active:scale-95 transition-all shadow-sm"
-              >
-                Sair
-              </button>
-            </div>
-          </div>
-        )}
-
         <header className="md:hidden p-4 flex justify-between items-center bg-white dark:bg-slate-900 z-30">
            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600 dark:text-slate-300">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -328,6 +356,7 @@ const App: React.FC = () => {
         {!isAdmin && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
         {!isAdmin && showPunchCamera && (
           <PunchCamera 
+            companyCode={user?.companyCode}
             geofenceConfig={company?.geofence} 
             authorizedIP={company?.authorizedIP} 
             defaultPunchType={getSuggestedPunchType(user?.matricula, user?.name)}

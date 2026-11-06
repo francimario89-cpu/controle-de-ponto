@@ -3,7 +3,8 @@ import React, { useState, useRef } from 'react';
 import { Company } from '../types';
 import { db } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { Upload, Trash2, Link as LinkIcon, CheckCircle2, AlertCircle, Info, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Upload, Trash2, Link as LinkIcon, CheckCircle2, AlertCircle, Info, Image as ImageIcon, Sparkles, Wifi } from 'lucide-react';
+import { fetchUserPublicIP } from '../utils/ipVerification';
 
 interface CompanyProfileProps {
   company: Company | null;
@@ -30,6 +31,28 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
     adminEmail: company?.adminEmail || '',
     authorizedIP: company?.authorizedIP || ''
   });
+  const [detectingIP, setDetectingIP] = useState(false);
+
+  const handleDetectCurrentIP = async () => {
+    setDetectingIP(true);
+    try {
+      const detected = await fetchUserPublicIP();
+      setFormData(prev => ({
+        ...prev,
+        authorizedIP: prev.authorizedIP ? `${prev.authorizedIP.trim()}, ${detected}` : detected
+      }));
+      setUploadStatus({
+        type: 'success',
+        message: `IP detectado com sucesso: ${detected}! Lembre-se de clicar em "Salvar Alterações".`
+      });
+    } catch (e: any) {
+      setUploadStatus({
+        type: 'error',
+        message: 'Não foi possível detectar o IP público atual. Verifique sua conexão com a internet.'
+      });
+    }
+    setDetectingIP(false);
+  };
 
   // Função para processar e otimizar imagem com Canvas no cliente
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -376,20 +399,33 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({ company }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {fields.map((f) => (
               <div key={f.field} className={`space-y-1.5 ${f.field === 'address' || f.field === 'socialReason' || f.field === 'authorizedIP' ? 'md:col-span-2' : ''}`}>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  {f.label}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    {f.label}
+                  </label>
+                  {f.field === 'authorizedIP' && (
+                    <button
+                      type="button"
+                      onClick={handleDetectCurrentIP}
+                      disabled={detectingIP}
+                      className="text-[9px] font-black text-blue-600 dark:text-blue-400 hover:underline uppercase flex items-center gap-1 active:scale-95 transition-all"
+                    >
+                      <Wifi size={12} className={detectingIP ? "animate-spin" : ""} />
+                      <span>{detectingIP ? "Detectando..." : "📡 Detectar IP Desta Rede"}</span>
+                    </button>
+                  )}
+                </div>
                 <input 
                   type="text" 
                   value={(formData as any)[f.field] || (f as any).value} 
                   onChange={e => !f.disabled && setFormData(prev => ({ ...prev, [f.field]: e.target.value }))}
-                  placeholder={f.field === 'authorizedIP' ? "Ex: 177.100.200.50" : ""}
+                  placeholder={f.field === 'authorizedIP' ? "Ex: 177.100.200.50 (ou múltiplos: 177.100.200.50, 187.32.11.20)" : ""}
                   readOnly={f.disabled}
                   className={`w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-[#0057ff] transition-all shadow-sm ${f.disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                 />
                 {f.field === 'authorizedIP' && (
-                  <p className="text-[8px] text-slate-400 uppercase font-bold px-1">
-                    Se preenchido, o ponto só poderá ser batido quando o colaborador estiver conectado ao IP da rede Wi-Fi da empresa.
+                  <p className="text-[8px] text-slate-400 uppercase font-bold px-1 leading-relaxed">
+                    🔒 <strong>Restrição Rigorosa:</strong> Se preenchido, os colaboradores só conseguirão bater o ponto quando estiverem conectados a este IP de Wi-Fi da empresa. Marcações fora da rede ou com dados móveis (4G/5G) serão bloqueadas. Aceita múltiplos IPs separados por vírgula.
                   </p>
                 )}
               </div>

@@ -1331,25 +1331,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
         <div className="space-y-6">
           <div className="bg-orange-50 p-8 rounded-[44px] shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 border border-orange-100">
             <div className="space-y-1"><p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Painel Administrativo</p><h3 className="text-slate-900 text-lg font-black uppercase">{company?.name}</h3></div>
-            <div className="bg-white px-8 py-5 rounded-3xl border border-orange-100 text-center shadow-sm">
-              <p className="text-[8px] text-slate-400 font-black uppercase mb-1">CÓDIGO EMPRESA</p>
-              {company?.accessCode ? (
-                <span className="text-orange-600 font-mono text-xl font-black">{company.accessCode}</span>
-              ) : (
-                <button 
-                  onClick={async () => {
-                    if (!company?.id) return;
-                    const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-                    try {
-                      await updateDoc(doc(db, "companies", company.id), { accessCode: newCode });
-                      alert("CÓDIGO GERADO: " + newCode);
-                    } catch (e) { alert("ERRO AO GERAR CÓDIGO"); }
-                  }}
-                  className="text-[10px] font-black text-orange-600 underline uppercase"
-                >
-                  Gerar Código
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => onNavigate?.('totem')}
+                className="bg-slate-950 hover:bg-slate-900 text-white px-5 py-4 rounded-3xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 active:scale-95 transition-all cursor-pointer border border-white/10"
+                title="Abrir Terminal Totem com Biometria Facial"
+              >
+                <span className="text-base">📟</span> Abrir Modo Totem
+              </button>
+              <div className="bg-white px-8 py-5 rounded-3xl border border-orange-100 text-center shadow-sm">
+                <p className="text-[8px] text-slate-400 font-black uppercase mb-1">CÓDIGO EMPRESA</p>
+                {company?.accessCode ? (
+                  <span className="text-orange-600 font-mono text-xl font-black">{company.accessCode}</span>
+                ) : (
+                  <button 
+                    onClick={async () => {
+                      if (!company?.id) return;
+                      const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                      try {
+                        await updateDoc(doc(db, "companies", company.id), { accessCode: newCode });
+                        alert("CÓDIGO GERADO: " + newCode);
+                      } catch (e) { alert("ERRO AO GERAR CÓDIGO"); }
+                    }}
+                    className="text-[10px] font-black text-orange-600 underline uppercase"
+                  >
+                    Gerar Código
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2346,6 +2355,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ latestRecords, company,
                             >
                               <MapPin size={10} /> Mapa
                             </a>
+                          )}
+                          {rec.ipAddress && (
+                            <span className="flex items-center gap-0.5 text-[8px] text-slate-500 font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded" title="Endereço IP">
+                              🌐 {rec.ipAddress}
+                            </span>
                           )}
                         </div>
                       </div>

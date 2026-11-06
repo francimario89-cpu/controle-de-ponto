@@ -1,25 +1,41 @@
 
-import React, { useRef, useEffect, useState } from 'react';
-import { MapPin, RefreshCw, AlertTriangle, ShieldAlert, ArrowLeft, CheckCircle2, Wifi, Info } from 'lucide-react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { MapPin, RefreshCw, AlertTriangle, ShieldAlert, ArrowLeft, CheckCircle2, Wifi, WifiOff, Info } from 'lucide-react';
+import { validateCompanyNetwork } from '../utils/ipVerification';
 
 interface PunchCameraProps {
-  onCapture: (photo: string, location: { lat: number; lng: number; address: string }, mood: string, punchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida') => void;
+  onCapture: (
+    photo: string, 
+    location: { lat: number; lng: number; address: string }, 
+    mood: string, 
+    punchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida',
+    networkInfo?: { ip?: string; verifiedNetwork?: boolean }
+  ) => void;
   onCancel: () => void;
   isFirstAccess?: boolean;
   geofenceConfig?: { enabled: boolean; lat: number; lng: number; radius: number };
   authorizedIP?: string;
+  companyCode?: string;
   defaultPunchType?: 'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida';
 }
 
 interface CameraErrorInfo {
-  type: 'gps_denied' | 'gps_off' | 'gps_timeout' | 'geofence' | 'network' | 'camera' | 'general';
+  type: 'gps_denied' | 'gps_off' | 'gps_timeout' | 'geofence' | 'network' | 'offline_blocked' | 'unreachable' | 'camera' | 'general';
   title: string;
   message: string;
   suggestion: string;
   allowBypass: boolean;
 }
 
-const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstAccess, geofenceConfig, authorizedIP, defaultPunchType }) => {
+const PunchCamera: React.FC<PunchCameraProps> = ({ 
+  onCapture, 
+  onCancel, 
+  isFirstAccess, 
+  geofenceConfig, 
+  authorizedIP, 
+  companyCode,
+  defaultPunchType 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,6 +44,22 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
   const [selectedMood, setSelectedMood] = useState('feliz');
   const [selectedPunchType, setSelectedPunchType] = useState<'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'>(defaultPunchType || 'entrada');
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [verifiedUserIP, setVerifiedUserIP] = useState<string>('');
+
+  // Resolução resiliente do IP corporativo autorizado (da prop ou do cache local da empresa)
+  const effectiveAuthorizedIP = useMemo(() => {
+    if (authorizedIP && authorizedIP.trim()) return authorizedIP.trim();
+    try {
+      const savedComp = localStorage.getItem('fortime_company');
+      if (savedComp) {
+        const parsed = JSON.parse(savedComp);
+        if (parsed?.authorizedIP && parsed.authorizedIP.trim()) {
+          return parsed.authorizedIP.trim();
+        }
+      }
+    } catch {}
+    return '';
+  }, [authorizedIP]);
 
   useEffect(() => {
     if (defaultPunchType) setSelectedPunchType(defaultPunchType);
@@ -101,7 +133,10 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
         canvas.height = videoRef.current.videoHeight || 480;
         canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
         const data = canvas.toDataURL('image/jpeg', 0.82);
-        onCapture(data, coords, selectedMood, selectedPunchType);
+        onCapture(data, coords, selectedMood, selectedPunchType, {
+          ip: verifiedUserIP,
+          verifiedNetwork: !!effectiveAuthorizedIP
+        });
       }
     }, 3600);
   };
@@ -116,27 +151,23 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
     setLoading(true);
     setErrorInfo(null);
 
-    // 1. Validar IP (WiFi da Empresa) apenas se estiver configurado e o dispositivo estiver online
-    if (authorizedIP && navigator.onLine) {
-      try {
-        setLivenessStage(-1); // Estágio de Verificação de Rede
-        const response = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(4000) });
-        const data = await response.json();
-        const userIP = data.ip;
-
-        if (userIP !== authorizedIP) {
-          setErrorInfo({
-            type: 'network',
-            title: 'Rede Wi-Fi Não Autorizada',
-            message: `Você deve estar conectado à rede Wi-Fi da empresa para bater o ponto.`,
-            suggestion: `Conecte-se à rede Wi-Fi oficial da empresa e tente novamente. (Seu IP: ${userIP} | IP Autorizado: ${authorizedIP})`,
-            allowBypass: false
-          });
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        console.warn("Não foi possível verificar IP público; prosseguindo com validação GPS:", e);
+    // 1. Validar IP (WiFi da Empresa) com validação estrita e sem bypass silencioso
+    if (effectiveAuthorizedIP) {
+      setLivenessStage(-1); // Estágio de Verificação de Rede
+      const netResult = await validateCompanyNetwork(effectiveAuthorizedIP, navigator.onLine);
+      if (!netResult.valid && netResult.error) {
+        setErrorInfo({
+          type: netResult.error.type as any,
+          title: netResult.error.title,
+          message: netResult.error.message,
+          suggestion: netResult.error.suggestion,
+          allowBypass: false // Restrição de IP corporativo NUNCA permite bypass!
+        });
+        setLoading(false);
+        return; // BLOQUEIA TERMINANTEMENTE O PONTO FORA DA EMPRESA!
+      }
+      if (netResult.userIP) {
+        setVerifiedUserIP(netResult.userIP);
       }
     }
 
@@ -301,6 +332,10 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
   };
 
   const handleBypassRegistration = () => {
+    if (effectiveAuthorizedIP && !verifiedUserIP) {
+      alert("Acesso Bloqueado: A empresa exige conexão exclusiva ao Wi-Fi corporativo autorizado.");
+      return;
+    }
     proceedWithCapture({
       lat: 0,
       lng: 0,
@@ -446,6 +481,8 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
                   <ShieldAlert size={28} />
                 ) : errorInfo.type === 'gps_off' || errorInfo.type === 'gps_timeout' ? (
                   <MapPin size={28} />
+                ) : errorInfo.type === 'network' || errorInfo.type === 'offline_blocked' || errorInfo.type === 'unreachable' ? (
+                  <WifiOff size={28} />
                 ) : (
                   <AlertTriangle size={28} />
                 )}
@@ -525,11 +562,16 @@ const PunchCamera: React.FC<PunchCameraProps> = ({ onCapture, onCancel, isFirstA
             }`)}
           </button>
         )}
-        <div className="flex flex-col items-center gap-0.5 opacity-30">
+        <div className="flex flex-col items-center gap-1 opacity-60">
           <p className="text-white text-[8px] text-center uppercase tracking-[0.3em]">
              Segurança WiFi & GPS v5.2
           </p>
-          {authorizedIP && <p className="text-white text-[7px] text-center uppercase">Rede Restrita: {authorizedIP}</p>}
+          {effectiveAuthorizedIP && (
+            <div className="flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider">
+              <Wifi size={10} className="text-amber-400" />
+              <span>Wi-Fi Restrito: {effectiveAuthorizedIP}</span>
+            </div>
+          )}
         </div>
       </div>
 

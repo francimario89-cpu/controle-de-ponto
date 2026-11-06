@@ -19,6 +19,7 @@ export interface StoredOfflineRecord {
   type: 'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo';
   companyCode: string;
   mood?: string;
+  ipAddress?: string;
   isOffline: true;
   offlineSavedAt: string;
 }
@@ -93,6 +94,7 @@ export function saveOfflineRecord(record: {
   type?: 'entrada' | 'saida' | 'inicio_intervalo' | 'fim_intervalo';
   companyCode: string;
   mood?: string;
+  ipAddress?: string;
 }): PointRecord {
   const currentQueue = getOfflineRecords();
   const date = record.timestamp || new Date();
@@ -115,6 +117,7 @@ export function saveOfflineRecord(record: {
     type: record.type || 'entrada',
     companyCode: record.companyCode,
     mood: record.mood,
+    ipAddress: record.ipAddress || '',
     isOffline: true,
     offlineSavedAt: new Date().toISOString(),
   };
@@ -217,6 +220,7 @@ export async function syncOfflineRecords(
           type: item.type,
           companyCode: item.companyCode,
           mood: item.mood || 'feliz',
+          ipAddress: item.ipAddress || '',
           isOffline: true,
           offlineSavedAt: item.offlineSavedAt,
           syncedAt: new Date(),
