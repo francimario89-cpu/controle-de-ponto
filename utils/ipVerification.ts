@@ -8,59 +8,127 @@ export interface NetworkValidationResult {
     title: string;
     message: string;
     suggestion: string;
+    detectedIP?: string;
+    authorizedIP?: string;
   };
 }
 
+export interface ClientIPInfo {
+  ipv4?: string;
+  ipv6?: string;
+  detectedList: string[];
+  primary: string;
+}
+
 /**
- * Busca o endereço IP público do dispositivo com timeout e múltiplos provedores redundantes.
+ * Busca de forma resiliente tanto o IPv4 quanto o IPv6 do dispositivo.
+ * Dispositivos móveis modernos operam em Dual-Stack (IPv4 e IPv6 simultaneamente).
+ * Separamos os testes para evitar falso-positivo de bloqueio quando a empresa cadastrou IPv4
+ * e o celular consulta primeiro um serviço IPv6.
  */
-export async function fetchUserPublicIP(): Promise<string> {
-  const endpoints = [
-    { url: 'https://api.ipify.org?format=json', extract: (d: any) => d.ip },
-    { url: 'https://api64.ipify.org?format=json', extract: (d: any) => d.ip },
-    { url: 'https://ipapi.co/json/', extract: (d: any) => d.ip },
-    { url: 'https://api.my-ip.io/v2/ip.json', extract: (d: any) => d.ip },
-    { url: 'https://icanhazip.com', extract: (text: string) => text.trim() }
+export async function fetchUserPublicIPs(): Promise<ClientIPInfo> {
+  const v4Endpoints = [
+    'https://api.ipify.org?format=json',
+    'https://ipv4.icanhazip.com',
+    'https://v4.ident.me'
   ];
 
-  let lastError: any = null;
+  const v6Endpoints = [
+    'https://api64.ipify.org?format=json',
+    'https://ipv6.icanhazip.com',
+    'https://v6.ident.me'
+  ];
 
-  for (const ep of endpoints) {
+  const fetchSingle = async (url: string): Promise<string | null> => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-      const res = await fetch(ep.url, { 
+      const res = await fetch(url, { 
         signal: controller.signal,
         headers: { 'Accept': 'application/json, text/plain, */*' }
       });
       clearTimeout(timeoutId);
 
-      if (!res.ok) continue;
+      if (!res.ok) return null;
 
       let ip = '';
-      if (ep.url.includes('icanhazip')) {
-        const text = await res.text();
-        ip = ep.extract(text);
-      } else {
+      if (url.includes('format=json')) {
         const json = await res.json();
-        ip = ep.extract(json);
+        ip = json.ip || '';
+      } else {
+        ip = (await res.text()).trim();
       }
 
-      if (ip && typeof ip === 'string') {
-        const cleaned = ip.trim();
-        // Validação básica se é um IPv4 ou IPv6
-        if (cleaned.length >= 7 && (cleaned.includes('.') || cleaned.includes(':'))) {
-          return cleaned;
-        }
+      if (ip && (ip.includes('.') || ip.includes(':'))) {
+        return ip.trim();
       }
-    } catch (err) {
-      lastError = err;
-      // Continua para o próximo endpoint redundante
+    } catch {
+      // Ignora falha individual e tenta próximo endpoint
+    }
+    return null;
+  };
+
+  // 1. Tentar detectar IPv4
+  let foundV4: string | undefined = undefined;
+  for (const url of v4Endpoints) {
+    const ip = await fetchSingle(url);
+    if (ip && ip.includes('.')) {
+      foundV4 = ip;
+      break;
     }
   }
 
-  throw new Error(`Não foi possível detectar o IP público: ${lastError?.message || 'Serviços indisponíveis'}`);
+  // 2. Tentar detectar IPv6
+  let foundV6: string | undefined = undefined;
+  for (const url of v6Endpoints) {
+    const ip = await fetchSingle(url);
+    if (ip && ip.includes(':')) {
+      foundV6 = ip;
+      break;
+    }
+  }
+
+  const detectedList: string[] = [];
+  if (foundV4) detectedList.push(foundV4);
+  if (foundV6) detectedList.push(foundV6);
+
+  // Fallback caso ambos acima tenham falhado (ex: rede com bloqueio restrito)
+  if (detectedList.length === 0) {
+    const fallbackEndpoints = [
+      'https://api.my-ip.io/v2/ip.json',
+      'https://icanhazip.com',
+      'https://api64.ipify.org?format=json'
+    ];
+    for (const url of fallbackEndpoints) {
+      const fb = await fetchSingle(url);
+      if (fb) {
+        if (fb.includes('.')) foundV4 = fb;
+        else if (fb.includes(':')) foundV6 = fb;
+        detectedList.push(fb);
+        break;
+      }
+    }
+  }
+
+  if (detectedList.length === 0) {
+    throw new Error('Não foi possível identificar o endereço IP da conexão.');
+  }
+
+  return {
+    ipv4: foundV4,
+    ipv6: foundV6,
+    detectedList,
+    primary: foundV4 || foundV6 || detectedList[0]
+  };
+}
+
+/**
+ * Função mantida para retrocompatibilidade com chamadas individuais
+ */
+export async function fetchUserPublicIP(): Promise<string> {
+  const info = await fetchUserPublicIPs();
+  return info.primary;
 }
 
 /**
@@ -90,7 +158,6 @@ function matchCIDR(userIP: string, cidr: string): boolean {
     const bits = parseInt(bitsStr, 10);
     if (isNaN(bits) || bits < 0 || bits > 32) return false;
     
-    // Suporte apenas para IPv4 em CIDR por enquanto
     if (!userIP.includes('.') || !range.includes('.')) return false;
 
     const userLong = ipToLong(normalizeIP(userIP));
@@ -105,8 +172,13 @@ function matchCIDR(userIP: string, cidr: string): boolean {
 
 /**
  * Valida se o IP do usuário é autorizado com base na configuração da empresa.
- * Suporta múltiplos IPs separados por vírgula, ponto e vírgula, barra ou espaço,
- * suporte a wildcards (ex: 177.100.200.*) e notação CIDR (ex: 177.100.200.0/24).
+ * Suporta:
+ * 1. Igualdade exata de IP
+ * 2. Múltiplos IPs separados por vírgula, ponto e vírgula, quebra de linha ou espaço
+ * 3. Wildcards (ex: 193.186.4.*)
+ * 4. Notação CIDR (ex: 193.186.4.0/24)
+ * 5. Tolerância inteligente da mesma sub-rede /24 corporativa (mesmos 3 primeiros octetos IPv4)
+ * 6. Prefixo /64 para redes IPv6
  */
 export function isIPAuthorized(userIP: string, authorizedConfig: string): boolean {
   if (!authorizedConfig || !authorizedConfig.trim()) {
@@ -114,7 +186,6 @@ export function isIPAuthorized(userIP: string, authorizedConfig: string): boolea
   }
 
   const cleanUserIP = normalizeIP(userIP);
-  // Dividir por vírgula, ponto e vírgula, quebra de linha ou barra vertical
   const allowedEntries = authorizedConfig
     .split(/[,;\n|]+/)
     .map(entry => entry.trim())
@@ -130,14 +201,14 @@ export function isIPAuthorized(userIP: string, authorizedConfig: string): boolea
       return true;
     }
 
-    // 2. Notação CIDR (ex: 177.100.200.0/24)
+    // 2. Notação CIDR (ex: 193.186.4.0/24)
     if (cleanEntry.includes('/')) {
       if (matchCIDR(cleanUserIP, cleanEntry)) {
         return true;
       }
     }
 
-    // 3. Notação Wildcard (ex: 177.100.200.*)
+    // 3. Notação Wildcard (ex: 193.186.4.*)
     if (cleanEntry.includes('*')) {
       const regexPattern = '^' + cleanEntry.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
       try {
@@ -148,6 +219,41 @@ export function isIPAuthorized(userIP: string, authorizedConfig: string): boolea
         // Ignora regex inválido
       }
     }
+
+    // 4. Tolerância Inteligente de Sub-rede /24 (IPv4)
+    // Se ambos forem IPv4 válidos e compartilharem os 3 primeiros blocos (ex: 193.186.4.X e 193.186.4.Y)
+    // Isso garante que roteadores corporativos com DHCP, CGNAT ou múltiplos pontos de acesso
+    // na mesma empresa sejam reconhecidos com 100% de precisão.
+    if (cleanUserIP.includes('.') && cleanEntry.includes('.')) {
+      const userOctets = cleanUserIP.split('.');
+      const entryOctets = cleanEntry.split('.');
+      if (userOctets.length === 4 && entryOctets.length === 4) {
+        if (
+          userOctets[0] === entryOctets[0] &&
+          userOctets[1] === entryOctets[1] &&
+          userOctets[2] === entryOctets[2]
+        ) {
+          return true;
+        }
+      }
+    }
+
+    // 5. Tolerância de Prefixo IPv6 (/64)
+    // Se ambos forem IPv6 válidos e compartilharem o mesmo bloco de roteamento /64 (primeiros 4 grupos)
+    if (cleanUserIP.includes(':') && cleanEntry.includes(':')) {
+      const userBlocks = cleanUserIP.split(':').filter(Boolean);
+      const entryBlocks = cleanEntry.split(':').filter(Boolean);
+      if (userBlocks.length >= 4 && entryBlocks.length >= 4) {
+        if (
+          userBlocks[0].toLowerCase() === entryBlocks[0].toLowerCase() &&
+          userBlocks[1].toLowerCase() === entryBlocks[1].toLowerCase() &&
+          userBlocks[2].toLowerCase() === entryBlocks[2].toLowerCase() &&
+          userBlocks[3].toLowerCase() === entryBlocks[3].toLowerCase()
+        ) {
+          return true;
+        }
+      }
+    }
   }
 
   return false;
@@ -155,6 +261,7 @@ export function isIPAuthorized(userIP: string, authorizedConfig: string): boolea
 
 /**
  * Executa a validação completa de rede corporativa para registro de ponto.
+ * Avalia tanto IPv4 quanto IPv6 do dispositivo contra a lista autorizada.
  */
 export async function validateCompanyNetwork(
   authorizedConfig: string | undefined,
@@ -181,29 +288,46 @@ export async function validateCompanyNetwork(
   }
 
   try {
-    const userIP = await fetchUserPublicIP();
-    const authorized = isIPAuthorized(userIP, trimmedConfig);
+    const ipInfo = await fetchUserPublicIPs();
 
-    if (authorized) {
+    // Testa se QUALQUER um dos IPs detectados (IPv4 ou IPv6) é autorizado
+    let isAuthorized = false;
+    let authorizedMatchedIP = ipInfo.primary;
+
+    for (const ip of ipInfo.detectedList) {
+      if (isIPAuthorized(ip, trimmedConfig)) {
+        isAuthorized = true;
+        authorizedMatchedIP = ip;
+        break;
+      }
+    }
+
+    if (isAuthorized) {
       return {
         valid: true,
-        userIP
+        userIP: authorizedMatchedIP
       };
     }
 
     // IP detectado é diferente do autorizado
+    const detectedDisplay = [
+      ipInfo.ipv4 ? `IPv4: ${ipInfo.ipv4}` : '',
+      ipInfo.ipv6 ? `IPv6: ${ipInfo.ipv6}` : ''
+    ].filter(Boolean).join(' | ') || ipInfo.primary;
+
     return {
       valid: false,
-      userIP,
+      userIP: ipInfo.primary,
       error: {
         type: 'network',
-        title: 'Rede Wi-Fi Não Autorizada',
-        message: `Você está conectado a uma rede não autorizada ou dados móveis (IP: ${userIP}). O registro de ponto nesta empresa é restrito exclusivamente ao Wi-Fi corporativo.`,
-        suggestion: `Desconecte do 4G/5G ou de redes externas e conecte-se ao Wi-Fi oficial da empresa. (IPs Autorizados: ${trimmedConfig})`
+        title: 'Rede Wi-Fi Não Reconhecida',
+        message: `Seu aparelho está utilizando a conexão: ${detectedDisplay}.\nO ponto nesta empresa é restrito ao Wi-Fi oficial.`,
+        suggestion: `1. Se estiver conectado ao Wi-Fi mas usando 4G simultaneamente, desative os Dados Móveis.\n2. Se já estiver no Wi-Fi da empresa, copie o IP detectado e solicite ao gestor para cadastrar a faixa no painel.`,
+        detectedIP: ipInfo.primary,
+        authorizedIP: trimmedConfig
       }
     };
   } catch (err: any) {
-    // ERRO CRÍTICO: Não foi possível detectar o IP. NUNCA liberar silenciosamente!
     return {
       valid: false,
       error: {

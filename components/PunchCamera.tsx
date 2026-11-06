@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { MapPin, RefreshCw, AlertTriangle, ShieldAlert, ArrowLeft, CheckCircle2, Wifi, WifiOff, Info } from 'lucide-react';
+import { MapPin, RefreshCw, AlertTriangle, ShieldAlert, ArrowLeft, CheckCircle2, Wifi, WifiOff, Info, Copy, Check } from 'lucide-react';
 import { validateCompanyNetwork } from '../utils/ipVerification';
 
 interface PunchCameraProps {
@@ -25,6 +25,8 @@ interface CameraErrorInfo {
   message: string;
   suggestion: string;
   allowBypass: boolean;
+  detectedIP?: string;
+  authorizedIP?: string;
 }
 
 const PunchCamera: React.FC<PunchCameraProps> = ({ 
@@ -45,6 +47,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
   const [selectedPunchType, setSelectedPunchType] = useState<'entrada' | 'inicio_intervalo' | 'fim_intervalo' | 'saida'>(defaultPunchType || 'entrada');
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [verifiedUserIP, setVerifiedUserIP] = useState<string>('');
+  const [copiedIPToast, setCopiedIPToast] = useState(false);
 
   // Resolução resiliente do IP corporativo autorizado (da prop ou do cache local da empresa)
   const effectiveAuthorizedIP = useMemo(() => {
@@ -161,6 +164,8 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
           title: netResult.error.title,
           message: netResult.error.message,
           suggestion: netResult.error.suggestion,
+          detectedIP: netResult.error.detectedIP,
+          authorizedIP: netResult.error.authorizedIP,
           allowBypass: false // Restrição de IP corporativo NUNCA permite bypass!
         });
         setLoading(false);
@@ -492,9 +497,31 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
                 {errorInfo.title}
               </h3>
 
-              <p className="text-white/90 font-medium text-[10px] leading-relaxed px-1">
+              <p className="text-white/90 font-medium text-[10px] leading-relaxed px-1 whitespace-pre-line">
                 {errorInfo.message}
               </p>
+
+              {/* Card de Diagnóstico do IP com Botão de Copiar */}
+              {errorInfo.detectedIP && (
+                <div className="w-full bg-black/40 rounded-2xl p-2.5 border border-white/20 flex items-center justify-between gap-2 text-left">
+                  <div className="overflow-hidden">
+                    <span className="text-[7.5px] uppercase font-black text-slate-300 block">IP Detectado no Aparelho:</span>
+                    <span className="text-[9px] font-mono font-bold text-amber-300 truncate block">{errorInfo.detectedIP}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(errorInfo.detectedIP || '');
+                      setCopiedIPToast(true);
+                      setTimeout(() => setCopiedIPToast(false), 2500);
+                    }}
+                    className="shrink-0 bg-white/20 hover:bg-white/30 text-white text-[8px] font-black uppercase px-2.5 py-1.5 rounded-xl flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    {copiedIPToast ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                    <span>{copiedIPToast ? "Copiado!" : "Copiar IP"}</span>
+                  </button>
+                </div>
+              )}
 
               {/* Caixa com Instrução Passo a Passo */}
               <div className="w-full bg-black/25 rounded-2xl p-3 border border-white/15 text-left space-y-1">
