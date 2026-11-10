@@ -223,6 +223,7 @@ const App: React.FC = () => {
       const docRef = await addDoc(collection(db, "records"), baseRecordData);
       const recordWithId = { ...baseRecordData, id: docRef.id } as PointRecord;
       setLastPunch(recordWithId);
+      setRecords(prev => [recordWithId, ...prev]);
       setShowPunchCamera(false);
     } catch (err) {
       console.warn("Falha de rede ao contatar o Firebase. Salvando no modo offline local:", err);

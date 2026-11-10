@@ -50,6 +50,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [verifiedUserIP, setVerifiedUserIP] = useState<string>('');
   const [copiedIPToast, setCopiedIPToast] = useState(false);
+  const cachedPositionRef = useRef<GeolocationPosition | null>(null);
 
   // Resolução resiliente do IP corporativo autorizado (da prop ou do cache local da empresa)
   const effectiveAuthorizedIP = useMemo(() => {
@@ -65,6 +66,29 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
     } catch {}
     return '';
   }, [authorizedIP]);
+
+  // Pré-aquecimento em segundo plano do GPS e IP assim que a câmera abre
+  useEffect(() => {
+    // 1. Aquecer GPS em segundo plano para resposta instantânea ao bater ponto
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          cachedPositionRef.current = pos;
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 3500, maximumAge: 300000 }
+      );
+    }
+
+    // 2. Pré-validar IP em segundo plano
+    if (effectiveAuthorizedIP && navigator.onLine) {
+      validateCompanyNetwork(effectiveAuthorizedIP, true).then(res => {
+        if (res.valid && res.userIP) {
+          setVerifiedUserIP(res.userIP);
+        }
+      }).catch(() => {});
+    }
+  }, [effectiveAuthorizedIP]);
 
   useEffect(() => {
     if (defaultPunchType) setSelectedPunchType(defaultPunchType);
@@ -128,9 +152,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
   const proceedWithCapture = (coords: { lat: number; lng: number; address: string }) => {
     setLoading(true);
     setErrorInfo(null);
-    // 3. Prova de Vida (Liveness)
-    setTimeout(() => setLivenessStage(1), 800);
-    setTimeout(() => setLivenessStage(2), 2200);
+    setLivenessStage(1); // "Registrando Presença... 📸"
     setTimeout(() => {
       if (videoRef.current) {
         const canvas = document.createElement('canvas');
@@ -143,7 +165,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
           verifiedNetwork: !!effectiveAuthorizedIP
         });
       }
-    }, 3600);
+    }, 400);
   };
 
   const getPositionWithTimeout = (options: PositionOptions): Promise<GeolocationPosition> => {
@@ -156,22 +178,10 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
     setLoading(true);
     setErrorInfo(null);
 
-    // 1. Validar IP (WiFi da Empresa) com busca em tempo real e sem bypass silencioso
+    // 1. Validar IP (WiFi da Empresa) de forma ultrarrápida
     let targetAuthorizedIP = effectiveAuthorizedIP;
-    if (companyCode) {
-      try {
-        const compDoc = await getDoc(doc(db, "companies", companyCode));
-        if (compDoc.exists()) {
-          const compData = compDoc.data();
-          if (compData.authorizedIP) {
-            targetAuthorizedIP = compData.authorizedIP.trim();
-          }
-        }
-      } catch {}
-    }
-
     if (targetAuthorizedIP) {
-      setLivenessStage(-1); // Estágio de Verificação de Rede
+      setLivenessStage(-1); // Validando Wi-Fi
       const netResult = await validateCompanyNetwork(targetAuthorizedIP, navigator.onLine);
       if (!netResult.valid && netResult.error) {
         setErrorInfo({
@@ -181,10 +191,10 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
           suggestion: netResult.error.suggestion,
           detectedIP: netResult.error.detectedIP,
           authorizedIP: netResult.error.authorizedIP,
-          allowBypass: false // Restrição de IP corporativo NUNCA permite bypass!
+          allowBypass: false
         });
         setLoading(false);
-        return; // BLOQUEIA TERMINANTEMENTE O PONTO FORA DA EMPRESA!
+        return; // Bloqueia apenas se estiver comprovadamente fora da rede
       }
       if (netResult.userIP) {
         setVerifiedUserIP(netResult.userIP);
@@ -193,7 +203,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
 
     const isGeofenceMandatory = Boolean(geofenceConfig?.enabled);
 
-    // 2. Verificar se navegador suporta Geolocalização
+    // 2. Verificar suporte a Geolocalização
     if (!('geolocation' in navigator)) {
       if (isGeofenceMandatory) {
         setErrorInfo({
@@ -209,66 +219,52 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
         proceedWithCapture({
           lat: 0,
           lng: 0,
-          address: "Ponto Autorizado (Dispositivo sem GPS)"
+          address: effectiveAuthorizedIP ? "Ponto no Wi-Fi da Empresa (IP Validado)" : "Ponto Autorizado no Estabelecimento"
         });
         return;
       }
     }
 
-    // 3. Checagem prévia de permissão se suportada
-    if (navigator.permissions && navigator.permissions.query) {
-      try {
-        const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
-        if (permissionStatus.state === 'denied') {
-          setErrorInfo({
-            type: 'gps_denied',
-            title: 'Permissão de GPS Bloqueada',
-            message: 'O navegador está bloqueando o acesso à localização deste aparelho.',
-            suggestion: 'Toque no ícone ao lado do link do site (🔒 ou configurações no topo do navegador) > Permissões > Ative a "Localização" e tente novamente.',
-            allowBypass: !isGeofenceMandatory
-          });
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        // Query de permissão pode falhar em alguns navegadores móveis, segue normalmente
-      }
-    }
-
-    setLivenessStage(0); // "Verificando GPS..."
+    // 3. Obtenção ultrarrápida de localização (sem travar colaborador em ambientes fechados)
+    setLivenessStage(0); // "Localizando presença..."
     let position: GeolocationPosition | null = null;
     let lastError: GeolocationPositionError | null = null;
 
-    try {
-      // Tentativa 1: Alta precisão com cache recente (até 60s) e timeout de 9 segundos
-      position = await getPositionWithTimeout({
-        enableHighAccuracy: true,
-        timeout: 9000,
-        maximumAge: 60000
-      });
-    } catch (err: any) {
-      lastError = err;
-      console.warn("Tentativa de alta precisão GPS falhou:", err);
-
-      // Se o erro NÃO for recusa explícita de permissão (code 1), tenta baixa precisão (Wi-Fi/Torres móveis)
-      if (err?.code !== 1) {
-        try {
-          // Tentativa 2: Baixa precisão (funciona rapidamente dentro de escritórios/prédios)
+    // Se já temos a posição aquecida em cache recente, usa imediatamente (<50ms)
+    if (cachedPositionRef.current) {
+      position = cachedPositionRef.current;
+    } else {
+      try {
+        if (isGeofenceMandatory) {
+          try {
+            position = await getPositionWithTimeout({
+              enableHighAccuracy: true,
+              timeout: 2500,
+              maximumAge: 60000
+            });
+          } catch {
+            position = await getPositionWithTimeout({
+              enableHighAccuracy: false,
+              timeout: 2000,
+              maximumAge: 180000
+            });
+          }
+        } else {
+          // Sem cerca virtual obrigatória: rede celular/Wi-Fi responde em <200ms
           position = await getPositionWithTimeout({
             enableHighAccuracy: false,
-            timeout: 10000,
-            maximumAge: 180000
+            timeout: 2000,
+            maximumAge: 300000
           });
-          lastError = null;
-        } catch (fallbackErr: any) {
-          lastError = fallbackErr;
-          console.warn("Tentativa de localização via rede também falhou:", fallbackErr);
         }
+      } catch (err: any) {
+        lastError = err;
       }
     }
 
     // Se obteve coordenadas com sucesso:
     if (position) {
+      cachedPositionRef.current = position;
       const { latitude, longitude, accuracy } = position.coords;
 
       // Validação de Geofence (Cerca Virtual) se habilitada pela empresa
@@ -302,6 +298,19 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
       return;
     }
 
+    // Se o GPS demorou ou falhou, mas a cerca virtual NÃO é obrigatória:
+    // O Wi-Fi corporativo já atesta a presença do colaborador na empresa sem fazê-lo esperar!
+    if (!isGeofenceMandatory) {
+      proceedWithCapture({
+        lat: 0,
+        lng: 0,
+        address: effectiveAuthorizedIP 
+          ? "Ponto no Wi-Fi da Empresa (IP Corporativo Validado)" 
+          : "Ponto Autorizado no Estabelecimento"
+      });
+      return;
+    }
+
     // Se o dispositivo estiver offline e o GPS falhar por falta de sinal
     if (!navigator.onLine) {
       proceedWithCapture({
@@ -312,7 +321,7 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
       return;
     }
 
-    // Classificação precisa do erro para orientar o colaborador
+    // Classificação precisa do erro para orientar o colaborador (apenas se cerca virtual for estrita)
     const errCode = lastError?.code;
     if (errCode === 1) { // PERMISSION_DENIED
       setErrorInfo({
@@ -347,7 +356,6 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
         allowBypass: !isGeofenceMandatory
       });
     }
-
     setLoading(false);
   };
 
@@ -474,9 +482,9 @@ const PunchCamera: React.FC<PunchCameraProps> = ({
                 <p className="text-[11px] font-black uppercase tracking-widest flex items-center gap-2">
                   <RefreshCw size={14} className="animate-spin" />
                   {livenessStage === -1 ? 'Validando Wi-Fi...' :
-                   livenessStage === 0 ? 'Conectando ao GPS...' :
-                   livenessStage === 1 ? 'Pisque lentamente 😉' : 
-                   'Sorria para confirmar! 😁'}
+                   livenessStage === 0 ? 'Localizando presença...' :
+                   livenessStage === 1 ? 'Registrando Presença... 📸' : 
+                   'Ponto Confirmado! ✅'}
                 </p>
              </div>
           </div>

@@ -20,13 +20,22 @@ export interface ClientIPInfo {
   primary: string;
 }
 
+// Cache em memória para evitar requisições de rede repetidas em curto intervalo
+let cachedIPInfo: ClientIPInfo | null = null;
+let cachedIPTimestamp: number = 0;
+const IP_CACHE_TTL_MS = 60000; // 60 segundos de cache
+
 /**
- * Busca de forma resiliente tanto o IPv4 quanto o IPv6 do dispositivo.
+ * Busca de forma ultrarrápida e resiliente o IPv4 e/ou IPv6 do dispositivo.
  * Dispositivos móveis modernos operam em Dual-Stack (IPv4 e IPv6 simultaneamente).
- * Separamos os testes para evitar falso-positivo de bloqueio quando a empresa cadastrou IPv4
- * e o celular consulta primeiro um serviço IPv6.
+ * Utiliza requisições paralelas (Promise.any) e cache de 60s para resposta quase instantânea (<200ms).
  */
-export async function fetchUserPublicIPs(): Promise<ClientIPInfo> {
+export async function fetchUserPublicIPs(forceRefresh: boolean = false): Promise<ClientIPInfo> {
+  const now = Date.now();
+  if (!forceRefresh && cachedIPInfo && (now - cachedIPTimestamp < IP_CACHE_TTL_MS)) {
+    return cachedIPInfo;
+  }
+
   const v4Endpoints = [
     'https://api.ipify.org?format=json',
     'https://ipv4.icanhazip.com',
@@ -39,18 +48,18 @@ export async function fetchUserPublicIPs(): Promise<ClientIPInfo> {
     'https://v6.ident.me'
   ];
 
-  const fetchSingle = async (url: string): Promise<string | null> => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+  const fetchSingle = async (url: string, timeoutMs: number = 2500): Promise<string> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+    try {
       const res = await fetch(url, { 
         signal: controller.signal,
         headers: { 'Accept': 'application/json, text/plain, */*' }
       });
       clearTimeout(timeoutId);
 
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       let ip = '';
       if (url.includes('format=json')) {
@@ -63,71 +72,73 @@ export async function fetchUserPublicIPs(): Promise<ClientIPInfo> {
       if (ip && (ip.includes('.') || ip.includes(':'))) {
         return ip.trim();
       }
-    } catch {
-      // Ignora falha individual e tenta próximo endpoint
+      throw new Error('Formato de IP inválido');
+    } catch (e) {
+      clearTimeout(timeoutId);
+      throw e;
     }
-    return null;
   };
 
-  // 1. Tentar detectar IPv4
-  let foundV4: string | undefined = undefined;
-  for (const url of v4Endpoints) {
-    const ip = await fetchSingle(url);
-    if (ip && ip.includes('.')) {
-      foundV4 = ip;
-      break;
-    }
-  }
+  // 1. Busca paralela ultrarrápida de IPv4
+  const v4Promise = Promise.any(
+    v4Endpoints.map(url => fetchSingle(url, 2200).then(ip => {
+      if (ip && ip.includes('.')) return ip;
+      throw new Error('Não é IPv4');
+    }))
+  ).catch(() => undefined);
 
-  // 2. Tentar detectar IPv6
-  let foundV6: string | undefined = undefined;
-  for (const url of v6Endpoints) {
-    const ip = await fetchSingle(url);
-    if (ip && ip.includes(':')) {
-      foundV6 = ip;
-      break;
-    }
-  }
+  // 2. Busca paralela de IPv6
+  const v6Promise = Promise.any(
+    v6Endpoints.map(url => fetchSingle(url, 2200).then(ip => {
+      if (ip && ip.includes(':')) return ip;
+      throw new Error('Não é IPv6');
+    }))
+  ).catch(() => undefined);
+
+  const [foundV4, foundV6] = await Promise.all([v4Promise, v6Promise]);
 
   const detectedList: string[] = [];
   if (foundV4) detectedList.push(foundV4);
   if (foundV6) detectedList.push(foundV6);
 
-  // Fallback caso ambos acima tenham falhado (ex: rede com bloqueio restrito)
+  // Fallback rápido apenas caso ambos tenham falhado
   if (detectedList.length === 0) {
     const fallbackEndpoints = [
       'https://api.my-ip.io/v2/ip.json',
       'https://icanhazip.com',
       'https://api64.ipify.org?format=json'
     ];
-    for (const url of fallbackEndpoints) {
-      const fb = await fetchSingle(url);
+    try {
+      const fb = await Promise.any(fallbackEndpoints.map(url => fetchSingle(url, 2500)));
       if (fb) {
-        if (fb.includes('.')) foundV4 = fb;
-        else if (fb.includes(':')) foundV6 = fb;
-        detectedList.push(fb);
-        break;
+        if (fb.includes('.')) detectedList.push(fb);
+        else if (fb.includes(':')) detectedList.push(fb);
       }
-    }
+    } catch {}
   }
 
   if (detectedList.length === 0) {
     throw new Error('Não foi possível identificar o endereço IP da conexão.');
   }
 
-  return {
+  const result: ClientIPInfo = {
     ipv4: foundV4,
     ipv6: foundV6,
     detectedList,
     primary: foundV4 || foundV6 || detectedList[0]
   };
+
+  cachedIPInfo = result;
+  cachedIPTimestamp = Date.now();
+
+  return result;
 }
 
 /**
  * Função mantida para retrocompatibilidade com chamadas individuais
  */
-export async function fetchUserPublicIP(): Promise<string> {
-  const info = await fetchUserPublicIPs();
+export async function fetchUserPublicIP(forceRefresh: boolean = false): Promise<string> {
+  const info = await fetchUserPublicIPs(forceRefresh);
   return info.primary;
 }
 
